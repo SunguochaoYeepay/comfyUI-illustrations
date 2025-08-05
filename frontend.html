@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flux Kontext 图像生成</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px dashed #dee2e6;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+            background-color: white;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-upload input[type=file] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-upload-label {
+            display: block;
+            padding: 20px;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload-label:hover {
+            background-color: #f8f9ff;
+            border-color: #5a6fd8;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            margin-top: 10px;
+            border-radius: 8px;
+        }
+
+        .advanced-params {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .advanced-params h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .param-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+
+        .result-image {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .history-section {
+            grid-column: 1 / -1;
+            margin-top: 30px;
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+        }
+
+        .history-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .param-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Flux Kontext 图像生成</h1>
+            <p>基于参考图像和文本描述生成高质量图像</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 输入区域 -->
+            <div class="input-section">
+                <h2>📝 创建新图像</h2>
+                
+                <form id="generateForm">
+                    <div class="form-group">
+                        <label for="referenceImage">参考图像</label>
+                        <div class="file-upload">
+                            <input type="file" id="referenceImage" accept="image/*" required>
+                            <label for="referenceImage" class="file-upload-label">
+                                <div>📁 点击选择图像文件</div>
+                                <small>支持 JPG, PNG, WebP 格式</small>
+                            </label>
+                        </div>
+                        <img id="imagePreview" class="preview-image" style="display: none;">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">文本描述</label>
+                        <textarea id="description" placeholder="描述你想要生成的图像..." required></textarea>
+                    </div>
+
+                    <div class="param-row">
+                        <div class="form-group">
+                            <label for="count">生成数量</label>
+                            <select id="count">
+                                <option value="1">1张</option>
+                                <option value="2">2张</option>
+                                <option value="3">3张</option>
+                                <option value="4">4张</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="size">图像尺寸</label>
+                            <select id="size">
+                                <option value="512x512">512×512 (正方形)</option>
+                                <option value="768x512">768×512 (横向)</option>
+                                <option value="512x768">512×768 (纵向)</option>
+                                <option value="1024x1024">1024×1024 (高清正方形)</option>
+                                <option value="1152x896">1152×896 (高清横向)</option>
+                                <option value="896x1152">896×1152 (高清纵向)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="advanced-params">
+                        <h3>⚙️ 可选参数</h3>
+                        <div class="param-row">
+                            <div class="form-group">
+                                <label for="steps">生成步数</label>
+                                <input type="number" id="steps" value="20" min="10" max="30">
+                            </div>
+                            <div class="form-group">
+                                <label for="seed">随机种子 (可选)</label>
+                                <input type="number" id="seed" placeholder="留空使用随机种子">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="generate-btn" id="generateBtn">
+                        🚀 开始生成
+                    </button>
+                </form>
+            </div>
+
+            <!-- 结果区域 -->
+            <div class="result-section">
+                <h2>🖼️ 生成结果</h2>
+                
+                <div id="statusCard" class="status-card" style="display: none;">
+                    <div id="statusText">准备中...</div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <div id="errorMessage" class="error-message" style="display: none;"></div>
+                </div>
+
+                <div id="resultContainer" style="display: none;">
+                    <img id="resultImage" class="result-image">
+                    <div style="margin-top: 15px; text-align: center;">
+                        <button onclick="downloadImage()" class="generate-btn" style="width: auto; padding: 10px 20px;">
+                            💾 下载图像
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史记录区域 -->
+            <div class="history-section">
+                <h2>📚 生成历史</h2>
+                <div id="historyContainer">
+                    <p>暂无历史记录</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9000/api';
+        let currentTaskId = null;
+        let pollInterval = null;
+
+        // 图像预览
+        document.getElementById('referenceImage').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+                
+                // 更新标签文本
+                document.querySelector('.file-upload-label div').textContent = file.name;
+            }
+        });
+
+        // 表单提交
+        document.getElementById('generateForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const referenceImage = document.getElementById('referenceImage').files[0];
+            const description = document.getElementById('description').value;
+            const count = document.getElementById('count').value;
+            const size = document.getElementById('size').value;
+            const steps = document.getElementById('steps').value;
+            const seed = document.getElementById('seed').value;
+            
+            if (!referenceImage || !description) {
+                alert('请选择参考图像并输入描述');
+                return;
+            }
+            
+            formData.append('reference_image', referenceImage);
+            formData.append('description', description);
+            formData.append('count', count);
+            formData.append('size', size);
+            formData.append('steps', steps);
+            if (seed) {
+                formData.append('seed', seed);
+            }
+            
+            try {
+                // 显示状态卡片
+                showStatus('提交任务中...', 0);
+                document.getElementById('generateBtn').disabled = true;
+                document.getElementById('generateBtn').textContent = '生成中...';
+                
+                const response = await fetch(`${API_BASE}/generate-image`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                currentTaskId = result.task_id;
+                
+                // 开始轮询状态
+                startPolling();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError('提交任务失败: ' + error.message);
+                resetForm();
+            }
+        });
+
+        function showStatus(text, progress) {
+            document.getElementById('statusCard').style.display = 'block';
+            document.getElementById('statusText').textContent = text;
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('resultContainer').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+        }
+
+        function showResult(imageUrl) {
+            document.getElementById('resultContainer').style.display = 'block';
+            document.getElementById('resultImage').src = imageUrl;
+            document.getElementById('statusCard').style.display = 'none';
+        }
+
+        function resetForm() {
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('generateBtn').textContent = '🚀 开始生成';
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        function startPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/task/${currentTaskId}`);
+                    const status = await response.json();
+                    
+                    if (status.status === 'pending') {
+                        showStatus('任务排队中...', 10);
+                    } else if (status.status === 'processing') {
+                        showStatus('正在生成图像...', status.progress || 50);
+                    } else if (status.status === 'completed') {
+                        showStatus('生成完成!', 100);
+                        setTimeout(() => {
+                            showResult(status.result.image_url);
+                            resetForm();
+                            loadHistory(); // 刷新历史记录
+                        }, 1000);
+                    } else if (status.status === 'failed') {
+                        showError('生成失败: ' + (status.error || '未知错误'));
+                        resetForm();
+                    }
+                    
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    showError('检查状态失败: ' + error.message);
+                    resetForm();
+                }
+            }, 2000);
+        }
+
+        function downloadImage() {
+            const imageUrl = document.getElementById('resultImage').src;
+            const link = document.createElement('a');
+            link.href = imageUrl;
+            link.download = `generated_image_${Date.now()}.png`;
+            link.click();
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/history`);
+                const data = await response.json();
+                
+                const container = document.getElementById('historyContainer');
+                
+                if (data.tasks && data.tasks.length > 0) {
+                    container.innerHTML = data.tasks.map(task => `
+                        <div class="history-item">
+                            <div>
+                                <div><strong>${task.description.substring(0, 50)}...</strong></div>
+                                <small>${new Date(task.created_at).toLocaleString()}</small>
+                                <div>状态: ${getStatusText(task.status)}</div>
+                            </div>
+                            ${task.result_url ? `<img src="${task.result_url}" onclick="viewImage('${task.result_url}')">` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p>暂无历史记录</p>';
+                }
+            } catch (error) {
+                console.error('Load history error:', error);
+            }
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                'pending': '等待中',
+                'processing': '处理中',
+                'completed': '已完成',
+                'failed': '失败'
+            };
+            return statusMap[status] || status;
+        }
+
+        function viewImage(url) {
+            window.open(url, '_blank');
+        }
+
+        // 页面加载时获取历史记录
+        document.addEventListener('DOMContentLoaded', function() {
+            loadHistory();
+        });
+    </script>
+</body>
+</html>

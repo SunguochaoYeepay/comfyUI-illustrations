@@ -36,6 +36,7 @@
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
+      "batch_size": 4,
       "model": [
         "37",
         0

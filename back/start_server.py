@@ -68,12 +68,12 @@ def check_comfyui_connection(url="http://127.0.0.1:8188"):
 
 def check_workflow_file():
     """检查工作流文件是否存在"""
-    workflow_file = Path("flux_kontext_dev_basic.json")
+    workflow_file = Path("./flux_kontext_dev_basic.json")
     if workflow_file.exists():
         print("✅ 工作流文件存在")
         return True
     else:
-        print("❌ 工作流文件不存在: flux_kontext_dev_basic.json")
+        print("❌ 工作流文件不存在: ./flux_kontext_dev_basic.json")
         return False
 
 def create_directories():

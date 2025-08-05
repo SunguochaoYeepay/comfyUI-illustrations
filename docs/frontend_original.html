@@ -444,10 +444,52 @@
             document.getElementById('errorMessage').style.display = 'block';
         }
 
-        function showResult(imageUrl) {
+        function showResult(result) {
             document.getElementById('resultContainer').style.display = 'block';
-            document.getElementById('resultImage').src = imageUrl;
             document.getElementById('statusCard').style.display = 'none';
+            
+            const resultImage = document.getElementById('resultImage');
+            
+            if (result.image_urls && result.image_urls.length > 1) {
+                // 多个图像：显示第一个图像，并添加切换功能
+                resultImage.src = result.image_urls[0];
+                
+                // 创建图像切换控件
+                let imageControls = document.getElementById('imageControls');
+                if (!imageControls) {
+                    imageControls = document.createElement('div');
+                    imageControls.id = 'imageControls';
+                    imageControls.style.cssText = 'margin-top: 10px; text-align: center;';
+                    document.getElementById('resultContainer').appendChild(imageControls);
+                }
+                
+                imageControls.innerHTML = `
+                    <div style="margin-bottom: 10px;">
+                        <span>图像 1 / ${result.count}</span>
+                    </div>
+                    <div>
+                        <button onclick="showPrevImage()" style="margin-right: 10px;">← 上一张</button>
+                        <button onclick="showNextImage()">下一张 →</button>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="downloadAllImages()">📥 下载全部</button>
+                    </div>
+                `;
+                
+                // 存储当前结果数据
+                window.currentResult = result;
+                window.currentImageIndex = 0;
+            } else {
+                // 单个图像：使用原有逻辑
+                const imageUrl = result.image_urls ? result.image_urls[0] : result.image_url;
+                resultImage.src = imageUrl;
+                
+                // 移除多图像控件
+                const imageControls = document.getElementById('imageControls');
+                if (imageControls) {
+                    imageControls.remove();
+                }
+            }
         }
 
         function resetForm() {
@@ -476,7 +518,7 @@
                     } else if (status.status === 'completed') {
                         showStatus('生成完成!', 100);
                         setTimeout(() => {
-                            showResult(status.result.image_url);
+                            showResult(status.result);
                             resetForm();
                             loadHistory(); // 刷新历史记录
                         }, 1000);
@@ -499,6 +541,42 @@
             link.href = imageUrl;
             link.download = `generated_image_${Date.now()}.png`;
             link.click();
+        }
+        
+        function showPrevImage() {
+            if (window.currentResult && window.currentImageIndex > 0) {
+                window.currentImageIndex--;
+                document.getElementById('resultImage').src = window.currentResult.image_urls[window.currentImageIndex];
+                updateImageCounter();
+            }
+        }
+        
+        function showNextImage() {
+            if (window.currentResult && window.currentImageIndex < window.currentResult.image_urls.length - 1) {
+                window.currentImageIndex++;
+                document.getElementById('resultImage').src = window.currentResult.image_urls[window.currentImageIndex];
+                updateImageCounter();
+            }
+        }
+        
+        function updateImageCounter() {
+            const counter = document.querySelector('#imageControls span');
+            if (counter) {
+                counter.textContent = `图像 ${window.currentImageIndex + 1} / ${window.currentResult.count}`;
+            }
+        }
+        
+        function downloadAllImages() {
+            if (window.currentResult && window.currentResult.image_urls) {
+                window.currentResult.image_urls.forEach((url, index) => {
+                    setTimeout(() => {
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `generated_image_${Date.now()}_${index + 1}.png`;
+                        link.click();
+                    }, index * 500); // 延迟下载避免浏览器阻止
+                });
+            }
         }
 
         async function loadHistory() {

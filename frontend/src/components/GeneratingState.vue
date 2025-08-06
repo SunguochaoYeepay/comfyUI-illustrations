@@ -34,23 +34,7 @@
               </div>
             </div>
             
-            <!-- 进度指示器 -->
-            <div class="progress-indicator">
-              <div class="progress-circle">
-                <svg class="progress-svg" viewBox="0 0 36 36">
-                  <defs>
-                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                      <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
-                      <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
-                    </linearGradient>
-                  </defs>
-                  <path class="progress-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                  <path class="progress-bar" :stroke-dasharray="progress + ', 100'" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                </svg>
-                <div class="progress-text">{{ Math.round(progress) }}%</div>
-              </div>
-            </div>
+
             
             <!-- 状态文字 -->
             <div class="loading-text">
@@ -296,50 +280,9 @@ defineProps({
   to { text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #f093fb; }
 }
 
-/* 进度指示器 */
-.progress-indicator {
-  position: absolute;
-  bottom: 15px;
-  right: 15px;
-  width: 50px;
-  height: 50px;
-}
 
-.progress-circle {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
 
-.progress-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
 
-.progress-bg {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 2;
-}
-
-.progress-bar {
-  fill: none;
-  stroke: url(#progressGradient);
-  stroke-width: 2;
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.3s ease;
-}
-
-.progress-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  font-weight: bold;
-  color: rgba(255, 255, 255, 0.9);
-}
 
 /* 状态文字 */
 .loading-text {

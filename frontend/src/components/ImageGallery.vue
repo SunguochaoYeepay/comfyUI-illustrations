@@ -31,6 +31,33 @@
       :progress="progress"
     />
     
+    <!-- 加载更多按钮 -->
+    <div v-if="hasMore && !isLoadingHistory" class="load-more-section">
+      <a-button 
+        type="primary" 
+        size="large" 
+        @click="$emit('loadMore')"
+        class="load-more-btn"
+      >
+        加载更多历史记录
+      </a-button>
+    </div>
+    
+    <!-- 加载中状态 -->
+    <div v-if="isLoadingHistory" class="loading-section">
+      <a-spin size="large">
+        <template #indicator>
+          <LoadingOutlined style="font-size: 24px" spin />
+        </template>
+      </a-spin>
+      <p>正在加载历史记录...</p>
+    </div>
+    
+    <!-- 分页信息 -->
+    <div v-if="totalCount > 0" class="pagination-info">
+      <p>共 {{ totalCount }} 条记录，已显示 {{ allImages.length }} 条</p>
+    </div>
+
     <!-- 图片预览组件 -->
     <ImagePreview
       :visible="previewVisible"
@@ -42,7 +69,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { PictureOutlined } from '@ant-design/icons-vue'
+import { PictureOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import TaskCard from './TaskCard.vue'
 import GeneratingState from './GeneratingState.vue'
 import ImagePreview from './ImagePreview.vue'
@@ -68,6 +95,18 @@ const props = defineProps({
   progress: {
     type: Number,
     default: 0
+  },
+  hasMore: {
+    type: Boolean,
+    default: false
+  },
+  isLoadingHistory: {
+    type: Boolean,
+    default: false
+  },
+  totalCount: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -76,7 +115,8 @@ defineEmits([
   'editImage',
   'regenerateImage', 
   'deleteImage',
-  'downloadImage'
+  'downloadImage',
+  'loadMore'
 ])
 
 // 图片预览相关状态
@@ -130,13 +170,10 @@ const imageGroups = computed(() => {
 
 <style scoped>
 .gallery-section {
-  flex: 1;
-  overflow-y: visible;
   max-width: 1000px;
-  margin: 0 auto 0px auto;
+  margin: 0 auto;
   width: 100%;
   padding: 0 20px;
-  min-height: auto;
 }
 
 .image-gallery {
@@ -175,5 +212,44 @@ const imageGroups = computed(() => {
 .empty-content p {
   font-size: 1rem;
   opacity: 0.7;
+}
+
+/* 分页相关样式 */
+.load-more-section {
+  text-align: center;
+  margin: 40px 0;
+}
+
+.load-more-btn {
+  padding: 12px 32px;
+  height: auto;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.loading-section {
+  text-align: center;
+  margin: 40px 0;
+  color: #666;
+}
+
+.loading-section p {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.pagination-info {
+  text-align: center;
+  margin: 20px 0;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  color: #666;
+  font-size: 14px;
+}
+
+.pagination-info p {
+  margin: 0;
 }
 </style>

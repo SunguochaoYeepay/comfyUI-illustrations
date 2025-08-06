@@ -20,18 +20,14 @@ html, body {
   padding: 0 !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   overflow-x: hidden;
-  position: relative;
-  top: 0;
-  left: 0;
+  height: auto !important;
+  min-height: 100vh;
 }
 
 #app {
   min-height: 100vh;
   margin: 0 !important;
   padding: 0 !important;
-  position: relative;
-  top: 0;
-  left: 0;
 }
 
 /* 强制重置可能的全局样式 */

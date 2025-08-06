@@ -10,10 +10,14 @@
         :prompt="prompt"
         :image-count="imageCount"
         :progress="progress"
+        :has-more="hasMore"
+        :is-loading-history="isLoadingHistory"
+        :total-count="totalCount"
         @edit-image="editImage"
         @regenerate-image="regenerateImage"
         @delete-image="deleteImage"
         @download-image="downloadImage"
+        @load-more="loadMoreHistory"
       />
 
       <!-- 控制面板 -->
@@ -50,7 +54,13 @@ const isGenerating = ref(false)
 const progress = ref(0)
 const estimatedTime = ref(30)
 const generatedImages = ref([])
+// 历史记录和分页状态
 const history = ref([])
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalCount = ref(0)
+const hasMore = ref(false)
+const isLoadingHistory = ref(false)
 const referenceImages = ref([])
 const previewVisible = ref(false)
 const previewImage = ref('')
@@ -192,9 +202,8 @@ const generateImage = async () => {
                 referenceImage: referenceImages.value.length > 0 ? referenceImages.value[0].url || referenceImages.value[0].preview : null
               }))
               
-              // 只刷新历史记录（从后端获取最新数据），不再单独设置generatedImages
-              // 这样避免了重复显示问题
-              await loadHistory()
+              // 重新加载第一页历史记录以显示最新生成的图像
+              await loadHistory(1, false)
               
               // 同时保存到本地存储作为备份
               saveHistory()
@@ -256,6 +265,10 @@ const clearHistory = async () => {
     
     if (response.ok) {
       history.value = []
+      // 重置分页状态
+      currentPage.value = 1
+      totalCount.value = 0
+      hasMore.value = false
       // 清空本地存储
       localStorage.removeItem('imageGeneratorHistory')
       message.success('历史记录已清空')
@@ -339,7 +352,7 @@ const downloadAllImages = async (group) => {
 }
 
 // 重新编辑图像
-const editImage = (image) => {
+const editImage = async (image) => {
   if (!image.prompt) {
     message.warning('该图像没有提示词，无法编辑')
     return
@@ -350,13 +363,27 @@ const editImage = (image) => {
   
   // 回显参考图
   if (image.referenceImage) {
-    referenceImages.value = [{
-      uid: Date.now(),
-      name: 'reference.png',
-      status: 'done',
-      url: image.referenceImage,
-      preview: image.referenceImage
-    }]
+    try {
+      // 从URL获取图片文件
+      const response = await fetch(image.referenceImage)
+      const blob = await response.blob()
+      
+      // 创建File对象
+      const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
+      
+      referenceImages.value = [{
+        uid: Date.now(),
+        name: 'reference.png',
+        status: 'done',
+        url: image.referenceImage,
+        preview: image.referenceImage,
+        originFileObj: file  // 添加originFileObj属性
+      }]
+    } catch (error) {
+      console.error('获取参考图失败:', error)
+      message.warning('无法获取原参考图，将不显示参考图')
+      referenceImages.value = []
+    }
   } else {
     referenceImages.value = []
   }
@@ -379,13 +406,27 @@ const regenerateImage = async (image) => {
   
   // 回显参考图
   if (image.referenceImage) {
-    referenceImages.value = [{
-      uid: Date.now(),
-      name: 'reference.png',
-      status: 'done',
-      url: image.referenceImage,
-      preview: image.referenceImage
-    }]
+    try {
+      // 从URL获取图片文件
+      const response = await fetch(image.referenceImage)
+      const blob = await response.blob()
+      
+      // 创建File对象
+      const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
+      
+      referenceImages.value = [{
+        uid: Date.now(),
+        name: 'reference.png',
+        status: 'done',
+        url: image.referenceImage,
+        preview: image.referenceImage,
+        originFileObj: file  // 添加originFileObj属性
+      }]
+    } catch (error) {
+      console.error('获取参考图失败:', error)
+      message.warning('无法获取原参考图，将不使用参考图重新生成')
+      referenceImages.value = []
+    }
   } else {
     referenceImages.value = []
   }
@@ -405,14 +446,8 @@ const deleteImage = async (image) => {
     })
     
     if (response.ok) {
-      // 从本地历史记录中移除
-      const historyIndex = history.value.findIndex(item => item.task_id === image.task_id)
-      if (historyIndex > -1) {
-        history.value.splice(historyIndex, 1)
-      }
-      
-      // 更新本地存储
-      saveHistory()
+      // 重新加载第一页历史记录以保持数据同步
+      await loadHistory(1, false)
       
       message.success('图像已删除')
     } else {
@@ -503,15 +538,26 @@ const processTaskImages = (task) => {
   }
 }
 
-// 加载历史记录
-const loadHistory = async () => {
+// 加载历史记录（支持分页）
+const loadHistory = async (page = 1, append = false) => {
+  if (isLoadingHistory.value) return
+  
   try {
-    const response = await fetch(`${API_BASE}/api/history`)
+    isLoadingHistory.value = true
+    const offset = (page - 1) * pageSize.value
+    const response = await fetch(`${API_BASE}/api/history?limit=${pageSize.value}&offset=${offset}`)
+    
     if (response.ok) {
       const data = await response.json()
+      
+      // 更新分页状态
+      totalCount.value = data.total || 0
+      hasMore.value = data.has_more || false
+      currentPage.value = page
+      
       if (data.tasks && data.tasks.length > 0) {
         // 转换后端数据格式为前端格式
-        history.value = data.tasks.map(task => {
+        const newHistoryItems = data.tasks.map(task => {
           const processedImages = processTaskImages(task)
           return {
             id: task.task_id,
@@ -522,21 +568,41 @@ const loadHistory = async () => {
             images: processedImages
           }
         })
-      } else {
+        
+        if (append) {
+          // 追加模式：添加到现有历史记录后面
+          history.value = [...history.value, ...newHistoryItems]
+        } else {
+          // 替换模式：替换现有历史记录
+          history.value = newHistoryItems
+        }
+      } else if (!append) {
         history.value = []
       }
     }
   } catch (error) {
     console.error('加载历史记录失败:', error)
-    // 如果API失败，尝试从localStorage加载
-    try {
-      const savedHistory = localStorage.getItem('imageGeneratorHistory')
-      if (savedHistory) {
-        history.value = JSON.parse(savedHistory)
+    // 如果API失败且是第一页，尝试从localStorage加载
+    if (page === 1) {
+      try {
+        const savedHistory = localStorage.getItem('imageGeneratorHistory')
+        if (savedHistory) {
+          history.value = JSON.parse(savedHistory)
+        }
+      } catch (localError) {
+        console.error('从本地存储加载历史记录也失败:', localError)
       }
-    } catch (localError) {
-      console.error('从本地存储加载历史记录也失败:', localError)
     }
+    message.error('加载历史记录失败')
+  } finally {
+    isLoadingHistory.value = false
+  }
+}
+
+// 加载更多历史记录
+const loadMoreHistory = async () => {
+  if (hasMore.value && !isLoadingHistory.value) {
+    await loadHistory(currentPage.value + 1, true)
   }
 }
 
@@ -558,9 +624,6 @@ onMounted(() => {
 <style scoped>
 .image-generator {
   min-height: 100vh;
-  margin: 0 !important;
-  position: relative !important;
-  top: 0 !important;
 }
 
 /* 移除重复的main-content样式定义 */
@@ -570,21 +633,16 @@ onMounted(() => {
   background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
   padding: 10px;
   position: relative;
-  top: 0;
-  left: 0;
 }
 
 .main-content {
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 30px;
   position: relative;
   z-index: 1;
-  padding-top: 60px;
-  padding-bottom: 110px;
-  margin-top: 0;
-  min-height: calc(100vh - 40px);
+  padding: 20px 0;
 }
 
 

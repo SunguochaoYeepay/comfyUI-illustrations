@@ -298,20 +298,34 @@ class DatabaseManager:
             return dict(zip(columns, row))
         return None
     
-    def get_all_tasks(self, limit: int = 50) -> list:
-        """获取所有任务"""
+    def get_all_tasks(self, limit: int = 50, offset: int = 0) -> dict:
+        """获取所有任务（支持分页）"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+        
+        # 获取总数
+        cursor.execute("SELECT COUNT(*) FROM tasks")
+        total = cursor.fetchone()[0]
+        
+        # 获取分页数据
         cursor.execute("""
             SELECT * FROM tasks 
             ORDER BY created_at DESC 
-            LIMIT ?
-        """, (limit,))
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
         rows = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         conn.close()
         
-        return [dict(zip(columns, row)) for row in rows]
+        tasks = [dict(zip(columns, row)) for row in rows]
+        
+        return {
+            "tasks": tasks,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + limit < total
+        }
     
     def delete_task(self, task_id: str) -> bool:
         """删除任务"""
@@ -853,9 +867,10 @@ async def get_reference_image(task_id: str):
     return FileResponse(reference_path)
 
 @app.get("/api/history")
-async def get_history(limit: int = 50):
-    """获取历史记录"""
-    tasks = db_manager.get_all_tasks(limit)
+async def get_history(limit: int = 20, offset: int = 0):
+    """获取历史记录（支持分页）"""
+    result = db_manager.get_all_tasks(limit, offset)
+    tasks = result["tasks"]
     
     history = []
     for task in tasks:
@@ -914,7 +929,13 @@ async def get_history(limit: int = 50):
         
         history.append(task_data)
     
-    return {"tasks": history}
+    return {
+        "tasks": history,
+        "total": result["total"],
+        "limit": result["limit"],
+        "offset": result["offset"],
+        "has_more": result["has_more"]
+    }
 
 @app.delete("/api/history/{task_id}")
 async def delete_history_item(task_id: str):

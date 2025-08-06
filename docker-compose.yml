@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # 后端API服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: yeepay-backend
+    ports:
+      - "9001:9000"
+    environment:
+      - ENVIRONMENT=production
+      - HOST=0.0.0.0
+      - PORT=9000
+      - COMFYUI_URL=${COMFYUI_URL:-http://host.docker.internal:8188}
+      - COMFYUI_OUTPUT_DIR=/app/comfyui_yeepay_output
+      - COMFYUI_TIMEOUT=300
+      - MAX_CONCURRENT_TASKS=3
+      - CORS_ORIGINS=*
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./back/uploads:/app/uploads
+      - ./back/outputs:/app/outputs
+      - ./back/tasks.db:/app/tasks.db
+      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui_output
+      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui_yeepay_output
+    networks:
+      - yeepay-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: yeepay-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_BASE_URL=
+    depends_on:
+      - backend
+    networks:
+      - yeepay-network
+    restart: unless-stopped
+
+  # Nginx反向代理（可选，用于生产环境）
+  nginx:
+    image: nginx:alpine
+    container_name: yeepay-nginx
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - yeepay-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+networks:
+  yeepay-network:
+    driver: bridge
+
+volumes:
+  uploads:
+  outputs: 

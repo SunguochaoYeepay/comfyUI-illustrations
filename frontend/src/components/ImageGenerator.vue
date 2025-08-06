@@ -10,6 +10,8 @@
         :prompt="prompt"
         :image-count="imageCount"
         :progress="progress"
+
+        
         :has-more="hasMore"
         :is-loading-history="isLoadingHistory"
         :total-count="totalCount"
@@ -40,8 +42,8 @@ import { message } from 'ant-design-vue'
 import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
 
-// API基础URL - 使用相对路径，通过Vite代理转发
-const API_BASE = 'http://localhost:9000'
+// API基础URL - 使用环境变量，空字符串表示相对路径通过nginx代理
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 
 

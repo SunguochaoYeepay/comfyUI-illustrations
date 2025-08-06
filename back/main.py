@@ -55,7 +55,9 @@ class TaskStatusResponse(BaseModel):
         }
 
 # 全局变量
-COMFYUI_URL = "http://127.0.0.1:8188"
+import os
+COMFYUI_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188")
+COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output"))
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
 DB_PATH = "tasks.db"
@@ -90,24 +92,16 @@ class WorkflowTemplate:
             name_without_ext = source_path.stem
             image_filename = f"{name_without_ext}.webp"
         
-        # ComfyUI输出目录路径
-        comfyui_output_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output")
-        
-        if comfyui_output_dir.exists():
-            # 复制图像到ComfyUI输出目录
-            dest_path = comfyui_output_dir / image_filename
-            try:
-                shutil.copy2(reference_image_path, dest_path)
-                # 更新工作流中的图像文件名（LoadImageOutput格式）
-                workflow["142"]["inputs"]["image"] = f"{image_filename} [output]"
-                print(f"已复制参考图像到ComfyUI输出目录: {dest_path}")
-            except Exception as e:
-                print(f"复制图像文件失败: {e}")
-                # 如果复制失败，尝试使用绝对路径
-                workflow["142"]["inputs"]["image"] = str(reference_image_path)
+        # 在Docker环境中，需要转换为宿主机路径
+        # 容器内的 /app/uploads 对应宿主机的 D:/AI-Image/YeePay/back/uploads
+        container_path = Path(reference_image_path)
+        if str(container_path).startswith('uploads/'):
+            # 转换为宿主机绝对路径
+            host_path = Path("D:/AI-Image/YeePay/back") / reference_image_path
+            print(f"转换路径: {reference_image_path} -> {host_path}")
+            workflow["142"]["inputs"]["image"] = str(host_path)
         else:
-            print(f"ComfyUI输出目录不存在: {comfyui_output_dir}")
-            # 如果找不到ComfyUI输出目录，使用绝对路径
+            print(f"使用原始路径: {reference_image_path}")
             workflow["142"]["inputs"]["image"] = str(reference_image_path)
         
         # 更新生成参数
@@ -147,6 +141,11 @@ class WorkflowTemplate:
         else:
             # 确保单张图片时batch_size为1
             workflow["31"]["inputs"]["batch_size"] = 1
+        
+        # 设置SaveImage节点的文件名前缀为yeepay，用于区分项目
+        if "136" in workflow and "inputs" in workflow["136"]:
+            workflow["136"]["inputs"]["filename_prefix"] = "yeepay/yeepay"
+            print(f"设置SaveImage文件名前缀为: yeepay/yeepay")
         
         # 处理种子参数
         if parameters.get("seed"):
@@ -554,7 +553,7 @@ class TaskManager:
                         outputs = task_info["outputs"]
                         result_paths = []
                         import shutil
-                        comfyui_output_dir = Path("D:\\AI-Image\\ComfyUI-aki-v1.6\\ComfyUI\\output")
+                        comfyui_output_dir = COMFYUI_OUTPUT_DIR
                         
                         # 首先尝试从节点输出获取图片
                         for node_id, output in outputs.items():

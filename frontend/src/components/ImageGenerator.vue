@@ -18,6 +18,8 @@
         @delete-image="deleteImage"
         @download-image="downloadImage"
         @load-more="loadMoreHistory"
+        @toggle-favorite="toggleFavorite"
+        @filter-change="handleFilterChange"
       />
 
       <!-- 控制面板 -->
@@ -33,7 +35,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
@@ -199,7 +201,8 @@ const generateImage = async () => {
                 prompt: prompt.value,
                 size: imageSize.value,
                 createdAt: new Date(),
-                referenceImage: referenceImages.value.length > 0 ? referenceImages.value[0].url || referenceImages.value[0].preview : null
+                referenceImage: referenceImages.value.length > 0 ? referenceImages.value[0].url || referenceImages.value[0].preview : null,
+                isFavorited: task.is_favorited === 1 || task.is_favorited === true  // 使用后端返回的收藏状态
               }))
               
               // 重新加载第一页历史记录以显示最新生成的图像
@@ -459,6 +462,30 @@ const deleteImage = async (image) => {
   }
 }
 
+// 切换收藏状态
+const toggleFavorite = (image) => {
+  try {
+    // 在allImages中找到对应的图片并更新收藏状态
+    const targetImage = allImages.value.find(img => 
+      img.url === image.url && img.task_id === image.task_id
+    )
+    
+    if (targetImage) {
+      targetImage.isFavorited = !targetImage.isFavorited
+      
+      // 显示提示信息
+      if (targetImage.isFavorited) {
+        message.success('已添加到收藏')
+      } else {
+        message.success('已取消收藏')
+      }
+    }
+  } catch (error) {
+    console.error('切换收藏状态失败:', error)
+    message.error('操作失败，请重试')
+  }
+}
+
 // 格式化时间
 const formatTime = (date) => {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -477,86 +504,140 @@ const handlePreview = (file) => {
 
 // 处理任务图片数据的辅助函数
 const processTaskImages = (task) => {
-  if (!task.result_url || task.status !== 'completed') {
-    return []
-  }
-  
-  // 获取文件名和直接URL（如果有）
-  let filenames = []
-  let directUrls = []
-  
-  if (task.filenames) {
-    try {
-      filenames = JSON.parse(task.filenames)
-    } catch (e) {
-      console.warn('解析文件名失败:', e)
+  try {
+    if (!task || !task.task_id) {
+      console.warn('无效的任务数据:', task)
+      return []
     }
-  }
-  
-  if (task.direct_urls) {
-    try {
-      directUrls = JSON.parse(task.direct_urls)
-    } catch (e) {
-      console.warn('解析直接URL失败:', e)
-    }
-  }
-  
-  // 获取参考图信息
-  let referenceImageUrl = null
-  if (task.reference_image_url) {
-    referenceImageUrl = task.reference_image_url
-  }
-  
-  // 如果有文件名信息，说明是多张图片
-  if (filenames.length > 0) {
-    const images = filenames.map((filename, index) => {
-      const imageUrl = directUrls[index] || `${task.result_url}?index=${index}`
-      return {
-        url: imageUrl,
-        directUrl: directUrls[index] || null,
-        filename: filename,
-        task_id: task.task_id,
-        prompt: task.description,
-        createdAt: new Date(task.created_at),
-        referenceImage: referenceImageUrl
-      }
-    })
-    return images
-  } else {
-    // 单张图片或没有详细信息
-    const imageUrl = task.result_url
     
-    return [{
-      url: imageUrl,
-      directUrl: null,
-      filename: `generated_${task.task_id}.png`,
-      task_id: task.task_id,
-      prompt: task.description,
-      createdAt: new Date(task.created_at),
-      referenceImage: referenceImageUrl
-    }]
+    if (!task.result_url || task.status !== 'completed') {
+      return []
+    }
+    
+    // 获取文件名和直接URL（如果有）
+    let filenames = []
+    let directUrls = []
+    
+    if (task.filenames) {
+      try {
+        filenames = JSON.parse(task.filenames)
+        if (!Array.isArray(filenames)) {
+          console.warn('文件名不是数组格式:', task.filenames)
+          filenames = []
+        }
+      } catch (e) {
+        console.warn('解析文件名失败:', e, task.filenames)
+        filenames = []
+      }
+    }
+    
+    if (task.direct_urls) {
+      try {
+        directUrls = JSON.parse(task.direct_urls)
+        if (!Array.isArray(directUrls)) {
+          console.warn('直接URL不是数组格式:', task.direct_urls)
+          directUrls = []
+        }
+      } catch (e) {
+        console.warn('解析直接URL失败:', e, task.direct_urls)
+        directUrls = []
+      }
+    }
+    
+    // 获取参考图信息
+    let referenceImageUrl = null
+    if (task.reference_image_url) {
+      referenceImageUrl = task.reference_image_url
+    }
+    
+    // 如果有文件名信息，说明是多张图片
+    if (filenames.length > 0) {
+      const images = filenames.map((filename, index) => {
+        try {
+          const imageUrl = directUrls[index] || `${task.result_url}?index=${index}`
+          return {
+            url: imageUrl,
+            directUrl: directUrls[index] || null,
+            filename: filename || `generated_${task.task_id}_${index + 1}.png`,
+            task_id: task.task_id,
+            prompt: task.description || '',
+            createdAt: new Date(task.created_at || Date.now()),
+            referenceImage: referenceImageUrl,
+            isFavorited: task.is_favorited === 1 || task.is_favorited === true  // 使用后端返回的收藏状态
+          }
+        } catch (imageError) {
+          console.error('处理单个图片数据失败:', imageError, { filename, index, task })
+          return null
+        }
+      }).filter(img => img !== null) // 过滤掉处理失败的图片
+      
+      return images
+    } else {
+      // 单张图片或没有详细信息
+      try {
+        const imageUrl = task.result_url
+        
+        return [{
+          url: imageUrl,
+          directUrl: null,
+          filename: `generated_${task.task_id}.png`,
+          task_id: task.task_id,
+          prompt: task.description || '',
+          createdAt: new Date(task.created_at || Date.now()),
+          referenceImage: referenceImageUrl,
+          isFavorited: false  // 添加收藏状态，默认为false
+        }]
+      } catch (singleImageError) {
+        console.error('处理单张图片数据失败:', singleImageError, task)
+        return []
+      }
+    }
+  } catch (error) {
+    console.error('processTaskImages 函数执行失败:', error, task)
+    return []
   }
 }
 
 // 加载历史记录（支持分页，从最新开始）
-const loadHistory = async (page = 1, prepend = false) => {
+const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
   if (isLoadingHistory.value) return
+  
+  const startTime = performance.now()
+  console.log(`[性能监控] 开始加载历史记录，页面: ${page}, 模式: ${prepend ? 'prepend' : 'replace'}`)
   
   try {
     isLoadingHistory.value = true
     const offset = (page - 1) * pageSize.value
+    
+    // 记录加载前的历史记录数量，用于计算新内容位置
+    const beforeCount = history.value.length
     
     // 使用AbortController来支持请求取消
     const controller = new AbortController()
     const timeoutId = setTimeout(() => {
       console.log('请求超时，取消请求')
       controller.abort()
-    }, 30000) // 增加到30秒超时
+    }, 15000) // 减少到15秒超时
     
-    console.log('开始加载历史记录，页面:', page, '偏移量:', offset)
+    console.log('开始加载历史记录，页面:', page, '偏移量:', offset, '筛选参数:', filterParams)
+    
+    // 构建查询参数
+    const queryParams = new URLSearchParams({
+      limit: pageSize.value.toString(),
+      offset: offset.toString(),
+      order: 'desc'
+    })
+    
+    // 添加筛选参数
+    if (filterParams.favoriteFilter && filterParams.favoriteFilter !== 'all') {
+      queryParams.append('favorite_filter', filterParams.favoriteFilter)
+    }
+    if (filterParams.timeFilter && filterParams.timeFilter !== 'all') {
+      queryParams.append('time_filter', filterParams.timeFilter)
+    }
     
     // 添加order参数，按创建时间倒序排列（最新的在前）
-    const response = await fetch(`${API_BASE}/api/history?limit=${pageSize.value}&offset=${offset}&order=desc`, {
+    const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
       signal: controller.signal,
       method: 'GET',
       headers: {
@@ -576,10 +657,12 @@ const loadHistory = async (page = 1, prepend = false) => {
       currentPage.value = page
       
       if (data.tasks && data.tasks.length > 0) {
-        // 使用requestIdleCallback优化数据处理
-        const processData = () => {
-          try {
-            const newHistoryItems = data.tasks.map(task => {
+        // 使用nextTick优化DOM更新
+        await nextTick()
+        
+        try {
+          const newHistoryItems = data.tasks.map(task => {
+            try {
               const processedImages = processTaskImages(task)
               return {
                 id: task.task_id,
@@ -589,35 +672,46 @@ const loadHistory = async (page = 1, prepend = false) => {
                 status: task.status,
                 images: processedImages
               }
-            })
-            
-            if (prepend) {
-              // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
-              history.value = [...newHistoryItems, ...history.value]
-            } else {
-              // 替换模式：替换现有历史记录（首次加载）
-              history.value = newHistoryItems
+            } catch (taskError) {
+              console.error('处理单个任务数据失败:', taskError, task)
+              return null
             }
+          }).filter(item => item !== null) // 过滤掉处理失败的项目
+          
+          if (prepend) {
+            // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
+            history.value = [...newHistoryItems, ...history.value]
             
-            console.log('数据处理完成，历史记录数量:', history.value.length)
-          } catch (error) {
-            console.error('处理历史数据时出错:', error)
-          } finally {
-            // 确保数据处理完成后立即清除loading状态
-            isLoadingHistory.value = false
-            console.log('processData完成，清除loading状态')
+            // 计算新内容的位置并滚动到该位置
+            const newContentCount = newHistoryItems.length
+            if (newContentCount > 0) {
+              // 延迟滚动，确保DOM已更新
+              setTimeout(() => {
+                scrollToNewContent(newContentCount)
+              }, 100)
+            }
+          } else {
+            // 替换模式：替换现有历史记录（首次加载）
+            history.value = newHistoryItems
           }
+          
+          const endTime = performance.now()
+          console.log(`[性能监控] 数据处理完成，历史记录数量: ${history.value.length}, 耗时: ${(endTime - startTime).toFixed(2)}ms`)
+        } catch (error) {
+          console.error('处理历史数据时出错:', error)
+          // 即使处理失败也要清除loading状态
+          isLoadingHistory.value = false
+          return
         }
         
-        // 使用requestIdleCallback或setTimeout来避免阻塞UI
-        if (window.requestIdleCallback) {
-          requestIdleCallback(processData)
-        } else {
-          setTimeout(processData, 0)
-        }
-      } else if (!prepend) {
-        history.value = []
+        // 立即清除loading状态
+        isLoadingHistory.value = false
+        console.log('数据处理完成，立即清除loading状态')
+      } else {
         // 如果没有数据需要处理，直接清除loading状态
+        if (!prepend) {
+          history.value = []
+        }
         isLoadingHistory.value = false
         console.log('无数据需要处理，清除loading状态')
       }
@@ -625,6 +719,7 @@ const loadHistory = async (page = 1, prepend = false) => {
       // API响应不成功，清除loading状态
       isLoadingHistory.value = false
       console.log('API响应失败，清除loading状态')
+      throw new Error(`API响应失败: ${response.status}`)
     }
   } catch (error) {
     if (error.name === 'AbortError') {
@@ -650,11 +745,86 @@ const loadHistory = async (page = 1, prepend = false) => {
   }
 }
 
+// 滚动到新内容位置的函数
+const scrollToNewContent = (newContentCount) => {
+  try {
+    // 等待DOM完全更新
+    setTimeout(() => {
+      // 查找新加载的内容元素
+      const taskCards = document.querySelectorAll('.task-card')
+      if (taskCards.length >= newContentCount) {
+        // 滚动到第一个新内容的顶部，留出一些空间
+        const targetElement = taskCards[newContentCount - 1]
+        if (targetElement) {
+          const targetPosition = targetElement.offsetTop - 100 // 留出100px的空间
+          window.scrollTo({
+            top: targetPosition,
+            behavior: 'smooth'
+          })
+          console.log(`已滚动到新内容位置，新内容数量: ${newContentCount}`)
+        }
+      }
+    }, 200) // 增加延迟确保DOM完全更新
+  } catch (error) {
+    console.error('滚动到新内容位置失败:', error)
+  }
+}
+
+// 防抖函数
+const debounce = (func, wait) => {
+  let timeout
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout)
+      func(...args)
+    }
+    clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
+
+// 当前筛选参数
+const currentFilterParams = ref({})
+
+// 防抖版本的loadMoreHistory
+const debouncedLoadMore = debounce(async () => {
+  console.log('loadMoreHistory被调用，hasMore:', hasMore.value, 'isLoadingHistory:', isLoadingHistory.value)
+  
+  if (hasMore.value && !isLoadingHistory.value) {
+    await loadHistory(currentPage.value + 1, true, currentFilterParams.value)
+  } else if (!hasMore.value && isLoadingHistory.value) {
+    // 如果没有更多数据但加载状态仍为true，清除加载状态
+    isLoadingHistory.value = false
+    console.log('没有更多数据，强制清除loading状态')
+  } else if (isLoadingHistory.value) {
+    // 如果正在加载中，强制清除状态（防止卡住）
+    console.log('检测到loading状态异常，强制清除')
+    isLoadingHistory.value = false
+  }
+}, 1000) // 增加到1秒防抖
+
 // 加载更多历史记录（加载更早的数据）
 const loadMoreHistory = async () => {
-  if (hasMore.value && !isLoadingHistory.value) {
-    await loadHistory(currentPage.value + 1, true)
+  // 添加额外的状态检查
+  if (isLoadingHistory.value) {
+    console.log('正在加载中，跳过重复请求')
+    return
   }
+  
+  debouncedLoadMore()
+}
+
+// 处理筛选条件变化
+const handleFilterChange = async (filterParams) => {
+  console.log('筛选条件变化:', filterParams)
+  currentFilterParams.value = filterParams
+  
+  // 重置分页状态
+  currentPage.value = 1
+  hasMore.value = true
+  
+  // 重新加载历史记录
+  await loadHistory(1, false, filterParams)
 }
 
 // 保存历史记录到本地存储（作为备份）

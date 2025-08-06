@@ -10,6 +10,18 @@
       <div class="preview-content">
         <!-- 左侧图片区域 -->
         <div class="image-section">
+          <!-- 上一张按钮 -->
+          <button 
+            v-if="imageList.length > 1"
+            class="nav-btn nav-btn-prev"
+            :class="{ disabled: currentIndex <= 0 }"
+            @click="navigatePrev"
+            :disabled="currentIndex <= 0"
+            title="上一张 (←)"
+          >
+            <LeftOutlined />
+          </button>
+          
           <div class="image-container">
             <img 
               :src="imageData.url" 
@@ -17,6 +29,23 @@
               class="preview-image"
               @click.stop
             />
+          </div>
+          
+          <!-- 下一张按钮 -->
+          <button 
+            v-if="imageList.length > 1"
+            class="nav-btn nav-btn-next"
+            :class="{ disabled: currentIndex >= imageList.length - 1 }"
+            @click="navigateNext"
+            :disabled="currentIndex >= imageList.length - 1"
+            title="下一张 (→)"
+          >
+            <RightOutlined />
+          </button>
+          
+          <!-- 图片计数器 -->
+          <div v-if="imageList.length > 1" class="image-counter">
+            {{ currentIndex + 1 }} / {{ imageList.length }}
           </div>
         </div>
         
@@ -105,9 +134,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons-vue'
+import { CloseOutlined, DownloadOutlined, CopyOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 
 // Props
 const props = defineProps({
@@ -118,11 +147,19 @@ const props = defineProps({
   imageData: {
     type: Object,
     default: () => ({})
+  },
+  imageList: {
+    type: Array,
+    default: () => []
+  },
+  currentIndex: {
+    type: Number,
+    default: 0
   }
 })
 
 // Emits
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'navigate'])
 
 // 关闭预览
 const closePreview = () => {
@@ -188,6 +225,49 @@ const viewReferenceImage = () => {
     window.open(props.imageData.referenceImage, '_blank')
   }
 }
+
+// 导航到上一张图片
+const navigatePrev = () => {
+  if (props.currentIndex > 0) {
+    emit('navigate', props.currentIndex - 1)
+  }
+}
+
+// 导航到下一张图片
+const navigateNext = () => {
+  if (props.currentIndex < props.imageList.length - 1) {
+    emit('navigate', props.currentIndex + 1)
+  }
+}
+
+// 键盘事件处理
+const handleKeydown = (e) => {
+  if (!props.visible) return
+  
+  switch (e.key) {
+    case 'ArrowLeft':
+      e.preventDefault()
+      navigatePrev()
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      navigateNext()
+      break
+    case 'Escape':
+      e.preventDefault()
+      closePreview()
+      break
+  }
+}
+
+// 生命周期钩子
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <style scoped>
@@ -203,6 +283,76 @@ const viewReferenceImage = () => {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(4px);
+}
+
+.nav-btn {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  z-index: 1000;
+  font-size: 16px;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.nav-btn:disabled,
+.nav-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.nav-btn:disabled:hover,
+.nav-btn.disabled:hover {
+  transform: none;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.nav-btn-prev {
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  transition: all 0.2s ease;
+}
+
+.nav-btn-prev:hover:not(:disabled) {
+  transform: translateY(-50%) scale(1.05);
+}
+
+.nav-btn-next {
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  transition: all 0.2s ease;
+}
+
+.nav-btn-next:hover:not(:disabled) {
+  transform: translateY(-50%) scale(1.05);
+}
+
+.image-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  backdrop-filter: blur(4px);
+  z-index: 5;
 }
 
 .image-preview-container {
@@ -249,6 +399,7 @@ const viewReferenceImage = () => {
   flex-direction: column;
   padding: 20px;
   min-width: 0;
+  position: relative;
 }
 
 .image-container {

@@ -52,6 +52,16 @@
                 <template #icon><EyeOutlined /></template>
               </a-button>
             </a-tooltip>
+            <a-tooltip :title="image.isFavorited ? '取消收藏' : '收藏图片'">
+              <a-button 
+                type="text" 
+                shape="circle" 
+                :class="['overlay-btn', 'favorite-btn', { 'favorited': image.isFavorited }]" 
+                @click.stop="$emit('toggleFavorite', image)"
+              >
+                <template #icon><HeartOutlined v-if="!image.isFavorited" /><HeartFilled v-else /></template>
+              </a-button>
+            </a-tooltip>
           </div>
         </div>
       </div>
@@ -72,7 +82,7 @@
 </template>
 
 <script setup>
-import { DownloadOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import { DownloadOutlined, EyeOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons-vue'
 
 // Props
 defineProps({
@@ -88,7 +98,8 @@ defineEmits([
   'regenerateImage',
   'deleteImage', 
   'downloadImage',
-  'previewImage'
+  'previewImage',
+  'toggleFavorite'
 ])
 </script>
 
@@ -249,6 +260,27 @@ defineEmits([
 .preview-btn:hover {
   background: rgba(64, 169, 255, 0.5);
   border-color: rgba(64, 169, 255, 0.7);
+}
+
+.favorite-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.favorite-btn:hover {
+  background: rgba(255, 107, 107, 0.3);
+  border-color: rgba(255, 107, 107, 0.5);
+}
+
+.favorite-btn.favorited {
+  background: rgba(255, 107, 107, 0.4);
+  border-color: rgba(255, 107, 107, 0.6);
+  color: #ff6b6b;
+}
+
+.favorite-btn.favorited:hover {
+  background: rgba(255, 107, 107, 0.6);
+  border-color: rgba(255, 107, 107, 0.8);
 }
 
 /* 状态显示样式 */

@@ -220,15 +220,18 @@ class DatabaseManager:
                 error TEXT,
                 progress INTEGER DEFAULT 0,
                 created_at TIMESTAMP,
-                updated_at TIMESTAMP
+                updated_at TIMESTAMP,
+                is_favorited INTEGER DEFAULT 0
             )
         """)
         
-        # 检查是否需要添加progress字段（兼容旧数据库）
+        # 检查是否需要添加字段（兼容旧数据库）
         cursor.execute("PRAGMA table_info(tasks)")
         columns = [column[1] for column in cursor.fetchall()]
         if 'progress' not in columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN progress INTEGER DEFAULT 0")
+        if 'is_favorited' not in columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN is_favorited INTEGER DEFAULT 0")
         
         conn.commit()
         conn.close()
@@ -298,30 +301,58 @@ class DatabaseManager:
             return dict(zip(columns, row))
         return None
     
-    def get_all_tasks(self, limit: int = 50, offset: int = 0, order: str = "desc") -> dict:
-        """获取所有任务（支持分页和排序）
+    def get_all_tasks(self, limit: int = 50, offset: int = 0, order: str = "desc", favorite_filter: str = "all", time_filter: str = "all") -> dict:
+        """获取所有任务（支持分页、排序和筛选）
         
         Args:
             limit: 每页数量
             offset: 偏移量
             order: 排序方式，'desc'为倒序（最新在前），'asc'为正序（最旧在前）
+            favorite_filter: 收藏筛选，'all'全部，'favorited'已收藏，'unfavorited'未收藏
+            time_filter: 时间筛选，'all'全部，'today'今天，'week'本周，'month'本月
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # 获取总数
-        cursor.execute("SELECT COUNT(*) FROM tasks")
+        # 构建WHERE条件
+        where_conditions = []
+        params = []
+        
+        # 收藏状态筛选
+        if favorite_filter == "favorited":
+            where_conditions.append("is_favorited = 1")
+        elif favorite_filter == "unfavorited":
+            where_conditions.append("is_favorited = 0")
+        
+        # 时间筛选
+        if time_filter == "today":
+            where_conditions.append("DATE(created_at) = DATE('now', 'localtime')")
+        elif time_filter == "week":
+            where_conditions.append("created_at >= DATE('now', 'localtime', '-7 days')")
+        elif time_filter == "month":
+            where_conditions.append("created_at >= DATE('now', 'localtime', '-30 days')")
+        
+        # 构建WHERE子句
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+        
+        # 获取筛选后的总数
+        count_query = f"SELECT COUNT(*) FROM tasks {where_clause}"
+        cursor.execute(count_query, params)
         total = cursor.fetchone()[0]
         
         # 根据order参数确定排序方式
         order_clause = "DESC" if order.lower() == "desc" else "ASC"
         
         # 获取分页数据
-        cursor.execute(f"""
+        data_query = f"""
             SELECT * FROM tasks 
+            {where_clause}
             ORDER BY created_at {order_clause} 
             LIMIT ? OFFSET ?
-        """, (limit, offset))
+        """
+        cursor.execute(data_query, params + [limit, offset])
         rows = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         conn.close()
@@ -390,6 +421,32 @@ class DatabaseManager:
         conn.close()
         
         return deleted_tasks
+    
+    def toggle_favorite(self, task_id: str) -> bool:
+        """切换任务收藏状态"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 获取当前收藏状态
+        cursor.execute("SELECT is_favorited FROM tasks WHERE id = ?", (task_id,))
+        row = cursor.fetchone()
+        
+        if row is None:
+            conn.close()
+            return False
+        
+        # 切换收藏状态
+        current_status = row[0]
+        new_status = 1 if current_status == 0 else 0
+        
+        cursor.execute(
+            "UPDATE tasks SET is_favorited = ?, updated_at = ? WHERE id = ?",
+            (new_status, datetime.now(), task_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        return True
 
 class TaskManager:
     def __init__(self, db_manager: DatabaseManager, comfyui_client: ComfyUIClient, workflow_template: WorkflowTemplate):
@@ -876,75 +933,95 @@ async def get_reference_image(task_id: str):
     return FileResponse(reference_path)
 
 @app.get("/api/history")
-async def get_history(limit: int = 20, offset: int = 0, order: str = "desc"):
-    """获取历史记录（支持分页和排序）"""
-    result = db_manager.get_all_tasks(limit, offset, order)
-    tasks = result["tasks"]
-    
-    history = []
-    for task in tasks:
-        task_data = {
-            "task_id": task["id"],
-            "created_at": task["created_at"],
-            "description": task["description"],
-            "status": task["status"],
-            "result_url": None,
-            "filenames": None,
-            "direct_urls": None,
-            "reference_image_url": None
-        }
+async def get_history(
+    limit: int = 20, 
+    offset: int = 0, 
+    order: str = "desc",
+    favorite_filter: str = "all",  # all, favorited, unfavorited
+    time_filter: str = "all"       # all, today, week, month
+):
+    """获取历史记录（支持分页、排序和筛选）"""
+    try:
+        # 限制最大查询数量，防止性能问题
+        if limit > 50:
+            limit = 50
         
-        # 添加参考图URL
-        if task.get("reference_image_path"):
-            reference_path = Path(task["reference_image_path"])
-            if reference_path.exists():
-                # 构建参考图的访问URL
-                task_data["reference_image_url"] = f"/api/reference-image/{task['id']}"
+        result = db_manager.get_all_tasks(limit, offset, order, favorite_filter, time_filter)
+        tasks = result["tasks"]
         
-        # 如果任务已完成，添加图片信息
-        if task["status"] == "completed" and task.get("result_path"):
+        history = []
+        for task in tasks:
             try:
-                # 尝试解析JSON格式的多个结果路径
-                import json
-                result_paths = json.loads(task["result_path"])
+                task_data = {
+                    "task_id": task["id"],
+                    "created_at": task["created_at"],
+                    "description": task["description"],
+                    "status": task["status"],
+                    "result_url": None,
+                    "filenames": None,
+                    "direct_urls": None,
+                    "reference_image_url": None,
+                    "is_favorited": bool(task.get("is_favorited", 0))
+                }
                 
-                if isinstance(result_paths, list):
-                    # 多个图像
-                    filenames = [Path(path).name for path in result_paths]
-                    task_data.update({
-                        "result_url": f"/api/image/{task['id']}",
-                        "filenames": json.dumps(filenames),
-                        "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}" for filename in filenames])
-                    })
-                else:
-                    # 单个图像
-                    filename = Path(result_paths).name
-                    task_data.update({
-                        "result_url": f"/api/image/{task['id']}",
-                        "filenames": json.dumps([filename]),
-                        "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
-                    })
-            except (json.JSONDecodeError, TypeError):
-                # 如果不是JSON格式，按单个图像处理
-                try:
-                    filename = Path(task["result_path"]).name
-                    task_data.update({
-                        "result_url": f"/api/image/{task['id']}",
-                        "filenames": json.dumps([filename]),
-                        "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
-                    })
-                except:
-                    task_data["result_url"] = f"/api/image/{task['id']}"
+                # 添加参考图URL
+                if task.get("reference_image_path"):
+                    reference_path = Path(task["reference_image_path"])
+                    if reference_path.exists():
+                        # 构建参考图的访问URL
+                        task_data["reference_image_url"] = f"/api/reference-image/{task['id']}"
+                
+                # 如果任务已完成，添加图片信息
+                if task["status"] == "completed" and task.get("result_path"):
+                    try:
+                        # 尝试解析JSON格式的多个结果路径
+                        import json
+                        result_paths = json.loads(task["result_path"])
+                        
+                        if isinstance(result_paths, list):
+                            # 多个图像
+                            filenames = [Path(path).name for path in result_paths]
+                            task_data.update({
+                                "result_url": f"/api/image/{task['id']}",
+                                "filenames": json.dumps(filenames),
+                                "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}" for filename in filenames])
+                            })
+                        else:
+                            # 单个图像
+                            filename = Path(result_paths).name
+                            task_data.update({
+                                "result_url": f"/api/image/{task['id']}",
+                                "filenames": json.dumps([filename]),
+                                "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
+                            })
+                    except (json.JSONDecodeError, TypeError):
+                        # 如果不是JSON格式，按单个图像处理
+                        try:
+                            filename = Path(task["result_path"]).name
+                            task_data.update({
+                                "result_url": f"/api/image/{task['id']}",
+                                "filenames": json.dumps([filename]),
+                                "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
+                            })
+                        except Exception as e:
+                            print(f"处理任务 {task['id']} 的图片信息失败: {e}")
+                            task_data["result_url"] = f"/api/image/{task['id']}"
+                
+                history.append(task_data)
+            except Exception as e:
+                print(f"处理任务 {task.get('id', 'unknown')} 时出错: {e}")
+                continue
         
-        history.append(task_data)
-    
-    return {
-        "tasks": history,
-        "total": result["total"],
-        "limit": result["limit"],
-        "offset": result["offset"],
-        "has_more": result["has_more"]
-    }
+        return {
+            "tasks": history,
+            "total": result["total"],
+            "limit": result["limit"],
+            "offset": result["offset"],
+            "has_more": result["has_more"]
+        }
+    except Exception as e:
+        print(f"获取历史记录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取历史记录失败: {str(e)}")
 
 @app.delete("/api/history/{task_id}")
 async def delete_history_item(task_id: str):
@@ -957,6 +1034,27 @@ async def delete_history_item(task_id: str):
             raise HTTPException(status_code=404, detail="任务不存在")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+@app.post("/api/history/{task_id}/toggle-favorite")
+async def toggle_favorite(task_id: str):
+    """切换任务收藏状态"""
+    try:
+        success = db_manager.toggle_favorite(task_id)
+        if success:
+            # 获取更新后的任务信息
+            task = db_manager.get_task(task_id)
+            if task:
+                return {
+                    "message": "收藏状态已更新",
+                    "task_id": task_id,
+                    "is_favorited": bool(task.get("is_favorited", 0))
+                }
+            else:
+                raise HTTPException(status_code=404, detail="任务不存在")
+        else:
+            raise HTTPException(status_code=404, detail="任务不存在")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"切换收藏状态失败: {str(e)}")
 
 @app.delete("/api/history")
 async def clear_all_history():

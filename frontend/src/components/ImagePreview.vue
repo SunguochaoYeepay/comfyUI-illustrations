@@ -226,17 +226,55 @@ const viewReferenceImage = () => {
   }
 }
 
-// 导航到上一张图片
-const navigatePrev = () => {
-  if (props.currentIndex > 0) {
-    emit('navigate', props.currentIndex - 1)
-  }
-}
+
+
+// 防抖标志
+let isNavigating = false
 
 // 导航到下一张图片
 const navigateNext = () => {
+  // 防抖处理
+  if (isNavigating) {
+    console.log('导航正在进行中，跳过此次调用')
+    return
+  }
+  
+  console.log('=== ImagePreview navigateNext 调试 ===')
+  console.log('当前索引:', props.currentIndex)
+  console.log('图片列表长度:', props.imageList.length)
+  console.log('是否可以导航:', props.currentIndex < props.imageList.length - 1)
+  
   if (props.currentIndex < props.imageList.length - 1) {
-    emit('navigate', props.currentIndex + 1)
+    isNavigating = true
+    const nextIndex = props.currentIndex + 1
+    console.log('发出navigate事件，目标索引:', nextIndex)
+    emit('navigate', nextIndex)
+    
+    // 重置防抖标志
+    setTimeout(() => {
+      isNavigating = false
+    }, 100)
+  } else {
+    console.log('已经是最后一张图片，无法导航')
+  }
+}
+
+// 导航到上一张图片
+const navigatePrev = () => {
+  // 防抖处理
+  if (isNavigating) {
+    console.log('导航正在进行中，跳过此次调用')
+    return
+  }
+  
+  if (props.currentIndex > 0) {
+    isNavigating = true
+    emit('navigate', props.currentIndex - 1)
+    
+    // 重置防抖标志
+    setTimeout(() => {
+      isNavigating = false
+    }, 100)
   }
 }
 
@@ -247,26 +285,42 @@ const handleKeydown = (e) => {
   switch (e.key) {
     case 'ArrowLeft':
       e.preventDefault()
+      e.stopPropagation()
       navigatePrev()
       break
     case 'ArrowRight':
       e.preventDefault()
+      e.stopPropagation()
       navigateNext()
       break
     case 'Escape':
       e.preventDefault()
+      e.stopPropagation()
       closePreview()
       break
   }
 }
 
+// 键盘事件监听器引用
+let keydownListener = null
+
 // 生命周期钩子
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
+  // 确保只绑定一次事件监听器
+  if (!keydownListener) {
+    keydownListener = handleKeydown
+    document.addEventListener('keydown', keydownListener)
+    console.log('键盘事件监听器已绑定')
+  }
 })
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
+  // 确保移除事件监听器
+  if (keydownListener) {
+    document.removeEventListener('keydown', keydownListener)
+    keydownListener = null
+    console.log('键盘事件监听器已移除')
+  }
 })
 </script>
 

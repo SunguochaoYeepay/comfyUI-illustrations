@@ -238,18 +238,51 @@ const handlePreviewImage = async (image) => {
       return
     }
     
-    // 创建扁平化的图片列表（按时间排序）
-    flatImageList.value = [...props.allImages].sort((a, b) => {
-      const timeA = new Date(a.createdAt || a.timestamp || 0).getTime()
-      const timeB = new Date(b.createdAt || b.timestamp || 0).getTime()
-      return timeA - timeB // 最新的在后，与主列表保持一致
+    console.log('=== 图片预览调试信息 ===')
+    console.log('点击的图片:', image)
+    console.log('filteredImageGroups数量:', filteredImageGroups.value.length)
+    
+    // 创建扁平化的图片列表（基于filteredImageGroups的顺序）
+    flatImageList.value = []
+    filteredImageGroups.value.forEach((group, groupIndex) => {
+      console.log(`第${groupIndex}组图片数量:`, group.length)
+      group.forEach((img, imgIndex) => {
+        console.log(`  组${groupIndex}-图片${imgIndex}:`, {
+          url: img.url,
+          directUrl: img.directUrl,
+          id: img.id,
+          task_id: img.task_id,
+          createdAt: img.createdAt || img.timestamp
+        })
+        flatImageList.value.push(img)
+      })
     })
     
-    // 找到当前图片在列表中的索引
-    currentImageIndex.value = flatImageList.value.findIndex(img => 
-      (img.url === image.url) || (img.directUrl === image.url) || 
-      (img.id === image.id) || (img === image)
-    )
+    console.log('flatImageList总数量:', flatImageList.value.length)
+    
+         // 找到当前图片在列表中的索引 - 使用更精确的匹配
+     currentImageIndex.value = flatImageList.value.findIndex(img => {
+       // 优先使用文件名匹配，因为文件名是唯一的
+       if (img.filename === image.filename && img.task_id === image.task_id) {
+         return true
+       }
+       // 备用匹配：URL匹配
+       if (img.url === image.url || img.directUrl === image.url) {
+         return true
+       }
+       // 最后备用：对象引用匹配
+       if (img === image) {
+         return true
+       }
+       return false
+     })
+    
+         console.log('计算出的currentImageIndex:', currentImageIndex.value)
+     console.log('匹配的图片:', flatImageList.value[currentImageIndex.value])
+     console.log('点击的图片文件名:', image.filename)
+     console.log('点击的图片task_id:', image.task_id)
+     console.log('匹配的图片文件名:', flatImageList.value[currentImageIndex.value]?.filename)
+     console.log('匹配的图片task_id:', flatImageList.value[currentImageIndex.value]?.task_id)
     
     // 获取图片尺寸
     const getImageDimensions = (url) => {
@@ -290,13 +323,41 @@ const closePreview = () => {
   flatImageList.value = []
 }
 
-// 处理图片导航
-const handleImageNavigate = async (newIndex) => {
-  if (newIndex >= 0 && newIndex < flatImageList.value.length) {
-    currentImageIndex.value = newIndex
-    const newImage = flatImageList.value[newIndex]
+ // 处理图片导航
+ const handleImageNavigate = async (newIndex) => {
+   console.log('=== 图片导航调试信息 ===')
+   console.log('请求导航到索引:', newIndex)
+   console.log('当前索引:', currentImageIndex.value)
+   console.log('flatImageList长度:', flatImageList.value.length)
+   console.log('flatImageList前5张图片:', flatImageList.value.slice(0, 5).map((img, idx) => ({
+     index: idx,
+     filename: img.filename,
+     task_id: img.task_id,
+     url: img.url
+   })))
+   
+   if (newIndex >= 0 && newIndex < flatImageList.value.length) {
+     currentImageIndex.value = newIndex
+     const newImage = flatImageList.value[newIndex]
+     console.log('导航到的图片:', newImage)
     
     const imageUrl = newImage.directUrl || newImage.url
+    
+    // 获取图片尺寸
+    const getImageDimensions = (url) => {
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          resolve({ width: img.naturalWidth, height: img.naturalHeight })
+        }
+        img.onerror = () => {
+          console.warn('获取图片尺寸失败:', url)
+          resolve({ width: null, height: null })
+        }
+        img.src = url
+      })
+    }
+    
     const dimensions = await getImageDimensions(imageUrl)
     
     selectedImage.value = {
@@ -413,7 +474,7 @@ const filteredImageGroups = computed(() => {
     }
   })
   
-  // 将每个任务组转换为数组，并按时间正序排序（最新的在后面）
+  // 将每个任务组转换为数组，并按时间升序排序（最新的在后面）
   Array.from(taskGroups.values())
     .sort((a, b) => {
       const timeA = new Date(a[0]?.createdAt || a[0]?.timestamp || 0).getTime()
@@ -450,7 +511,7 @@ const imageGroups = computed(() => {
     }
   })
   
-  // 将每个任务组转换为数组，并按时间正序排序（最新的在后面）
+  // 将每个任务组转换为数组，并按时间升序排序（最新的在后面）
   try {
     Array.from(taskGroups.values())
       .sort((a, b) => {

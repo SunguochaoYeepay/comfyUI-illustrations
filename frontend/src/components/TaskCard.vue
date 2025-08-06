@@ -139,7 +139,6 @@ defineEmits([
   color: rgba(255, 255, 255, 0.9);
   margin: 0;
   line-height: 1.4;
-  max-width: 600px;
   word-wrap: break-word;
 }
 

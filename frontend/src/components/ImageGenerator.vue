@@ -82,7 +82,7 @@ const allImages = computed(() => {
     }))
   )
   
-  // 按时间正序排列，确保最新生成的图片显示在最后面
+  // 按时间升序排列，确保最新生成的图片显示在最后面
   const result = historyImages
     .sort((a, b) => new Date(a.createdAt || a.timestamp) - new Date(b.createdAt || b.timestamp))
   
@@ -103,7 +103,7 @@ const imageGroups = computed(() => {
     taskGroups.get(taskId).push(image)
   })
   
-  // 将每个任务组转换为数组，并按时间正序排序（最新的在后面）
+  // 将每个任务组转换为数组，并按时间升序排序（最新的在后面）
   Array.from(taskGroups.values())
     .sort((a, b) => new Date(a[0].createdAt) - new Date(b[0].createdAt))
     .forEach(group => {
@@ -202,7 +202,7 @@ const generateImage = async () => {
                 size: imageSize.value,
                 createdAt: new Date(),
                 referenceImage: referenceImages.value.length > 0 ? referenceImages.value[0].url || referenceImages.value[0].preview : null,
-                isFavorited: task.is_favorited === 1 || task.is_favorited === true  // 使用后端返回的收藏状态
+                isFavorited: statusData.is_favorited === 1 || statusData.is_favorited === true  // 使用后端返回的收藏状态
               }))
               
               // 重新加载第一页历史记录以显示最新生成的图像
@@ -625,7 +625,7 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     const queryParams = new URLSearchParams({
       limit: pageSize.value.toString(),
       offset: offset.toString(),
-      order: 'desc'
+      order: 'asc'
     })
     
     // 添加筛选参数
@@ -636,7 +636,7 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
       queryParams.append('time_filter', filterParams.timeFilter)
     }
     
-    // 添加order参数，按创建时间倒序排列（最新的在前）
+    // 添加order参数，按创建时间升序排列（最新的在后）
     const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
       signal: controller.signal,
       method: 'GET',

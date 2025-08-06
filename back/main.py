@@ -298,8 +298,14 @@ class DatabaseManager:
             return dict(zip(columns, row))
         return None
     
-    def get_all_tasks(self, limit: int = 50, offset: int = 0) -> dict:
-        """获取所有任务（支持分页）"""
+    def get_all_tasks(self, limit: int = 50, offset: int = 0, order: str = "desc") -> dict:
+        """获取所有任务（支持分页和排序）
+        
+        Args:
+            limit: 每页数量
+            offset: 偏移量
+            order: 排序方式，'desc'为倒序（最新在前），'asc'为正序（最旧在前）
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -307,10 +313,13 @@ class DatabaseManager:
         cursor.execute("SELECT COUNT(*) FROM tasks")
         total = cursor.fetchone()[0]
         
+        # 根据order参数确定排序方式
+        order_clause = "DESC" if order.lower() == "desc" else "ASC"
+        
         # 获取分页数据
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT * FROM tasks 
-            ORDER BY created_at DESC 
+            ORDER BY created_at {order_clause} 
             LIMIT ? OFFSET ?
         """, (limit, offset))
         rows = cursor.fetchall()
@@ -867,9 +876,9 @@ async def get_reference_image(task_id: str):
     return FileResponse(reference_path)
 
 @app.get("/api/history")
-async def get_history(limit: int = 20, offset: int = 0):
-    """获取历史记录（支持分页）"""
-    result = db_manager.get_all_tasks(limit, offset)
+async def get_history(limit: int = 20, offset: int = 0, order: str = "desc"):
+    """获取历史记录（支持分页和排序）"""
+    result = db_manager.get_all_tasks(limit, offset, order)
     tasks = result["tasks"]
     
     history = []

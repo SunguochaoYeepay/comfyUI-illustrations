@@ -1,5 +1,17 @@
 <template>
-  <div class="gallery-section">
+  <div class="gallery-section" ref="galleryRef">
+    <!-- 顶部滚动加载触发区域 -->
+    <div 
+      v-if="hasMore && !isLoadingHistory && allImages.length > 0" 
+      class="scroll-trigger-top" 
+      ref="topTriggerRef"
+    >
+      <div class="trigger-content">
+        <LoadingOutlined class="trigger-icon" />
+        <span>向上滑动加载更多</span>
+      </div>
+    </div>
+    
     <!-- 图像展示网格 - 历史图片始终显示 -->
     <div v-if="allImages.length > 0" class="image-gallery">
       <TaskCard
@@ -31,31 +43,22 @@
       :progress="progress"
     />
     
-    <!-- 加载更多按钮 -->
-    <div v-if="hasMore && !isLoadingHistory" class="load-more-section">
-      <a-button 
-        type="primary" 
-        size="large" 
-        @click="$emit('loadMore')"
-        class="load-more-btn"
-      >
-        加载更多历史记录
-      </a-button>
-    </div>
-    
-    <!-- 加载中状态 -->
+    <!-- 自动加载中状态 -->
     <div v-if="isLoadingHistory" class="loading-section">
       <a-spin size="large">
         <template #indicator>
           <LoadingOutlined style="font-size: 24px" spin />
         </template>
       </a-spin>
-      <p>正在加载历史记录...</p>
+      <p>正在加载更多历史记录...</p>
     </div>
     
-    <!-- 分页信息 -->
-    <div v-if="totalCount > 0" class="pagination-info">
-      <p>共 {{ totalCount }} 条记录，已显示 {{ allImages.length }} 条</p>
+    <!-- 没有更多数据提示 -->
+    <div v-if="!hasMore && !isLoadingHistory && allImages.length > 0" class="no-more-section">
+      <div class="no-more-content">
+        <span class="no-more-text">已加载全部历史记录</span>
+        <div class="no-more-divider"></div>
+      </div>
     </div>
 
     <!-- 图片预览组件 -->
@@ -68,7 +71,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { PictureOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import TaskCard from './TaskCard.vue'
 import GeneratingState from './GeneratingState.vue'
@@ -111,7 +114,7 @@ const props = defineProps({
 })
 
 // Emits
-defineEmits([
+const emit = defineEmits([
   'editImage',
   'regenerateImage', 
   'deleteImage',
@@ -122,6 +125,11 @@ defineEmits([
 // 图片预览相关状态
 const previewVisible = ref(false)
 const selectedImage = ref({})
+
+// 滚动监听相关
+const galleryRef = ref(null)
+const topTriggerRef = ref(null)
+let isAutoLoading = false
 
 // 处理图片预览
 const handlePreviewImage = (image) => {
@@ -166,6 +174,90 @@ const imageGroups = computed(() => {
   
   return groups
 })
+
+// 滚动监听函数 - 改为监听滚动到顶部（作为备用机制）
+const handleScroll = () => {
+  if (isAutoLoading || !props.hasMore || props.isLoadingHistory) {
+    return
+  }
+
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+  
+  // 当滚动到距离顶部30px时触发加载
+  if (scrollTop <= 30) {
+    isAutoLoading = true
+    emit('loadMore')
+    
+    // 减少延迟时间
+    setTimeout(() => {
+      isAutoLoading = false
+    }, 300)
+  }
+}
+
+// 使用Intersection Observer监听顶部滚动触发区域
+let observer = null
+
+const setupIntersectionObserver = () => {
+  if (!topTriggerRef.value) return
+  
+  observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && props.hasMore && !props.isLoadingHistory && !isAutoLoading) {
+          isAutoLoading = true
+          emit('loadMore')
+          
+          // 减少延迟时间，提高响应速度
+          setTimeout(() => {
+            isAutoLoading = false
+          }, 300)
+        }
+      })
+    },
+    {
+      rootMargin: '100px' // 增加触发范围
+    }
+  )
+  
+  observer.observe(topTriggerRef.value)
+}
+
+// 滚动到底部的函数
+const scrollToBottom = () => {
+  nextTick(() => {
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth'
+    })
+  })
+}
+
+// 生命周期钩子
+onMounted(() => {
+  // 添加滚动监听
+  window.addEventListener('scroll', handleScroll, { passive: true })
+  
+  // 设置Intersection Observer
+  nextTick(() => {
+    setupIntersectionObserver()
+    // 页面加载时滚动到底部
+    scrollToBottom()
+  })
+})
+
+onUnmounted(() => {
+  // 移除滚动监听
+  window.removeEventListener('scroll', handleScroll)
+  
+  // 清理Intersection Observer
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+})
+
+
 </script>
 
 <style scoped>
@@ -214,7 +306,7 @@ const imageGroups = computed(() => {
   opacity: 0.7;
 }
 
-/* 分页相关样式 */
+/* 加载相关样式 */
 .load-more-section {
   text-align: center;
   margin: 40px 0;
@@ -239,17 +331,82 @@ const imageGroups = computed(() => {
   font-size: 14px;
 }
 
-.pagination-info {
+/* 滚动触发区域样式 */
+.scroll-trigger {
   text-align: center;
-  margin: 20px 0;
-  padding: 12px;
-  background: #f5f5f5;
-  border-radius: 6px;
-  color: #666;
+  padding: 20px;
+  min-height: 60px;
+}
+
+.scroll-trigger-top {
+  margin: 0 0 10px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  background: rgba(26, 26, 26, 0.8);
+  border-radius: 8px;
+  padding: 8px 16px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.trigger-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
 }
 
-.pagination-info p {
+.trigger-icon {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.scroll-hint {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.scroll-hint p {
   margin: 0;
+  opacity: 0.7;
+}
+
+/* 没有更多数据提示样式 */
+.no-more-section {
+  text-align: center;
+  margin: 40px 0;
+  padding: 20px;
+}
+
+.no-more-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.no-more-text {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.no-more-divider {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  max-width: 200px;
 }
 </style>

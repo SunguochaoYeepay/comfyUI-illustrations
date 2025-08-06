@@ -209,9 +209,7 @@ const viewReferenceImage = () => {
   position: relative;
   width: 90vw;
   height: 90vh;
-  max-width: 1400px;
   max-height: 900px;
-  background: #1a1a1a;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -278,7 +276,6 @@ const viewReferenceImage = () => {
 
 .info-panel {
   width: 400px;
-  background: #2a2a2a;
   border-left: 1px solid #444;
   display: flex;
   flex-direction: column;
@@ -286,7 +283,6 @@ const viewReferenceImage = () => {
 
 .info-header {
   padding: 20px;
-  border-bottom: 1px solid #444;
 }
 
 .info-header h3 {

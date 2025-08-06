@@ -538,14 +538,34 @@ const processTaskImages = (task) => {
   }
 }
 
-// 加载历史记录（支持分页）
-const loadHistory = async (page = 1, append = false) => {
+// 加载历史记录（支持分页，从最新开始）
+const loadHistory = async (page = 1, prepend = false) => {
   if (isLoadingHistory.value) return
   
   try {
     isLoadingHistory.value = true
     const offset = (page - 1) * pageSize.value
-    const response = await fetch(`${API_BASE}/api/history?limit=${pageSize.value}&offset=${offset}`)
+    
+    // 使用AbortController来支持请求取消
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      console.log('请求超时，取消请求')
+      controller.abort()
+    }, 30000) // 增加到30秒超时
+    
+    console.log('开始加载历史记录，页面:', page, '偏移量:', offset)
+    
+    // 添加order参数，按创建时间倒序排列（最新的在前）
+    const response = await fetch(`${API_BASE}/api/history?limit=${pageSize.value}&offset=${offset}&order=desc`, {
+      signal: controller.signal,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    clearTimeout(timeoutId)
+    console.log('API响应状态:', response.status)
     
     if (response.ok) {
       const data = await response.json()
@@ -556,50 +576,81 @@ const loadHistory = async (page = 1, append = false) => {
       currentPage.value = page
       
       if (data.tasks && data.tasks.length > 0) {
-        // 转换后端数据格式为前端格式
-        const newHistoryItems = data.tasks.map(task => {
-          const processedImages = processTaskImages(task)
-          return {
-            id: task.task_id,
-            task_id: task.task_id,  // 保持task_id字段用于删除操作
-            prompt: task.description,
-            timestamp: task.created_at,
-            status: task.status,
-            images: processedImages
+        // 使用requestIdleCallback优化数据处理
+        const processData = () => {
+          try {
+            const newHistoryItems = data.tasks.map(task => {
+              const processedImages = processTaskImages(task)
+              return {
+                id: task.task_id,
+                task_id: task.task_id,  // 保持task_id字段用于删除操作
+                prompt: task.description,
+                timestamp: task.created_at,
+                status: task.status,
+                images: processedImages
+              }
+            })
+            
+            if (prepend) {
+              // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
+              history.value = [...newHistoryItems, ...history.value]
+            } else {
+              // 替换模式：替换现有历史记录（首次加载）
+              history.value = newHistoryItems
+            }
+            
+            console.log('数据处理完成，历史记录数量:', history.value.length)
+          } catch (error) {
+            console.error('处理历史数据时出错:', error)
+          } finally {
+            // 确保数据处理完成后立即清除loading状态
+            isLoadingHistory.value = false
+            console.log('processData完成，清除loading状态')
           }
-        })
-        
-        if (append) {
-          // 追加模式：添加到现有历史记录后面
-          history.value = [...history.value, ...newHistoryItems]
-        } else {
-          // 替换模式：替换现有历史记录
-          history.value = newHistoryItems
         }
-      } else if (!append) {
+        
+        // 使用requestIdleCallback或setTimeout来避免阻塞UI
+        if (window.requestIdleCallback) {
+          requestIdleCallback(processData)
+        } else {
+          setTimeout(processData, 0)
+        }
+      } else if (!prepend) {
         history.value = []
+        // 如果没有数据需要处理，直接清除loading状态
+        isLoadingHistory.value = false
+        console.log('无数据需要处理，清除loading状态')
       }
+    } else {
+      // API响应不成功，清除loading状态
+      isLoadingHistory.value = false
+      console.log('API响应失败，清除loading状态')
     }
   } catch (error) {
-    console.error('加载历史记录失败:', error)
-    // 如果API失败且是第一页，尝试从localStorage加载
-    if (page === 1) {
-      try {
-        const savedHistory = localStorage.getItem('imageGeneratorHistory')
-        if (savedHistory) {
-          history.value = JSON.parse(savedHistory)
+    if (error.name === 'AbortError') {
+      console.log('请求被取消')
+    } else {
+      console.error('加载历史记录失败:', error)
+      // 如果API失败且是第一页，尝试从localStorage加载
+      if (page === 1) {
+        try {
+          const savedHistory = localStorage.getItem('imageGeneratorHistory')
+          if (savedHistory) {
+            history.value = JSON.parse(savedHistory)
+          }
+        } catch (localError) {
+          console.error('从本地存储加载历史记录也失败:', localError)
         }
-      } catch (localError) {
-        console.error('从本地存储加载历史记录也失败:', localError)
       }
+      message.error('加载历史记录失败')
     }
-    message.error('加载历史记录失败')
-  } finally {
+    // 在catch块中也要清除loading状态
     isLoadingHistory.value = false
+    console.log('异常情况，清除loading状态')
   }
 }
 
-// 加载更多历史记录
+// 加载更多历史记录（加载更早的数据）
 const loadMoreHistory = async () => {
   if (hasMore.value && !isLoadingHistory.value) {
     await loadHistory(currentPage.value + 1, true)
@@ -616,8 +667,15 @@ const saveHistory = () => {
 }
 
 // 组件挂载时加载历史记录
-onMounted(() => {
-  loadHistory()
+onMounted(async () => {
+  await loadHistory()
+  // 页面加载完成后滚动到底部，确保控制面板可见
+  setTimeout(() => {
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth'
+    })
+  }, 500) // 延迟500ms确保DOM渲染完成
 })
 </script>
 
@@ -642,7 +700,7 @@ onMounted(() => {
   gap: 30px;
   position: relative;
   z-index: 1;
-  padding: 20px 0;
+  padding: 0 0 140px 0; /* 为底部固定控制面板预留空间 */
 }
 
 

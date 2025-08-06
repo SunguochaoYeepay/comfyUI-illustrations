@@ -94,9 +94,10 @@ const handleGenerate = () => {
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  padding: 10px;
   max-width: 800px;
   width: 90%;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .control-card {

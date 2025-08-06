@@ -835,6 +835,23 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
     
     return FileResponse(image_path)
 
+@app.get("/api/reference-image/{task_id}")
+async def get_reference_image(task_id: str):
+    """获取任务的参考图像"""
+    task = task_manager.get_task_status(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    if not task.get("reference_image_path"):
+        raise HTTPException(status_code=404, detail="该任务没有参考图像")
+    
+    reference_path = Path(task["reference_image_path"])
+    if not reference_path.exists():
+        raise HTTPException(status_code=404, detail="参考图像文件不存在")
+    
+    return FileResponse(reference_path)
+
 @app.get("/api/history")
 async def get_history(limit: int = 50):
     """获取历史记录"""
@@ -849,8 +866,16 @@ async def get_history(limit: int = 50):
             "status": task["status"],
             "result_url": None,
             "filenames": None,
-            "direct_urls": None
+            "direct_urls": None,
+            "reference_image_url": None
         }
+        
+        # 添加参考图URL
+        if task.get("reference_image_path"):
+            reference_path = Path(task["reference_image_path"])
+            if reference_path.exists():
+                # 构建参考图的访问URL
+                task_data["reference_image_url"] = f"/api/reference-image/{task['id']}"
         
         # 如果任务已完成，添加图片信息
         if task["status"] == "completed" and task.get("result_path"):

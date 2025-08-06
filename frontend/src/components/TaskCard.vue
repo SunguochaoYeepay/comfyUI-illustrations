@@ -37,19 +37,19 @@
         class="image-item"
       >
         <!-- 图像容器 -->
-        <div class="image-container">
+        <div class="image-container" @click="$emit('previewImage', image)">
           <img :src="image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
           
           <!-- 图片操作悬浮层 -->
           <div class="image-overlay">
-            <a-tooltip title="下载图片">
+            <a-tooltip title="预览图片">
               <a-button 
                 type="text" 
                 shape="circle" 
-                class="overlay-btn" 
-                @click.stop="$emit('downloadImage', image)"
+                class="overlay-btn preview-btn" 
+                @click.stop="$emit('previewImage', image)"
               >
-                <template #icon><DownloadOutlined /></template>
+                <template #icon><EyeOutlined /></template>
               </a-button>
             </a-tooltip>
           </div>
@@ -72,7 +72,7 @@
 </template>
 
 <script setup>
-import { DownloadOutlined } from '@ant-design/icons-vue'
+import { DownloadOutlined, EyeOutlined } from '@ant-design/icons-vue'
 
 // Props
 defineProps({
@@ -87,7 +87,8 @@ defineEmits([
   'editImage',
   'regenerateImage',
   'deleteImage', 
-  'downloadImage'
+  'downloadImage',
+  'previewImage'
 ])
 </script>
 
@@ -95,7 +96,7 @@ defineEmits([
 .task-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
-  padding: 20px;
+  padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
@@ -112,8 +113,8 @@ defineEmits([
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -128,9 +129,7 @@ defineEmits([
   margin: 0;
   line-height: 1.4;
   max-width: 600px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-wrap: break-word;
 }
 
 .task-meta {
@@ -138,6 +137,7 @@ defineEmits([
   color: rgba(255, 255, 255, 0.6);
   font-weight: 400;
   margin-left: 8px;
+  white-space: nowrap;
 }
 
 .task-actions {
@@ -172,7 +172,7 @@ defineEmits([
 
 .images-grid {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   grid-template-columns: repeat(4, 1fr);
 }
 
@@ -191,6 +191,7 @@ defineEmits([
   border-radius: 12px;
   overflow: hidden;
   transition: transform 0.3s ease;
+  cursor: pointer;
 }
 
 .image-container:hover {
@@ -215,6 +216,7 @@ defineEmits([
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   opacity: 0;
   transition: opacity 0.3s ease;
   border-radius: 12px;
@@ -237,6 +239,16 @@ defineEmits([
   border-color: rgba(255, 255, 255, 0.5);
   color: white;
   transform: scale(1.1);
+}
+
+.preview-btn {
+  background: rgba(64, 169, 255, 0.3);
+  border-color: rgba(64, 169, 255, 0.5);
+}
+
+.preview-btn:hover {
+  background: rgba(64, 169, 255, 0.5);
+  border-color: rgba(64, 169, 255, 0.7);
 }
 
 /* 状态显示样式 */

@@ -10,6 +10,7 @@
         @regenerate-image="$emit('regenerateImage', $event)"
         @delete-image="$emit('deleteImage', $event)"
         @download-image="$emit('downloadImage', $event)"
+        @preview-image="handlePreviewImage"
       />
     </div>
     
@@ -29,14 +30,22 @@
       :image-count="imageCount"
       :progress="progress"
     />
+    
+    <!-- 图片预览组件 -->
+    <ImagePreview
+      :visible="previewVisible"
+      :image-data="selectedImage"
+      @close="closePreview"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { PictureOutlined } from '@ant-design/icons-vue'
 import TaskCard from './TaskCard.vue'
 import GeneratingState from './GeneratingState.vue'
+import ImagePreview from './ImagePreview.vue'
 
 // Props
 const props = defineProps({
@@ -70,6 +79,26 @@ defineEmits([
   'downloadImage'
 ])
 
+// 图片预览相关状态
+const previewVisible = ref(false)
+const selectedImage = ref({})
+
+// 处理图片预览
+const handlePreviewImage = (image) => {
+  selectedImage.value = {
+    ...image,
+    url: image.directUrl || image.url,
+    createdAt: image.createdAt || image.timestamp
+  }
+  previewVisible.value = true
+}
+
+// 关闭预览
+const closePreview = () => {
+  previewVisible.value = false
+  selectedImage.value = {}
+}
+
 // 计算属性：将图像按任务分组，每组四张图片
 const imageGroups = computed(() => {
   const groups = []
@@ -102,14 +131,18 @@ const imageGroups = computed(() => {
 <style scoped>
 .gallery-section {
   flex: 1;
-  overflow: hidden;
-  margin-bottom: 20px;
+  overflow-y: visible;
+  max-width: 1000px;
+  margin: 0 auto 0px auto;
+  width: 100%;
+  padding: 0 20px;
+  min-height: auto;
 }
 
 .image-gallery {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
 .empty-gallery {

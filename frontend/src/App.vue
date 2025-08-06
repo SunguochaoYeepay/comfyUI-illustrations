@@ -15,11 +15,29 @@ import ImageGenerator from './components/ImageGenerator.vue'
   box-sizing: border-box;
 }
 
-body {
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow-x: hidden;
+  position: relative;
+  top: 0;
+  left: 0;
 }
 
 #app {
   min-height: 100vh;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: relative;
+  top: 0;
+  left: 0;
+}
+
+/* 强制重置可能的全局样式 */
+body > div:first-child {
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
 }
 </style>

@@ -35,7 +35,7 @@ import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
 
 // API基础URL - 使用相对路径，通过Vite代理转发
-const API_BASE = ''
+const API_BASE = 'http://localhost:9000'
 
 
 
@@ -56,9 +56,8 @@ const previewVisible = ref(false)
 const previewImage = ref('')
 // 移除了图片索引存储变量
 
-// 计算属性：合并所有图像用于展示
+// 计算属性：只从历史记录获取图像用于展示
 const allImages = computed(() => {
-  const generated = generatedImages.value || []
   const hist = history.value || []
   
   // 将历史记录中的图片展开
@@ -72,7 +71,7 @@ const allImages = computed(() => {
   )
   
   // 按时间正序排列，确保最新生成的图片显示在最后面
-  const result = [...generated, ...historyImages]
+  const result = historyImages
     .sort((a, b) => new Date(a.createdAt || a.timestamp) - new Date(b.createdAt || b.timestamp))
   
   return result
@@ -133,8 +132,16 @@ const generateImage = async () => {
     formData.append('steps', 20)
     
     // 添加参考图片（如果有的话）
-    if (referenceImages.value.length > 0) {
-      formData.append('reference_image', referenceImages.value[0].originFileObj)
+    if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {
+      const fileObj = referenceImages.value[0].originFileObj
+      // 验证文件对象是否有效
+      if (fileObj instanceof File) {
+        formData.append('reference_image', fileObj)
+      } else {
+        console.error('参考图片文件对象无效:', fileObj)
+        message.error('参考图片文件无效，请重新选择')
+        return
+      }
     } else {
       // 如果没有参考图片，创建一个空白图片
       const canvas = document.createElement('canvas')
@@ -148,7 +155,7 @@ const generateImage = async () => {
     }
 
     // 调用后端API
-    const response = await fetch('/api/generate-image', {
+    const response = await fetch(`${API_BASE}/api/generate-image`, {
       method: 'POST',
       body: formData
     })
@@ -162,7 +169,7 @@ const generateImage = async () => {
       // 轮询任务状态
       const pollStatus = async () => {
         try {
-          const statusResponse = await fetch(`/api/task/${taskId}`)
+          const statusResponse = await fetch(`${API_BASE}/api/task/${taskId}`)
           if (statusResponse.ok) {
             const statusData = await statusResponse.json()
             progress.value = statusData.progress || 0
@@ -181,12 +188,12 @@ const generateImage = async () => {
                 filename: filenames[index] || `generated_${taskId}_${index + 1}.png`,
                 prompt: prompt.value,
                 size: imageSize.value,
-                createdAt: new Date()
+                createdAt: new Date(),
+                referenceImage: referenceImages.value.length > 0 ? referenceImages.value[0].url || referenceImages.value[0].preview : null
               }))
               
-              generatedImages.value = newImages
-              
-              // 刷新历史记录（从后端获取最新数据）
+              // 只刷新历史记录（从后端获取最新数据），不再单独设置generatedImages
+              // 这样避免了重复显示问题
               await loadHistory()
               
               // 同时保存到本地存储作为备份
@@ -249,7 +256,6 @@ const clearHistory = async () => {
     
     if (response.ok) {
       history.value = []
-      generatedImages.value = []
       // 清空本地存储
       localStorage.removeItem('imageGeneratorHistory')
       message.success('历史记录已清空')
@@ -342,14 +348,23 @@ const editImage = (image) => {
   // 使用原图像的提示词
   prompt.value = image.prompt
   
-  // 如果有参考图，可以尝试回填
-  // 这里需要根据实际情况处理参考图的回填
-  // 由于原始参考图可能已不可用，这里只回填提示词
+  // 回显参考图
+  if (image.referenceImage) {
+    referenceImages.value = [{
+      uid: Date.now(),
+      name: 'reference.png',
+      status: 'done',
+      url: image.referenceImage,
+      preview: image.referenceImage
+    }]
+  } else {
+    referenceImages.value = []
+  }
   
   // 滚动到输入区域
-  document.querySelector('.input-section')?.scrollIntoView({ behavior: 'smooth' })
+  document.querySelector('.control-section')?.scrollIntoView({ behavior: 'smooth' })
   
-  message.success('已将提示词回填到输入框，您可以进行编辑')
+  message.success('已将提示词和参考图回填到输入框，您可以进行编辑')
 }
 
 // 重新生成图像
@@ -362,10 +377,23 @@ const regenerateImage = async (image) => {
   // 使用原图像的提示词
   prompt.value = image.prompt
   
+  // 回显参考图
+  if (image.referenceImage) {
+    referenceImages.value = [{
+      uid: Date.now(),
+      name: 'reference.png',
+      status: 'done',
+      url: image.referenceImage,
+      preview: image.referenceImage
+    }]
+  } else {
+    referenceImages.value = []
+  }
+  
   // 开始生成
   await generateImage()
   
-  message.info('正在使用原提示词重新生成图像...')
+  message.info('正在使用原提示词和参考图重新生成图像...')
 }
 
 // 删除图像
@@ -381,12 +409,6 @@ const deleteImage = async (image) => {
       const historyIndex = history.value.findIndex(item => item.task_id === image.task_id)
       if (historyIndex > -1) {
         history.value.splice(historyIndex, 1)
-      }
-      
-      // 从生成的图像中移除
-      const generatedIndex = generatedImages.value.findIndex(item => item.task_id === image.task_id)
-      if (generatedIndex > -1) {
-        generatedImages.value.splice(generatedIndex, 1)
       }
       
       // 更新本地存储
@@ -444,6 +466,12 @@ const processTaskImages = (task) => {
     }
   }
   
+  // 获取参考图信息
+  let referenceImageUrl = null
+  if (task.reference_image_url) {
+    referenceImageUrl = task.reference_image_url
+  }
+  
   // 如果有文件名信息，说明是多张图片
   if (filenames.length > 0) {
     const images = filenames.map((filename, index) => {
@@ -454,7 +482,8 @@ const processTaskImages = (task) => {
         filename: filename,
         task_id: task.task_id,
         prompt: task.description,
-        createdAt: new Date(task.created_at)
+        createdAt: new Date(task.created_at),
+        referenceImage: referenceImageUrl
       }
     })
     return images
@@ -468,7 +497,8 @@ const processTaskImages = (task) => {
       filename: `generated_${task.task_id}.png`,
       task_id: task.task_id,
       prompt: task.description,
-      createdAt: new Date(task.created_at)
+      createdAt: new Date(task.created_at),
+      referenceImage: referenceImageUrl
     }]
   }
 }
@@ -528,32 +558,33 @@ onMounted(() => {
 <style scoped>
 .image-generator {
   min-height: 100vh;
-  padding: 40px 20px;
+  margin: 0 !important;
+  position: relative !important;
+  top: 0 !important;
 }
 
-.main-content {
-  display: flex;
-  flex-direction: column;
-  margin: 0 auto;
-  width: 60%;
-  max-width: 80%;
-  padding: 0 20px;
-  padding-bottom: 120px;
-}
+/* 移除重复的main-content样式定义 */
 
 .main-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
-  padding: 20px;
-  padding-bottom: 200px;
+  padding: 10px;
+  position: relative;
+  top: 0;
+  left: 0;
 }
 
 .main-content {
-  max-width: 1200px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: 30px;
+  position: relative;
+  z-index: 1;
+  padding-top: 60px;
+  padding-bottom: 110px;
+  margin-top: 0;
+  min-height: calc(100vh - 40px);
 }
 
 
@@ -594,14 +625,6 @@ onMounted(() => {
     gap: 20px;
   }
   
-  .title {
-    font-size: 2rem;
-  }
-  
-  .main-container {
-    padding: 10px;
-    padding-bottom: 200px;
-  }
 }
 
 
@@ -712,6 +735,7 @@ onMounted(() => {
 .image-generator .ant-card-body {
   background: #1a1a1a !important;
   color: #fff !important;
+  padding:10px !important;
 }
 
 /* 全局强制覆盖Ant Design上传组件样式 */

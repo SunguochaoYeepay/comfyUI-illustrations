@@ -4,8 +4,7 @@
       <!-- 任务信息头部 -->
       <div class="task-header">
         <div class="task-info">
-          <p class="task-prompt">{{ prompt || '正在生成图片...' }}</p>
-          <p class="task-meta">{{ imageCount }}张图片 · 正在生成中...</p>
+          <p class="task-prompt">{{ prompt || '正在生成' + imageCount +'图片...' }}</p>
         </div>
       </div>
       
@@ -95,8 +94,7 @@ defineProps({
 .task-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px;
   backdrop-filter: blur(10px);
 }
 

@@ -54,6 +54,21 @@ const beforeUpload = (file) => {
     message.error('图片大小不能超过 2MB!')
     return false
   }
+  
+  // 手动处理文件，确保originFileObj正确设置
+  const fileObj = {
+    uid: file.uid || Date.now().toString(),
+    name: file.name,
+    status: 'done',
+    originFileObj: file, // 确保originFileObj被正确设置
+    url: URL.createObjectURL(file), // 创建预览URL
+    preview: URL.createObjectURL(file)
+  }
+  
+  // 更新文件列表
+  const newFileList = [fileObj] // 只保留最新的一个文件
+  localFileList.value = newFileList
+  
   return false // 阻止自动上传，手动处理
 }
 
@@ -113,8 +128,7 @@ const handleRemove = (file) => {
 }
 
 .reference-upload :deep(.ant-upload-select) {
-  width: 104px !important;
-  height: 104px !important;
+ 
   background: rgba(255, 255, 255, 0.05) !important;
   border: 1px dashed rgba(255, 255, 255, 0.3) !important;
   border-radius: 8px !important;
@@ -129,19 +143,16 @@ const handleRemove = (file) => {
 }
 
 .reference-upload :deep(.ant-upload-list-picture-card-container) {
-  width: 104px !important;
-  height: 104px !important;
+ 
 }
 
 .reference-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item) {
-  width: 104px !important;
-  height: 104px !important;
+ 
   border-radius: 8px !important;
   background: rgba(255, 255, 255, 0.05) !important;
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   border: none !important;
-  height: 104px !important;
-  width: 104px !important;
+ 
   padding: 0 !important;
   overflow: hidden !important;
   border-radius: 6px !important;

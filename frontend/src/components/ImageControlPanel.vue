@@ -90,13 +90,13 @@ const handleGenerate = () => {
 <style scoped>
 .control-section {
   position: fixed;
-  bottom: 0;
-  left: 10%;
-  right: 10%;
+  bottom: 0px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1000;
-  padding: 10px 20px;
-  max-width: 50%;
-  margin: 0 auto;
+  padding: 10px;
+  max-width: 800px;
+  width: 90%;
 }
 
 .control-card {

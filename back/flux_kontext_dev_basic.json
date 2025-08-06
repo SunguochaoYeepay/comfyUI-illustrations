@@ -149,7 +149,8 @@
       "images": [
         "8",
         0
-      ]
+      ],
+      "save_all": true
     },
     "class_type": "SaveImage",
     "_meta": {

@@ -6,8 +6,79 @@
     <div class="main-content">
       <!-- 上方：历史图片展示区域 -->
       <div class="gallery-section">
-       
-        <!-- 生成状态 -->
+        
+        <!-- 图像展示网格 - 历史图片始终显示 -->
+        <div v-if="allImages.length > 0" class="image-gallery">
+          <div
+            v-for="(group, groupIndex) in imageGroups"
+            :key="groupIndex"
+            class="task-card"
+          >
+            <!-- 任务信息头部 -->
+            <div class="task-header">
+              <div class="task-info">
+                <p class="task-prompt">{{ group[0]?.prompt || '无提示词' }}</p>
+                <p class="task-meta">{{ group.length }}张图片 · {{ new Date(group[0]?.createdAt).toLocaleString() }}</p>
+              </div>
+              <div class="task-actions">
+                <!-- 移除了图片组导航按钮 -->
+                
+                <!-- 操作按钮 -->
+                <div class="action-buttons">
+                  <a-button type="text" size="small" @click.stop="editImage(group[0])" class="action-btn">
+                    重新编辑
+                  </a-button>
+                  <a-button type="text" size="small" @click.stop="regenerateImage(group[0])" class="action-btn">
+                    再次生成
+                  </a-button>
+                  <a-button type="text" size="small" @click.stop="deleteImage(group[0])" class="action-btn delete-btn">
+                    删除
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 图片网格 -->
+            <div class="images-grid" :data-count="group.length">
+              <!-- 显示所有图片 -->
+              <div
+                v-for="(image, index) in group"
+                :key="index"
+                class="image-item"
+              >
+                <!-- 图像容器 -->
+                <div class="image-container">
+                  <img :src="image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
+                  
+                  <!-- 图片操作悬浮层 -->
+                  <div class="image-overlay">
+                    <a-tooltip title="下载图片">
+                      <a-button 
+                        type="text" 
+                        shape="circle" 
+                        class="overlay-btn" 
+                        @click.stop="downloadImage(image)"
+                      >
+                        <template #icon><DownloadOutlined /></template>
+                      </a-button>
+                    </a-tooltip>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 空状态 -->
+        <div v-if="!isGenerating && allImages.length === 0" class="empty-gallery">
+          <div class="empty-content">
+            <PictureOutlined class="empty-icon" />
+            <h3>还没有生成图像</h3>
+            <p>输入您的创意提示词，开始创作第一张图像吧！</p>
+          </div>
+        </div>
+        
+        <!-- 生成状态 - 始终显示在历史图片下方 -->
         <div v-if="isGenerating" class="generating-state">
           <div class="task-card">
             <!-- 任务信息头部 -->
@@ -26,9 +97,50 @@
                 class="image-item"
               >
                 <div class="image-container loading-placeholder">
-                  <div class="loading-content">
-                    <a-spin size="large" />
-                    <p>生成中...</p>
+                  <!-- 背景脉冲动画 -->
+                  <div class="pulse-bg"></div>
+                  
+                  <!-- 粒子效果 -->
+                  <div class="particles">
+                    <div class="particle" v-for="i in 8" :key="i"></div>
+                  </div>
+                  
+                  <!-- 中心旋转加载器 -->
+                  <div class="center-loader">
+                    <div class="loader-ring ring-1"></div>
+                    <div class="loader-ring ring-2"></div>
+                    <div class="loader-ring ring-3"></div>
+                    <div class="loader-core">
+                      <div class="core-icon">✨</div>
+                    </div>
+                  </div>
+                  
+                  <!-- 进度指示器 -->
+                   <div class="progress-indicator">
+                     <div class="progress-circle">
+                       <svg class="progress-svg" viewBox="0 0 36 36">
+                         <defs>
+                           <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                             <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                             <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+                             <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+                           </linearGradient>
+                         </defs>
+                         <path class="progress-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                         <path class="progress-bar" :stroke-dasharray="progress + ', 100'" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                       </svg>
+                       <div class="progress-text">{{ Math.round(progress) }}%</div>
+                     </div>
+                   </div>
+                  
+                  <!-- 状态文字 -->
+                  <div class="loading-text">
+                    <div class="text-line">AI创作中</div>
+                    <div class="dots">
+                      <span class="dot"></span>
+                      <span class="dot"></span>
+                      <span class="dot"></span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -36,80 +148,6 @@
           </div>
         </div>
 
-        <!-- 图像展示网格 -->
-        <div v-else-if="allImages.length > 0" class="image-gallery">
-          <div
-            v-for="(group, groupIndex) in imageGroups"
-            :key="groupIndex"
-            class="task-card"
-          >
-            <!-- 任务信息头部 -->
-            <div class="task-header">
-              <div class="task-info">
-                <p class="task-prompt">{{ group[0]?.prompt || '无提示词' }}</p>
-                <p class="task-meta">{{ group.length }}张图片 · {{ new Date(group[0]?.createdAt).toLocaleString() }}</p>
-              </div>
-              <div class="task-actions">
-                <!-- 图片组导航按钮 -->
-                <div v-if="group.length > 1" class="image-nav-controls">
-                  <span class="image-counter">{{ getCurrentImageIndex(groupIndex) + 1 }} / {{ group.length }}</span>
-                  <a-button type="text" size="small" @click.stop="showPrevImage(groupIndex)" class="nav-btn" title="上一张" :disabled="getCurrentImageIndex(groupIndex) === 0">
-                    ←
-                  </a-button>
-                  <a-button type="text" size="small" @click.stop="showNextImage(groupIndex)" class="nav-btn" title="下一张" :disabled="getCurrentImageIndex(groupIndex) === group.length - 1">
-                    →
-                  </a-button>
-                </div>
-                
-                <!-- 操作按钮 -->
-                <div class="action-buttons">
-                  <a-button type="text" size="small" @click.stop="regenerateImage(group[0])" class="action-btn" title="重新生成">
-                    <template #icon><ReloadOutlined /></template>
-                  </a-button>
-                  <a-button type="text" size="small" @click.stop="deleteImage(group[0])" class="action-btn delete-btn" title="删除">
-                    <template #icon><DeleteOutlined /></template>
-                  </a-button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 图片网格 -->
-            <div class="images-grid" :data-count="group.length > 1 ? 1 : group.length">
-              <!-- 当有多张图片时，只显示当前选中的图片 -->
-              <template v-if="group.length > 1">
-                <div class="image-item">
-                  <!-- 图像容器 -->
-                  <div class="image-container">
-                    <img :src="group[getCurrentImageIndex(groupIndex)].url" :alt="group[getCurrentImageIndex(groupIndex)].prompt" class="gallery-image" />
-                  </div>
-                </div>
-              </template>
-              
-              <!-- 当只有一张图片时，正常显示 -->
-              <template v-else>
-                <div
-                  v-for="(image, index) in group"
-                  :key="index"
-                  class="image-item"
-                >
-                  <!-- 图像容器 -->
-                  <div class="image-container">
-                    <img :src="image.url" :alt="image.prompt" class="gallery-image" />
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else class="empty-gallery">
-          <div class="empty-content">
-            <PictureOutlined class="empty-icon" />
-            <h3>还没有生成图像</h3>
-            <p>输入您的创意提示词，开始创作第一张图像吧！</p>
-          </div>
-        </div>
       </div>
 
       <!-- 下方：对话框和参数设置 -->
@@ -176,7 +214,7 @@ import { message } from 'ant-design-vue'
 import { DownloadOutlined, ShareAltOutlined, EditOutlined, PictureOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 
 // API基础URL
-const API_BASE = 'http://localhost:9000'
+const API_BASE = 'http://localhost:8000'
 
 // 响应式数据
 const prompt = ref('')
@@ -191,13 +229,14 @@ const history = ref([])
 const referenceImages = ref([])
 const previewVisible = ref(false)
 const previewImage = ref('')
-const currentImageIndexes = ref(new Map()) // 存储每个图片组当前显示的图片索引
+// 移除了图片索引存储变量
 
 // 计算属性：合并所有图像用于展示
 const allImages = computed(() => {
+  // 按时间正序排列，确保最新生成的图片显示在最后面
   return [...generatedImages.value, ...history.value.flatMap(h => h.images || [])]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 20) // 最多显示20张图片
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  // 移除了图片数量限制，显示所有图片
 })
 
 // 计算属性：将图像按任务分组，每组四张图片
@@ -214,9 +253,9 @@ const imageGroups = computed(() => {
     taskGroups.get(taskId).push(image)
   })
   
-  // 将每个任务组转换为数组，并按时间排序
+  // 将每个任务组转换为数组，并按时间正序排序（最新的在后面）
   Array.from(taskGroups.values())
-    .sort((a, b) => new Date(b[0].createdAt) - new Date(a[0].createdAt))
+    .sort((a, b) => new Date(a[0].createdAt) - new Date(b[0].createdAt))
     .forEach(group => {
       groups.push(group)
     })
@@ -270,7 +309,7 @@ const generateImage = async () => {
     }
 
     // 调用后端API
-    const response = await fetch('http://localhost:9000/api/generate-image', {
+    const response = await fetch('http://localhost:8000/api/generate-image', {
       method: 'POST',
       body: formData
     })
@@ -284,7 +323,7 @@ const generateImage = async () => {
       // 轮询任务状态
       const pollStatus = async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:9000/api/task/${taskId}`)
+          const statusResponse = await fetch(`http://localhost:8000/api/task/${taskId}`)
           if (statusResponse.ok) {
             const statusData = await statusResponse.json()
             progress.value = statusData.progress || 0
@@ -292,10 +331,15 @@ const generateImage = async () => {
             if (statusData.status === 'completed' && statusData.result) {
               // 任务完成，获取图像
               const imageUrls = statusData.result.image_urls
+              const filenames = statusData.result.filenames || []
+              const directUrls = statusData.result.direct_urls || []
+              
               const newImages = imageUrls.map((imageUrl, index) => ({
                 id: Date.now() + index,
                 task_id: taskId,  // 添加task_id用于删除操作
-                url: `http://localhost:9000${imageUrl}`,
+                url: `http://localhost:8000${imageUrl}`,
+          directUrl: directUrls[index] ? `http://localhost:8000${directUrls[index]}` : null,
+                filename: filenames[index] || `generated_${taskId}_${index + 1}.png`,
                 prompt: prompt.value,
                 size: imageSize.value,
                 createdAt: new Date()
@@ -386,12 +430,25 @@ const useImagePrompt = (image) => {
 }
 
 // 下载图像
-const downloadImage = (image) => {
-  const link = document.createElement('a')
-  link.href = image.url
-  link.download = `ai-generated-${Date.now()}.png`
-  link.click()
-  message.success('开始下载图像')
+const downloadImage = async (image) => {
+  try {
+    // 使用直接URL或常规URL
+    const imageUrl = image.directUrl || image.url
+    const filename = image.filename || `ai-generated-${Date.now()}.png`
+    
+    // 创建一个临时链接
+    const link = document.createElement('a')
+    link.href = imageUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    message.success(`图片 ${filename} 下载已开始`)
+  } catch (error) {
+    console.error('下载失败:', error)
+    message.error('下载失败，请重试')
+  }
 }
 
 // 分享图像
@@ -408,27 +465,7 @@ const shareImage = (image) => {
   }
 }
 
-// 获取当前图片组显示的图片索引
-const getCurrentImageIndex = (groupIndex) => {
-  return currentImageIndexes.value.get(groupIndex) || 0
-}
-
-// 显示上一张图片
-const showPrevImage = (groupIndex) => {
-  const currentIndex = getCurrentImageIndex(groupIndex)
-  if (currentIndex > 0) {
-    currentImageIndexes.value.set(groupIndex, currentIndex - 1)
-  }
-}
-
-// 显示下一张图片
-const showNextImage = (groupIndex) => {
-  const group = imageGroups.value[groupIndex]
-  const currentIndex = getCurrentImageIndex(groupIndex)
-  if (currentIndex < group.length - 1) {
-    currentImageIndexes.value.set(groupIndex, currentIndex + 1)
-  }
-}
+// 移除了图片切换相关函数
 
 // 下载全部图片
 const downloadAllImages = async (group) => {
@@ -454,6 +491,26 @@ const downloadAllImages = async (group) => {
     console.error('批量下载失败:', error)
     message.error('批量下载失败，请重试')
   }
+}
+
+// 重新编辑图像
+const editImage = (image) => {
+  if (!image.prompt) {
+    message.warning('该图像没有提示词，无法编辑')
+    return
+  }
+  
+  // 使用原图像的提示词
+  prompt.value = image.prompt
+  
+  // 如果有参考图，可以尝试回填
+  // 这里需要根据实际情况处理参考图的回填
+  // 由于原始参考图可能已不可用，这里只回填提示词
+  
+  // 滚动到输入区域
+  document.querySelector('.input-section')?.scrollIntoView({ behavior: 'smooth' })
+  
+  message.success('已将提示词回填到输入框，您可以进行编辑')
 }
 
 // 重新生成图像
@@ -561,11 +618,32 @@ const loadHistory = async () => {
             try {
               // 尝试解析JSON格式的多张图片路径
               const paths = JSON.parse(task.result_url)
+              // 获取文件名和直接URL（如果有）
+              let filenames = [];
+              let directUrls = [];
+              
+              if (task.filenames) {
+                try {
+                  filenames = JSON.parse(task.filenames);
+                } catch (e) {
+                  console.warn('解析文件名失败:', e);
+                }
+              }
+              
+              if (task.direct_urls) {
+                try {
+                  directUrls = JSON.parse(task.direct_urls);
+                } catch (e) {
+                  console.warn('解析直接URL失败:', e);
+                }
+              }
+              
               if (Array.isArray(paths)) {
                 // 多张图片
                 return paths.map((path, index) => ({
                   url: `${API_BASE}/${path}`,
-                  filename: `generated_${task.task_id}_${index + 1}.png`,
+                  directUrl: directUrls[index] ? `${API_BASE}${directUrls[index]}` : null,
+                  filename: filenames[index] || `generated_${task.task_id}_${index + 1}.png`,
                   task_id: task.task_id,
                   createdAt: new Date(task.created_at)
                 }))
@@ -573,7 +651,8 @@ const loadHistory = async () => {
                 // 单张图片，但是JSON格式
                 return [{
                   url: `${API_BASE}/${paths}`,
-                  filename: `generated_${task.task_id}.png`,
+                  directUrl: directUrls[0] ? `${API_BASE}${directUrls[0]}` : null,
+                  filename: filenames[0] || `generated_${task.task_id}.png`,
                   task_id: task.task_id,
                   createdAt: new Date(task.created_at)
                 }]
@@ -582,6 +661,7 @@ const loadHistory = async () => {
               // 不是JSON格式，按单张图片处理
               return [{
                 url: `${API_BASE}${task.result_url}`,
+                directUrl: null,
                 filename: `generated_${task.task_id}.png`,
                 task_id: task.task_id,
                 createdAt: new Date(task.created_at)
@@ -795,6 +875,9 @@ onMounted(() => {
 .gallery-section {
   border-radius: 8px;
   padding: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .image-gallery {
@@ -802,6 +885,9 @@ onMounted(() => {
   flex-direction: column;
   gap: 15px;
   padding: 10px 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* 任务卡片容器 */
@@ -811,6 +897,9 @@ onMounted(() => {
   padding: 12px;
   margin-bottom: 12px;
   border: 1px solid #444;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* 任务头部 */
@@ -862,51 +951,15 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-/* 图片组导航控件 */
-.image-nav-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid #444;
-}
+/* 移除了图片组导航控件样式 */
 
-.image-counter {
-  color: #ccc;
-  font-size: 12px;
-  font-weight: 500;
-  min-width: 40px;
-  text-align: center;
-}
+/* 移除了导航按钮悬停样式 */
 
-.nav-btn {
-  color: #fff !important;
-  border: 1px solid #555 !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  font-weight: bold;
-  transition: all 0.2s;
-}
-
-.nav-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2) !important;
-  border-color: #777 !important;
-  transform: scale(1.05);
-}
-
-.nav-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* 移除了禁用导航按钮样式 */
 
 
 
@@ -915,12 +968,15 @@ onMounted(() => {
   display: grid;
   gap: 10px;
   width: 100%;
+  max-width: 100%;
+  margin: 0;
+  justify-content: start;
 }
 
 /* 1张图片 */
 .images-grid[data-count="1"] {
-  grid-template-columns: 400px;
-  justify-content: center;
+  grid-template-columns: minmax(300px, 400px);
+  justify-content: start;
 }
 
 /* 2张图片 */
@@ -946,13 +1002,16 @@ onMounted(() => {
 /* 单张图片项 */
 .image-item {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Loading占位符样式 */
 .loading-placeholder {
-  background: #2a2a2a !important;
-  border: 2px dashed #444;
-  border-radius: 8px;
+  background: #1a1a1a !important;
+  border: 2px solid #333;
+  border-radius: 12px;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -963,48 +1022,319 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.loading-placeholder::before {
-  content: '';
+/* 背景脉冲动画 */
+.pulse-bg {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: #2a2a2a;
-  z-index: 1;
+  background: linear-gradient(45deg, #667eea, #764ba2, #f093fb, #667eea);
+  background-size: 400% 400%;
+  animation: pulse-bg 4s ease-in-out infinite;
+  opacity: 0.2;
+  border-radius: 10px;
 }
 
-.loading-placeholder .loading-content {
+@keyframes pulse-bg {
+  0%, 100% {
+    background-position: 0% 50%;
+    opacity: 0.1;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.3;
+  }
+}
+
+/* 粒子效果 */
+.particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #667eea;
+  border-radius: 50%;
+  animation: float 3s ease-in-out infinite;
+}
+
+.particle:nth-child(1) { top: 20%; left: 20%; animation-delay: 0s; background: #667eea; }
+.particle:nth-child(2) { top: 80%; left: 80%; animation-delay: 0.5s; background: #764ba2; }
+.particle:nth-child(3) { top: 60%; left: 30%; animation-delay: 1s; background: #f093fb; }
+.particle:nth-child(4) { top: 30%; left: 70%; animation-delay: 1.5s; background: #667eea; }
+.particle:nth-child(5) { top: 70%; left: 20%; animation-delay: 2s; background: #764ba2; }
+.particle:nth-child(6) { top: 40%; left: 60%; animation-delay: 2.5s; background: #f093fb; }
+.particle:nth-child(7) { top: 10%; left: 50%; animation-delay: 3s; background: #667eea; }
+.particle:nth-child(8) { top: 90%; left: 40%; animation-delay: 3.5s; background: #764ba2; }
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(-25px) scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* 中心加载器 */
+.center-loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+}
+
+.loader-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 2s linear infinite;
+}
+
+.ring-1 {
+  border-top-color: #667eea;
+  border-right-color: #667eea;
+  animation-duration: 1.5s;
+}
+
+.ring-2 {
+  border-bottom-color: #764ba2;
+  border-left-color: #764ba2;
+  animation-duration: 2s;
+  animation-direction: reverse;
+  width: 80%;
+  height: 80%;
+  top: 10%;
+  left: 10%;
+}
+
+.ring-3 {
+  border-top-color: #f093fb;
+  border-bottom-color: #f093fb;
+  animation-duration: 2.5s;
+  width: 60%;
+  height: 60%;
+  top: 20%;
+  left: 20%;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loader-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: core-pulse 2s ease-in-out infinite;
+}
+
+.core-icon {
+  font-size: 24px;
+  animation: icon-rotate 3s linear infinite;
+}
+
+@keyframes core-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+  }
+}
+
+@keyframes icon-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 进度指示器 */
+.progress-indicator {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 80px;
+  height: 80px;
+}
+
+.progress-circle {
   position: relative;
-  z-index: 2;
+  width: 100%;
+  height: 100%;
+}
+
+.progress-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.progress-bg {
+  fill: none;
+  stroke: #333;
+  stroke-width: 2;
+}
+
+.progress-bar {
+  fill: none;
+  stroke: url(#progressGradient);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s ease;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: bold;
+  color: #fff;
+}
+
+/* 状态文字 */
+.loading-text {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  color: #fff;
+}
+
+.text-line {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+}
+
+.dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #667eea;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-12px);
+    opacity: 1;
+  }
 }
 
 /* 确保生成状态下的图片项正确显示 */
 .generating-state .image-item {
   min-width: 0;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.loading-content {
-  text-align: center;
-  color: #999;
-}
-
-.loading-content p {
-  margin: 10px 0 0 0;
-  font-size: 14px;
+/* 移动端响应式 */
+@media (max-width: 768px) {
+  .center-loader {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .loader-core {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .core-icon {
+    font-size: 16px;
+  }
+  
+  .progress-indicator {
+    width: 60px;
+    height: 60px;
+    top: 10px;
+    right: 10px;
+  }
+  
+  .text-line {
+    font-size: 16px;
+  }
 }
 
 /* 移动端响应式 */
 @media (max-width: 1024px) {
   .images-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    max-width: 100%;
+    justify-content: start;
+  }
+  
+  .images-grid[data-count="1"] {
+    grid-template-columns: minmax(250px, 350px);
+    justify-content: start;
   }
 }
 
 @media (max-width: 768px) {
   .images-grid {
     grid-template-columns: repeat(2, 1fr);
+    max-width: 100%;
+    gap: 8px;
+    justify-content: start;
+  }
+  
+  .images-grid[data-count="1"] {
+    grid-template-columns: minmax(200px, 200px);
+    justify-content: start;
   }
   
   .task-header {
@@ -1057,8 +1387,41 @@ onMounted(() => {
   overflow: hidden;
   cursor: pointer;
   width: 100%;
+  max-width: 100%;
   aspect-ratio: 1;
   border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.image-container:hover .image-overlay {
+  opacity: 1;
+}
+
+.overlay-btn {
+  color: white !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  border: none !important;
+  font-size: 18px;
+  transition: all 0.3s ease;
+}
+
+.overlay-btn:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+  transform: scale(1.1);
 }
 
 .gallery-image {
@@ -1091,16 +1454,21 @@ onMounted(() => {
   backdrop-filter: blur(10px);
   border-radius: 4px;
   transition: all 0.2s;
-  width: 28px;
+  padding: 0 8px;
   height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 12px;
 }
 
 .action-btn:hover {
   background: rgba(255, 255, 255, 0.2) !important;
   transform: scale(1.1);
+}
+
+.delete-btn {
+  color: #ff6b6b !important;
 }
 
 .delete-btn:hover {
@@ -1607,6 +1975,64 @@ onMounted(() => {
   border: none !important;
   height: 80px !important;
   width: 80px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 6px !important;
+}
+
+/* 上传图片预览样式 */
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+}
+
+/* 上传图片容器样式 */
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-info {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 6px !important;
+  background: none !important;
+  border: none !important;
+}
+
+/* 上传图片缩略图容器 */
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-thumbnail {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  border-radius: 6px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: none !important;
+  border: none !important;
+}
+
+/* 移除可能的遮罩层白边 */
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-actions {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 强制移除所有可能的内边距和边框 */
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item * {
+  box-sizing: border-box !important;
+}
+
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-image {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 6px !important;
 }
 .reference-upload:hover {
   border-color: #667eea;
@@ -1686,6 +2112,59 @@ onMounted(() => {
   width: 80px !important;
   height: 80px !important;
   background: #2a2a2a !important;
+  border-radius: 6px !important;
+}
+
+/* 全局强制覆盖上传图片预览项样式 */
+.ant-upload-list-picture-card .ant-upload-list-item {
+  width: 80px !important;
+  height: 80px !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+/* 强制覆盖上传列表项容器 */
+.ant-upload-wrapper.ant-upload-picture-card-wrapper .ant-upload-list.ant-upload-list-picture-card .ant-upload-list-item-container {
+  width: 80px !important;
+  height: 80px !important;
+  margin: 0 !important;
+  display: inline-block !important;
+}
+
+.ant-upload-list-picture-card .ant-upload-list-item img {
+  width: 80px !important;
+  height: 80px !important;
+  object-fit: cover !important;
+  border-radius: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.ant-upload-list-picture-card .ant-upload-list-item-info {
+  width: 80px !important;
+  height: 80px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 6px !important;
+}
+
+.ant-upload-list-picture-card .ant-upload-list-item-thumbnail {
+  width: 80px !important;
+  height: 80px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+.ant-upload-list-picture-card .ant-upload-list-item-image {
+  width: 80px !important;
+  height: 80px !important;
+  object-fit: cover !important;
   border-radius: 6px !important;
 }
 

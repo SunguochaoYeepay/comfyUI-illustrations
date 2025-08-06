@@ -37,6 +37,22 @@ class TaskStatusResponse(BaseModel):
     progress: int
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "task_id": "123e4567-e89b-12d3-a456-426614174000",
+                "status": "completed",
+                "progress": 100,
+                "result": {
+                    "image_urls": ["/api/image/123e4567-e89b-12d3-a456-426614174000?index=0"],
+                    "count": 1,
+                    "filenames": ["ComfyUI_00001_.png"],
+                    "direct_urls": ["/api/image/123e4567-e89b-12d3-a456-426614174000?filename=ComfyUI_00001_.png"]
+                },
+                "error": None
+            }
+        }
 
 # 全局变量
 COMFYUI_URL = "http://127.0.0.1:8188"
@@ -124,6 +140,10 @@ class WorkflowTemplate:
         if count > 1:
             workflow["31"]["inputs"]["batch_size"] = count
             print(f"设置batch_size为: {count}")
+            # 确保SaveImage节点的save_all参数为true
+            if "136" in workflow and "inputs" in workflow["136"]:
+                workflow["136"]["inputs"]["save_all"] = True
+                print(f"设置SaveImage节点的save_all参数为true，确保保存所有批次图片")
         else:
             # 确保单张图片时batch_size为1
             workflow["31"]["inputs"]["batch_size"] = 1
@@ -198,10 +218,18 @@ class DatabaseManager:
                 prompt_id TEXT,
                 result_path TEXT,
                 error TEXT,
+                progress INTEGER DEFAULT 0,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP
             )
         """)
+        
+        # 检查是否需要添加progress字段（兼容旧数据库）
+        cursor.execute("PRAGMA table_info(tasks)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'progress' not in columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN progress INTEGER DEFAULT 0")
+        
         conn.commit()
         conn.close()
     
@@ -243,6 +271,17 @@ class DatabaseManager:
             UPDATE tasks SET {', '.join(update_fields)}
             WHERE id = ?
         """, values)
+        conn.commit()
+        conn.close()
+    
+    def update_task_progress(self, task_id: str, progress: int) -> None:
+        """更新任务进度"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE tasks SET progress = ?, updated_at = ?
+            WHERE id = ?
+        """, (progress, datetime.now(), task_id))
         conn.commit()
         conn.close()
     
@@ -357,22 +396,53 @@ class TaskManager:
             count = int(parameters.get("count", 1))
             result_paths = []
             
-            # 准备工作流（使用batch_size一次生成多张图）
-            workflow = self.workflow_template.customize_workflow(
-                reference_image_path, description, parameters
-            )
+            print(f"🎯 开始生成 {count} 张图片...")
             
-            # 提交到ComfyUI
-            prompt_id = await self.comfyui.submit_workflow(workflow)
-            self.db.update_task_status(task_id, "processing", prompt_id=prompt_id)
-            
-            # 等待完成
-            result_paths = await self.wait_for_completion(task_id, prompt_id)
+            # 循环生成每张图片
+            for i in range(count):
+                print(f"📸 正在生成第 {i+1}/{count} 张图片...")
+                
+                # 为每次生成创建独立的参数副本
+                current_params = parameters.copy()
+                current_params["count"] = 1  # 每次只生成一张
+                
+                # 如果没有指定种子，为每张图片生成不同的随机种子
+                if not parameters.get("seed"):
+                    import random
+                    current_params["seed"] = random.randint(1, 2**32 - 1)
+                    print(f"🎲 使用随机种子: {current_params['seed']}")
+                
+                # 准备工作流
+                workflow = self.workflow_template.customize_workflow(
+                    reference_image_path, description, current_params
+                )
+                
+                # 提交到ComfyUI
+                prompt_id = await self.comfyui.submit_workflow(workflow)
+                print(f"📤 已提交工作流，prompt_id: {prompt_id}")
+                
+                # 等待完成
+                batch_result = await self.wait_for_completion(task_id, prompt_id)
+                
+                if batch_result:
+                    result_paths.extend(batch_result)
+                    print(f"✅ 第 {i+1} 张图片生成完成: {batch_result}")
+                else:
+                    print(f"❌ 第 {i+1} 张图片生成失败")
+                
+                # 更新进度
+                progress = int((i + 1) / count * 100)
+                self.db.update_task_progress(task_id, progress)
+                
+                # 如果不是最后一张，稍微等待一下避免过快请求
+                if i < count - 1:
+                    await asyncio.sleep(1)
             
             # 处理结果
             if result_paths:
-                print(f"🔍 调试信息: count={count}, result_paths数量={len(result_paths)}, paths={result_paths}")
-                if count == 1:
+                print(f"🔍 最终结果: count={count}, result_paths数量={len(result_paths)}, paths={result_paths}")
+                
+                if len(result_paths) == 1:
                     # 单张图片，直接存储路径
                     print(f"💾 保存单张图片: {result_paths[0]}")
                     self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
@@ -386,6 +456,7 @@ class TaskManager:
                 self.db.update_task_status(task_id, "failed", error="No output generated")
                 
         except Exception as e:
+            print(f"❌ 任务执行失败: {str(e)}")
             self.db.update_task_status(task_id, "failed", error=str(e))
     
     async def wait_for_completion(self, task_id: str, prompt_id: str, max_wait_time: int = 300) -> Optional[list]:
@@ -422,20 +493,107 @@ class TaskManager:
                                         print(f"❌ 源文件不存在: {source_path}")
                         
                         # 如果从节点输出获取的图片数量不足，尝试查找最新的文件
-                        expected_count = 4  # 期望的图片数量
+                        # 从任务信息中获取期望的图片数量
+                        expected_count = 1  # 默认为1
+                        try:
+                            # 尝试从工作流中获取batch_size参数
+                            if "31" in task_info.get("prompt", {}) and "inputs" in task_info["prompt"]["31"]:
+                                expected_count = task_info["prompt"]["31"]["inputs"].get("batch_size", 1)
+                                print(f"🔢 从工作流中获取期望图片数量: {expected_count}")
+                        except Exception as e:
+                            print(f"⚠️ 获取期望图片数量失败: {e}")
+                            # 保持默认值
                         if len(result_paths) < expected_count:
                             print(f"⚠️ 节点输出图片数量不足({len(result_paths)}/{expected_count})，尝试查找最新文件")
                             try:
-                                # 查找所有ComfyUI开头的png文件
-                                pattern = "ComfyUI*.png"
-                                matching_files = list(comfyui_output_dir.glob(pattern))
+                                # 从SaveImage节点的输出中获取文件名模式
+                                # ComfyUI的批量生成通常会使用相同的前缀，但添加不同的索引
+                                # 例如：ComfyUI_00001_.png, ComfyUI_00002_.png 等
+                                
+                                # 首先检查是否有已知的文件名作为基础
+                                base_filename = None
+                                if result_paths and len(result_paths) > 0:
+                                    # 从已有的结果中提取基本文件名模式
+                                    first_file = Path(result_paths[0].replace("outputs/", ""))
+                                    # 提取数字部分前的前缀和后缀
+                                    import re
+                                    # 尝试多种可能的文件名模式
+                                    # 1. ComfyUI_00001_.png 格式
+                                    match = re.search(r'(.+?)_(\d+)_(.+)', first_file.name)
+                                    # 2. ComfyUI_00001.png 格式
+                                    if not match:
+                                        match = re.search(r'(.+?)_(\d+)(\.\w+)', first_file.name)
+                                    if match:
+                                        prefix = match.group(1)  # 例如 "ComfyUI"
+                                        # 数字部分
+                                        index = int(match.group(2))
+                                        suffix = match.group(3)  # 例如 ".png"
+                                        print(f"📋 提取的文件名模式: 前缀={prefix}, 索引={index}, 后缀={suffix}")
+                                        
+                                        # 查找具有相同前缀和后缀但索引不同的文件
+                                        potential_files = []
+                                        # 确定文件名格式
+                                        has_underscore_suffix = '_' in suffix if suffix else False
+                                        
+                                        for i in range(index, index + expected_count * 2):  # 搜索范围扩大一些
+                                            # 构建可能的文件名，保持相同的数字格式（例如 00001）
+                                            formatted_index = str(i).zfill(len(str(index)))
+                                            
+                                            # 尝试多种可能的文件名格式
+                                            potential_filenames = []
+                                            if has_underscore_suffix:
+                                                # ComfyUI_00001_.png 格式
+                                                potential_filenames.append(f"{prefix}_{formatted_index}_{suffix}")
+                                            else:
+                                                # ComfyUI_00001.png 格式
+                                                potential_filenames.append(f"{prefix}_{formatted_index}{suffix}")
+                                            
+                                            # 检查所有可能的文件名
+                                            for potential_filename in potential_filenames:
+                                                potential_path = comfyui_output_dir / potential_filename
+                                                if potential_path.exists():
+                                                    potential_files.append(potential_path)
+                                                    print(f"🔍 找到潜在的批量文件: {potential_filename}")
+                                                    break  # 找到一个就跳出内层循环
+                                        
+                                        if len(potential_files) >= expected_count:
+                                            print(f"✅ 找到足够的批量文件: {len(potential_files)} 张")
+                                            matching_files = potential_files[:expected_count]
+                                        else:
+                                            print(f"⚠️ 未找到足够的批量文件，回退到通配符搜索")
+                                            pattern = "ComfyUI*.png"
+                                            matching_files = list(comfyui_output_dir.glob(pattern))
+                                    else:
+                                        print(f"⚠️ 无法从现有文件提取模式: {first_file.name}，回退到通配符搜索")
+                                        pattern = "ComfyUI*.png"
+                                        matching_files = list(comfyui_output_dir.glob(pattern))
+                                else:
+                                    print(f"⚠️ 没有现有文件作为参考，回退到通配符搜索")
+                                    pattern = "ComfyUI*.png"
+                                    matching_files = list(comfyui_output_dir.glob(pattern))
                                 
                                 if matching_files:
                                     # 按修改时间排序，获取最新的文件
                                     matching_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
                                     
-                                    # 复制最新的文件，补足数量
-                                    files_to_copy = matching_files[:expected_count]
+                                    # 尝试查找具有相似时间戳的文件组（批量生成的图片通常时间戳接近）
+                                    if expected_count > 1 and len(matching_files) >= expected_count:
+                                        print(f"🔍 尝试查找批量生成的图片组...")
+                                        # 获取最新文件的时间戳
+                                        latest_time = matching_files[0].stat().st_mtime
+                                        # 查找时间戳接近的文件（5秒内）
+                                        batch_files = [f for f in matching_files if abs(f.stat().st_mtime - latest_time) < 5]
+                                        
+                                        if len(batch_files) >= expected_count:
+                                            print(f"✅ 找到可能的批量生成图片组: {len(batch_files)} 张")
+                                            files_to_copy = batch_files[:expected_count]
+                                        else:
+                                            print(f"⚠️ 未找到足够的批量图片，使用最新的 {expected_count} 张")
+                                            files_to_copy = matching_files[:expected_count]
+                                    else:
+                                        # 复制最新的文件，补足数量
+                                        files_to_copy = matching_files[:expected_count]
+                                    
                                     result_paths = []  # 重新开始，使用最新文件
                                     
                                     for latest_file in files_to_copy:
@@ -576,22 +734,40 @@ async def get_task_status(task_id: str):
             result_paths = json.loads(task["result_path"])
             if isinstance(result_paths, list):
                 # 多个图像
+                # 提取文件名，以便前端可以直接请求特定文件
+                filenames = [Path(path).name for path in result_paths]
                 result = {
                     "image_urls": [f"/api/image/{task_id}?index={i}" for i in range(len(result_paths))],
-                    "count": len(result_paths)
+                    "count": len(result_paths),
+                    "filenames": filenames,  # 添加文件名列表
+                    "direct_urls": [f"/api/image/{task_id}?filename={filename}" for filename in filenames]  # 直接访问URL
                 }
             else:
                 # 单个图像（向后兼容）
+                filename = Path(result_paths).name
                 result = {
                     "image_urls": [f"/api/image/{task_id}"],
-                    "count": 1
+                    "count": 1,
+                    "filenames": [filename],
+                    "direct_urls": [f"/api/image/{task_id}?filename={filename}"]
                 }
         except (json.JSONDecodeError, TypeError):
             # 如果不是JSON格式，按单个图像处理（向后兼容）
-            result = {
-                "image_urls": [f"/api/image/{task_id}"],
-                "count": 1
-            }
+            try:
+                filename = Path(task["result_path"]).name
+                result = {
+                    "image_urls": [f"/api/image/{task_id}"],
+                    "count": 1,
+                    "filenames": [filename],
+                    "direct_urls": [f"/api/image/{task_id}?filename={filename}"]
+                }
+            except:
+                result = {
+                    "image_urls": [f"/api/image/{task_id}"],
+                    "count": 1,
+                    "filenames": ["unknown.png"],
+                    "direct_urls": [f"/api/image/{task_id}"]
+                }
     
     return TaskStatusResponse(
         task_id=task_id,
@@ -602,8 +778,14 @@ async def get_task_status(task_id: str):
     )
 
 @app.get("/api/image/{task_id}")
-async def get_generated_image(task_id: str, index: int = 0):
-    """获取生成的图像"""
+async def get_generated_image(task_id: str, index: int = 0, filename: str = None):
+    """获取生成的图像
+    
+    参数:
+        task_id: 任务ID
+        index: 图像索引（批量生成时使用）
+        filename: 可选，指定要获取的文件名
+    """
     task = task_manager.get_task_status(task_id)
     
     if not task or task["status"] != "completed" or not task["result_path"]:
@@ -613,16 +795,36 @@ async def get_generated_image(task_id: str, index: int = 0):
         # 尝试解析JSON格式的多个结果路径
         import json
         result_paths = json.loads(task["result_path"])
-        if isinstance(result_paths, list):
-            # 多个图像
-            if index >= len(result_paths) or index < 0:
-                raise HTTPException(status_code=404, detail="图像索引不存在")
-            image_path = Path(result_paths[index])
+        
+        # 如果指定了文件名，尝试查找匹配的文件
+        if filename:
+            if isinstance(result_paths, list):
+                # 在结果列表中查找匹配的文件名
+                found = False
+                for path in result_paths:
+                    if Path(path).name == filename or Path(path).name.endswith(f"/{filename}"):
+                        image_path = Path(path)
+                        found = True
+                        break
+                if not found:
+                    raise HTTPException(status_code=404, detail=f"指定的文件名 {filename} 不存在")
+            else:
+                # 单个结果，检查是否匹配
+                if Path(result_paths).name != filename and not Path(result_paths).name.endswith(f"/{filename}"):
+                    raise HTTPException(status_code=404, detail=f"指定的文件名 {filename} 不存在")
+                image_path = Path(result_paths)
         else:
-            # 单个图像（向后兼容）
-            if index != 0:
-                raise HTTPException(status_code=404, detail="图像索引不存在")
-            image_path = Path(result_paths)
+            # 使用索引获取图像
+            if isinstance(result_paths, list):
+                # 多个图像
+                if index >= len(result_paths) or index < 0:
+                    raise HTTPException(status_code=404, detail="图像索引不存在")
+                image_path = Path(result_paths[index])
+            else:
+                # 单个图像（向后兼容）
+                if index != 0:
+                    raise HTTPException(status_code=404, detail="图像索引不存在")
+                image_path = Path(result_paths)
     except (json.JSONDecodeError, TypeError):
         # 如果不是JSON格式，按单个图像处理（向后兼容）
         if index != 0:
@@ -690,4 +892,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+    from config import config
+    uvicorn.run(app, host=config.HOST, port=config.PORT)

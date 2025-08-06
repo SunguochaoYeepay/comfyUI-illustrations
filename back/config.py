@@ -17,7 +17,7 @@ class Config:
     
     # 服务器配置
     HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", 8000))
+    PORT = int(os.getenv("PORT", 9000))
     
     # ComfyUI配置
     COMFYUI_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188")

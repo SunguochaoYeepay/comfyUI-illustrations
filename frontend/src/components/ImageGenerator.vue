@@ -1,209 +1,29 @@
 <template>
-  <div class="image-generator">
-    
-
+  <div class="image-generator main-container">
     <!-- 主要内容区域 -->
     <div class="main-content">
-      <!-- 上方：历史图片展示区域 -->
-      <div class="gallery-section">
-        
-        <!-- 图像展示网格 - 历史图片始终显示 -->
-        <div v-if="allImages.length > 0" class="image-gallery">
-          <div
-            v-for="(group, groupIndex) in imageGroups"
-            :key="groupIndex"
-            class="task-card"
-          >
-            <!-- 任务信息头部 -->
-            <div class="task-header">
-              <div class="task-info">
-                <p class="task-prompt">{{ group[0]?.prompt || '无提示词' }}</p>
-                <p class="task-meta">{{ group.length }}张图片 · {{ new Date(group[0]?.createdAt).toLocaleString() }}</p>
-              </div>
-              <div class="task-actions">
-                <!-- 移除了图片组导航按钮 -->
-                
-                <!-- 操作按钮 -->
-                <div class="action-buttons">
-                  <a-button type="text" size="small" @click.stop="editImage(group[0])" class="action-btn">
-                    重新编辑
-                  </a-button>
-                  <a-button type="text" size="small" @click.stop="regenerateImage(group[0])" class="action-btn">
-                    再次生成
-                  </a-button>
-                  <a-button type="text" size="small" @click.stop="deleteImage(group[0])" class="action-btn delete-btn">
-                    删除
-                  </a-button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 图片网格 -->
-            <div class="images-grid" :data-count="group.length">
-              <!-- 显示所有图片 -->
-              <div
-                v-for="(image, index) in group"
-                :key="index"
-                class="image-item"
-              >
-                <!-- 图像容器 -->
-                <div class="image-container">
-                  <img :src="image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
-                  
-                  <!-- 图片操作悬浮层 -->
-                  <div class="image-overlay">
-                    <a-tooltip title="下载图片">
-                      <a-button 
-                        type="text" 
-                        shape="circle" 
-                        class="overlay-btn" 
-                        @click.stop="downloadImage(image)"
-                      >
-                        <template #icon><DownloadOutlined /></template>
-                      </a-button>
-                    </a-tooltip>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 空状态 -->
-        <div v-if="!isGenerating && allImages.length === 0" class="empty-gallery">
-          <div class="empty-content">
-            <PictureOutlined class="empty-icon" />
-            <h3>还没有生成图像</h3>
-            <p>输入您的创意提示词，开始创作第一张图像吧！</p>
-          </div>
-        </div>
-        
-        <!-- 生成状态 - 始终显示在历史图片下方 -->
-        <div v-if="isGenerating" class="generating-state">
-          <div class="task-card">
-            <!-- 任务信息头部 -->
-            <div class="task-header">
-              <div class="task-info">
-                <p class="task-prompt">{{ prompt || '正在生成图片...' }}</p>
-                <p class="task-meta">{{ imageCount }}张图片 · 正在生成中...</p>
-              </div>
-            </div>
-            
-            <!-- 图片占位符网格 -->
-            <div class="images-grid" :data-count="imageCount">
-              <div
-                v-for="index in imageCount"
-                :key="index"
-                class="image-item"
-              >
-                <div class="image-container loading-placeholder">
-                  <!-- 背景脉冲动画 -->
-                  <div class="pulse-bg"></div>
-                  
-                  <!-- 粒子效果 -->
-                  <div class="particles">
-                    <div class="particle" v-for="i in 8" :key="i"></div>
-                  </div>
-                  
-                  <!-- 中心旋转加载器 -->
-                  <div class="center-loader">
-                    <div class="loader-ring ring-1"></div>
-                    <div class="loader-ring ring-2"></div>
-                    <div class="loader-ring ring-3"></div>
-                    <div class="loader-core">
-                      <div class="core-icon">✨</div>
-                    </div>
-                  </div>
-                  
-                  <!-- 进度指示器 -->
-                   <div class="progress-indicator">
-                     <div class="progress-circle">
-                       <svg class="progress-svg" viewBox="0 0 36 36">
-                         <defs>
-                           <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                             <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-                             <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
-                             <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
-                           </linearGradient>
-                         </defs>
-                         <path class="progress-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                         <path class="progress-bar" :stroke-dasharray="progress + ', 100'" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                       </svg>
-                       <div class="progress-text">{{ Math.round(progress) }}%</div>
-                     </div>
-                   </div>
-                  
-                  <!-- 状态文字 -->
-                  <div class="loading-text">
-                    <div class="text-line">AI创作中</div>
-                    <div class="dots">
-                      <span class="dot"></span>
-                      <span class="dot"></span>
-                      <span class="dot"></span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+     
+      <!-- 图片展示区域 -->
+      <ImageGallery
+        :all-images="allImages"
+        :is-generating="isGenerating"
+        :prompt="prompt"
+        :image-count="imageCount"
+        :progress="progress"
+        @edit-image="editImage"
+        @regenerate-image="regenerateImage"
+        @delete-image="deleteImage"
+        @download-image="downloadImage"
+      />
 
-      </div>
-
-      <!-- 下方：对话框和参数设置 -->
-      <div class="control-section">
-        <a-card class="control-card">
-          <div class="control-layout">
-            <!-- 主要输入区域 -->
-            <div class="main-input-row">
-              <!-- 参考图片区域 -->
-              <div class="reference-section">
-                 <a-upload
-                  v-model:file-list="referenceImages"
-                  name="reference"
-                  list-type="picture-card"
-                  class="reference-upload"
-                  :show-upload-list="true"
-                  :before-upload="beforeUpload"
-                  @preview="handlePreview"
-                  @remove="handleRemove"
-                  :style="{ '--ant-upload-border': 'none !important' }"
-                >
-                  <div v-if="referenceImages.length < 1">
-                    <plus-outlined />
-                    <div style="margin-top: 8px">上传参考图</div>
-                  </div>
-                </a-upload>
-              </div>
-
-              <!-- 提示词和生成按钮区域 -->
-              <div class="input-group">
-                <div class="prompt-generate-row">
-                  <a-textarea
-                    v-model:value="prompt"
-                    placeholder="请详细描述您想要生成的图像，例如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格"
-                    :rows="2"
-                    class="prompt-input"
-                  />
-                  
-                  <a-button
-                    type="primary"
-                    size="large"
-                    :loading="isGenerating"
-                    @click="generateImage"
-                    class="generate-btn"
-                  >
-                    <template #icon>
-                      <span v-if="!isGenerating">✨</span>
-                    </template>
-                    {{ isGenerating ? '生成中...' : '生成' }}
-                  </a-button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </a-card>
-      </div>
+      <!-- 控制面板 -->
+      <ImageControlPanel
+        v-model:prompt="prompt"
+        v-model:reference-images="referenceImages"
+        :is-generating="isGenerating"
+        @generate="generateImage"
+        @preview="handlePreview"
+      />
     </div>
   </div>
 </template>
@@ -211,10 +31,15 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { DownloadOutlined, ShareAltOutlined, EditOutlined, PictureOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import ImageGallery from './ImageGallery.vue'
+import ImageControlPanel from './ImageControlPanel.vue'
 
-// API基础URL
-const API_BASE = 'http://localhost:8000'
+// API基础URL - 使用相对路径，通过Vite代理转发
+const API_BASE = ''
+
+
+
+
 
 // 响应式数据
 const prompt = ref('')
@@ -233,10 +58,24 @@ const previewImage = ref('')
 
 // 计算属性：合并所有图像用于展示
 const allImages = computed(() => {
+  const generated = generatedImages.value || []
+  const hist = history.value || []
+  
+  // 将历史记录中的图片展开
+  const historyImages = hist.flatMap(item => 
+    (item.images || []).map(img => ({
+      ...img,
+      prompt: item.prompt,
+      timestamp: item.timestamp,
+      status: item.status
+    }))
+  )
+  
   // 按时间正序排列，确保最新生成的图片显示在最后面
-  return [...generatedImages.value, ...history.value.flatMap(h => h.images || [])]
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-  // 移除了图片数量限制，显示所有图片
+  const result = [...generated, ...historyImages]
+    .sort((a, b) => new Date(a.createdAt || a.timestamp) - new Date(b.createdAt || b.timestamp))
+  
+  return result
 })
 
 // 计算属性：将图像按任务分组，每组四张图片
@@ -309,7 +148,7 @@ const generateImage = async () => {
     }
 
     // 调用后端API
-    const response = await fetch('http://localhost:8000/api/generate-image', {
+    const response = await fetch('/api/generate-image', {
       method: 'POST',
       body: formData
     })
@@ -323,7 +162,7 @@ const generateImage = async () => {
       // 轮询任务状态
       const pollStatus = async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:8000/api/task/${taskId}`)
+          const statusResponse = await fetch(`/api/task/${taskId}`)
           if (statusResponse.ok) {
             const statusData = await statusResponse.json()
             progress.value = statusData.progress || 0
@@ -337,8 +176,8 @@ const generateImage = async () => {
               const newImages = imageUrls.map((imageUrl, index) => ({
                 id: Date.now() + index,
                 task_id: taskId,  // 添加task_id用于删除操作
-                url: `http://localhost:8000${imageUrl}`,
-          directUrl: directUrls[index] ? `http://localhost:8000${directUrls[index]}` : null,
+                url: imageUrl,
+           directUrl: directUrls[index] ? directUrls[index] : null,
                 filename: filenames[index] || `generated_${taskId}_${index + 1}.png`,
                 prompt: prompt.value,
                 size: imageSize.value,
@@ -573,30 +412,64 @@ const formatTime = (date) => {
   }).format(date)
 }
 
-// 参考图上传相关方法
-const beforeUpload = (file) => {
-  const isJpgOrPng = file.type === 'image/jpeg' || file.type === 'image/png'
-  if (!isJpgOrPng) {
-    message.error('只能上传 JPG/PNG 格式的图片!')
-    return false
-  }
-  const isLt2M = file.size / 1024 / 1024 < 2
-  if (!isLt2M) {
-    message.error('图片大小不能超过 2MB!')
-    return false
-  }
-  return false // 阻止自动上传，手动处理
-}
-
+// 处理参考图预览
 const handlePreview = (file) => {
   previewImage.value = file.url || file.preview
   previewVisible.value = true
 }
 
-const handleRemove = (file) => {
-  const index = referenceImages.value.indexOf(file)
-  if (index > -1) {
-    referenceImages.value.splice(index, 1)
+// 处理任务图片数据的辅助函数
+const processTaskImages = (task) => {
+  if (!task.result_url || task.status !== 'completed') {
+    return []
+  }
+  
+  // 获取文件名和直接URL（如果有）
+  let filenames = []
+  let directUrls = []
+  
+  if (task.filenames) {
+    try {
+      filenames = JSON.parse(task.filenames)
+    } catch (e) {
+      console.warn('解析文件名失败:', e)
+    }
+  }
+  
+  if (task.direct_urls) {
+    try {
+      directUrls = JSON.parse(task.direct_urls)
+    } catch (e) {
+      console.warn('解析直接URL失败:', e)
+    }
+  }
+  
+  // 如果有文件名信息，说明是多张图片
+  if (filenames.length > 0) {
+    const images = filenames.map((filename, index) => {
+      const imageUrl = directUrls[index] || `${task.result_url}?index=${index}`
+      return {
+        url: imageUrl,
+        directUrl: directUrls[index] || null,
+        filename: filename,
+        task_id: task.task_id,
+        prompt: task.description,
+        createdAt: new Date(task.created_at)
+      }
+    })
+    return images
+  } else {
+    // 单张图片或没有详细信息
+    const imageUrl = task.result_url
+    
+    return [{
+      url: imageUrl,
+      directUrl: null,
+      filename: `generated_${task.task_id}.png`,
+      task_id: task.task_id,
+      prompt: task.description,
+      createdAt: new Date(task.created_at)
+    }]
   }
 }
 
@@ -608,67 +481,17 @@ const loadHistory = async () => {
       const data = await response.json()
       if (data.tasks && data.tasks.length > 0) {
         // 转换后端数据格式为前端格式
-        history.value = data.tasks.map(task => ({
-          id: task.task_id,
-          task_id: task.task_id,  // 保持task_id字段用于删除操作
-          prompt: task.description,
-          timestamp: task.created_at,
-          status: task.status,
-          images: task.result_url ? (() => {
-            try {
-              // 尝试解析JSON格式的多张图片路径
-              const paths = JSON.parse(task.result_url)
-              // 获取文件名和直接URL（如果有）
-              let filenames = [];
-              let directUrls = [];
-              
-              if (task.filenames) {
-                try {
-                  filenames = JSON.parse(task.filenames);
-                } catch (e) {
-                  console.warn('解析文件名失败:', e);
-                }
-              }
-              
-              if (task.direct_urls) {
-                try {
-                  directUrls = JSON.parse(task.direct_urls);
-                } catch (e) {
-                  console.warn('解析直接URL失败:', e);
-                }
-              }
-              
-              if (Array.isArray(paths)) {
-                // 多张图片
-                return paths.map((path, index) => ({
-                  url: `${API_BASE}/${path}`,
-                  directUrl: directUrls[index] ? `${API_BASE}${directUrls[index]}` : null,
-                  filename: filenames[index] || `generated_${task.task_id}_${index + 1}.png`,
-                  task_id: task.task_id,
-                  createdAt: new Date(task.created_at)
-                }))
-              } else {
-                // 单张图片，但是JSON格式
-                return [{
-                  url: `${API_BASE}/${paths}`,
-                  directUrl: directUrls[0] ? `${API_BASE}${directUrls[0]}` : null,
-                  filename: filenames[0] || `generated_${task.task_id}.png`,
-                  task_id: task.task_id,
-                  createdAt: new Date(task.created_at)
-                }]
-              }
-            } catch (e) {
-              // 不是JSON格式，按单张图片处理
-              return [{
-                url: `${API_BASE}${task.result_url}`,
-                directUrl: null,
-                filename: `generated_${task.task_id}.png`,
-                task_id: task.task_id,
-                createdAt: new Date(task.created_at)
-              }]
-            }
-          })() : []
-        }))
+        history.value = data.tasks.map(task => {
+          const processedImages = processTaskImages(task)
+          return {
+            id: task.task_id,
+            task_id: task.task_id,  // 保持task_id字段用于删除操作
+            prompt: task.description,
+            timestamp: task.created_at,
+            status: task.status,
+            images: processedImages
+          }
+        })
       } else {
         history.value = []
       }
@@ -708,37 +531,6 @@ onMounted(() => {
   padding: 40px 20px;
 }
 
-.header {
-  text-align: center;
-  margin-bottom: 30px;
-  color: white;
-}
-
-.title {
-  font-size: 2.5rem;
-  font-weight: bold;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.icon {
-  font-size: 2rem;
-}
-
-.subtitle {
-  font-size: 1.1rem;
-  opacity: 0.7;
-  margin: 10px 0 0 0;
-  color: #999;
-}
-
 .main-content {
   display: flex;
   flex-direction: column;
@@ -749,1100 +541,53 @@ onMounted(() => {
   padding-bottom: 120px;
 }
 
-.gallery-section {
-  flex: 1;
-  overflow: hidden;
-  margin-bottom: 20px;
+.main-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+  padding: 20px;
+  padding-bottom: 200px;
 }
 
-.gallery-card {
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  min-height: 400px;
-}
-
-.control-section {
-  position: fixed;
-  bottom: 0;
-  left: 10%;
-  right: 10%;
-  z-index: 1000;
-  padding: 10px 20px;
-  max-width: 50%;
+.main-content {
+  max-width: 1200px;
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 30px;
 }
 
-.control-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  background: #1a1a1a;
-  border: 1px solid #333;
+
+/* 参考图片上传样式 */
+.reference-upload .ant-upload-list-picture-card {
+  height: 80px !important;
+  width: 80px !important;
 }
 
-.control-card .ant-card-body {
-  background: #1a1a1a;
-  color: #fff;
-}
-
-.control-card .ant-card-head {
-  background: #1a1a1a;
-  border-bottom: 1px solid #333;
-}
-
-.control-card .ant-card-head-title {
-  color: #fff;
-}
-
-.control-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 auto;
-}
-
-.main-input-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
-
-.reference-section {
-  flex-shrink: 0;
-  height: 80px;
-}
-.reference-section div.ant-upload-wrapper.ant-upload-picture-card-wrapper .ant-upload.ant-upload-select{
+.reference-upload .ant-upload-select {
   height: 80px !important;
   width: 80px !important;
   border: none !important;
+  border-style: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #2a2a2a !important;
   border-radius: 6px !important;
 }
 
-.input-group {
-  flex: 1;
-}
-
-/* 提示词和生成按钮单行布局 */
-.prompt-generate-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.prompt-input {
-  flex: 1;
-}
-
-.prompt-input .ant-input {
-  height: 80px !important;
-  resize: none !important;
-}
-
-.generate-btn {
-  height: 80px;
-  padding: 0 16px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 6px;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-@media (max-width: 768px) {
-  .main-input-row {
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .prompt-generate-row {
-    flex-direction: column;
-    gap: 10px;
-  }
-   
-  .generate-btn {
-    width: 100%;
-    height: 48px;
-  }
-}
-
-/* 卡片内边距调整 */
-:deep(.ant-card .ant-card-body) {
-  padding: 12px !important;
-}
-
-/* 图像画廊样式 */
-.gallery-section {
-  border-radius: 8px;
-  padding: 10px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.image-gallery {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 10px 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-/* 任务卡片容器 */
-.task-card {
-  background: #2a2a2a;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-  border: 1px solid #444;
-  max-width: 100%;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* 任务头部 */
-.task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #444;
-}
-
-.task-info {
-  flex: 1;
-  min-width: 0;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.task-prompt {
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.4;
-  word-break: break-word;
-  white-space: normal;
-}
-
-.task-meta {
-  color: #999;
-  font-size: 14px;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.task-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-/* 操作按钮容器 */
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-/* 移除了图片组导航控件样式 */
-
-/* 移除了导航按钮悬停样式 */
-
-/* 移除了禁用导航按钮样式 */
-
-
-
-/* 图片网格 - 根据图片数量动态调整列数 */
-.images-grid {
-  display: grid;
-  gap: 10px;
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  justify-content: start;
-}
-
-/* 1张图片 */
-.images-grid[data-count="1"] {
-  grid-template-columns: minmax(300px, 400px);
-  justify-content: start;
-}
-
-/* 2张图片 */
-.images-grid[data-count="2"] {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-/* 4张图片 */
-.images-grid[data-count="4"] {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-/* 6张图片 */
-.images-grid[data-count="6"] {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-/* 生成状态下保持相同布局 */
-.generating-state .images-grid {
-  /* 继承上面的布局规则 */
-}
-
-/* 单张图片项 */
-.image-item {
-  position: relative;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-/* Loading占位符样式 */
-.loading-placeholder {
-  background: #1a1a1a !important;
-  border: 2px solid #333;
-  border-radius: 12px;
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-}
-
-/* 背景脉冲动画 */
-.pulse-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, #667eea, #764ba2, #f093fb, #667eea);
-  background-size: 400% 400%;
-  animation: pulse-bg 4s ease-in-out infinite;
-  opacity: 0.2;
-  border-radius: 10px;
-}
-
-@keyframes pulse-bg {
-  0%, 100% {
-    background-position: 0% 50%;
-    opacity: 0.1;
-  }
-  50% {
-    background-position: 100% 50%;
-    opacity: 0.3;
-  }
-}
-
-/* 粒子效果 */
-.particles {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-}
-
-.particle {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  background: #667eea;
-  border-radius: 50%;
-  animation: float 3s ease-in-out infinite;
-}
-
-.particle:nth-child(1) { top: 20%; left: 20%; animation-delay: 0s; background: #667eea; }
-.particle:nth-child(2) { top: 80%; left: 80%; animation-delay: 0.5s; background: #764ba2; }
-.particle:nth-child(3) { top: 60%; left: 30%; animation-delay: 1s; background: #f093fb; }
-.particle:nth-child(4) { top: 30%; left: 70%; animation-delay: 1.5s; background: #667eea; }
-.particle:nth-child(5) { top: 70%; left: 20%; animation-delay: 2s; background: #764ba2; }
-.particle:nth-child(6) { top: 40%; left: 60%; animation-delay: 2.5s; background: #f093fb; }
-.particle:nth-child(7) { top: 10%; left: 50%; animation-delay: 3s; background: #667eea; }
-.particle:nth-child(8) { top: 90%; left: 40%; animation-delay: 3.5s; background: #764ba2; }
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px) scale(1);
-    opacity: 0.7;
-  }
-  50% {
-    transform: translateY(-25px) scale(1.3);
-    opacity: 1;
-  }
-}
-
-/* 中心加载器 */
-.center-loader {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 120px;
-  height: 120px;
-}
-
-.loader-ring {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: 2px solid transparent;
-  border-radius: 50%;
-  animation: spin 2s linear infinite;
-}
-
-.ring-1 {
-  border-top-color: #667eea;
-  border-right-color: #667eea;
-  animation-duration: 1.5s;
-}
-
-.ring-2 {
-  border-bottom-color: #764ba2;
-  border-left-color: #764ba2;
-  animation-duration: 2s;
-  animation-direction: reverse;
-  width: 80%;
-  height: 80%;
-  top: 10%;
-  left: 10%;
-}
-
-.ring-3 {
-  border-top-color: #f093fb;
-  border-bottom-color: #f093fb;
-  animation-duration: 2.5s;
-  width: 60%;
-  height: 60%;
-  top: 20%;
-  left: 20%;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.loader-core {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(45deg, #667eea, #764ba2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: core-pulse 2s ease-in-out infinite;
-}
-
-.core-icon {
-  font-size: 24px;
-  animation: icon-rotate 3s linear infinite;
-}
-
-@keyframes core-pulse {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
-    box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.1);
-    box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
-  }
-}
-
-@keyframes icon-rotate {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* 进度指示器 */
-.progress-indicator {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  width: 80px;
-  height: 80px;
-}
-
-.progress-circle {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.progress-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.progress-bg {
-  fill: none;
-  stroke: #333;
-  stroke-width: 2;
-}
-
-.progress-bar {
-  fill: none;
-  stroke: url(#progressGradient);
-  stroke-width: 2;
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.3s ease;
-}
-
-.progress-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  font-weight: bold;
-  color: #fff;
-}
-
-/* 状态文字 */
-.loading-text {
-  position: absolute;
-  bottom: 15px;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  color: #fff;
-}
-
-.text-line {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  text-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
-}
-
-.dots {
-  display: flex;
-  justify-content: center;
-  gap: 3px;
-}
-
-.dots .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #667eea;
-  animation: dot-bounce 1.4s ease-in-out infinite;
-}
-
-.dots .dot:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.dots .dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.dots .dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes dot-bounce {
-  0%, 60%, 100% {
-    transform: translateY(0);
-    opacity: 0.5;
-  }
-  30% {
-    transform: translateY(-12px);
-    opacity: 1;
-  }
-}
-
-/* 确保生成状态下的图片项正确显示 */
-.generating-state .image-item {
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-/* 移动端响应式 */
-@media (max-width: 768px) {
-  .center-loader {
-    width: 80px;
-    height: 80px;
-  }
-  
-  .loader-core {
-    width: 32px;
-    height: 32px;
-  }
-  
-  .core-icon {
-    font-size: 16px;
-  }
-  
-  .progress-indicator {
-    width: 60px;
-    height: 60px;
-    top: 10px;
-    right: 10px;
-  }
-  
-  .text-line {
-    font-size: 16px;
-  }
-}
-
-/* 移动端响应式 */
-@media (max-width: 1024px) {
-  .images-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    max-width: 100%;
-    justify-content: start;
-  }
-  
-  .images-grid[data-count="1"] {
-    grid-template-columns: minmax(250px, 350px);
-    justify-content: start;
-  }
-}
-
-@media (max-width: 768px) {
-  .images-grid {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 100%;
-    gap: 8px;
-    justify-content: start;
-  }
-  
-  .images-grid[data-count="1"] {
-    grid-template-columns: minmax(200px, 200px);
-    justify-content: start;
-  }
-  
-  .task-header {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .task-actions {
-    align-self: flex-start;
-  }
-}
-
-.gallery-item {
-  border-radius: 12px;
-  overflow: hidden;
-  background: #2a2a2a;
-  transition: transform 0.2s, box-shadow 0.2s;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.gallery-item:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-/* 提示词头部 */
-.image-prompt-header {
-  padding: 8px 10px;
-  background: #333;
-  border-bottom: 1px solid #444;
-}
-
-.image-prompt-text {
-  color: #fff;
-  font-size: 14px;
-  line-height: 1.4;
-  margin: 0;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 图像容器 */
-.image-container {
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  width: 100%;
-  max-width: 100%;
-  aspect-ratio: 1;
-  border-radius: 8px;
-  box-sizing: border-box;
-}
-
-.image-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.image-container:hover .image-overlay {
-  opacity: 1;
-}
-
-.overlay-btn {
-  color: white !important;
-  background: rgba(255, 255, 255, 0.2) !important;
+/* 图片缩略图样式 */
+.reference-upload .ant-upload-list-picture-card .ant-upload-list-item img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
   border: none !important;
-  font-size: 18px;
-  transition: all 0.3s ease;
+  background: none !important;
 }
 
-.overlay-btn:hover {
-  background: rgba(255, 255, 255, 0.4) !important;
-  transform: scale(1.1);
-}
-
-.gallery-image {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 1;
-  object-fit: cover;
-  transition: transform 0.3s;
-  border-radius: 8px;
-}
-
-.image-container:hover .gallery-image {
-  transform: scale(1.05);
-}
-
-/* 底部操作按钮 */
-.image-actions {
-  padding: 6px;
-  background: #333;
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-  border-top: 1px solid #444;
-}
-
-.action-btn {
-  color: #fff !important;
-  border: none !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(10px);
-  border-radius: 4px;
-  transition: all 0.2s;
-  padding: 0 8px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-
-.action-btn:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
-  transform: scale(1.1);
-}
-
-.delete-btn {
-  color: #ff6b6b !important;
-}
-
-.delete-btn:hover {
-  background: rgba(255, 77, 77, 0.3) !important;
-  color: #ff6b6b !important;
-}
-
-.empty-gallery {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-  color: #666;
-}
-
-.empty-content {
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 20px;
-  color: #444;
-}
-
-.empty-content h3 {
-  color: #999;
-  margin-bottom: 10px;
-}
-
-.empty-content p {
-  color: #666;
-  margin: 0;
-}
-
-/* 控制区域样式 */
-.prompt-area {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.prompt-section,
-.negative-prompt-section,
-.example-section {
-  margin-bottom: 0;
-}
-
-.settings-area {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.settings-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.setting-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #fff;
-  font-size: 0.9rem;
-}
-
-.prompt-input,
-.negative-prompt-input {
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-
-.prompt-input textarea.ant-input {
-  height: 80px !important;
-  min-height: 80px !important;
-  max-height: 80px !important;
-  resize: none !important;
-}
-
-.setting-select {
-  width: 100%;
-}
-
-.count-slider {
-  margin: 10px 0;
-}
-
-.generate-section {
-  margin-top: auto;
-}
-
-.generate-btn {
-  height: 80px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-}
-
-.example-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.example-tag {
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.8rem;
-}
-
-.example-tag:hover {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: transparent;
-}
-
-.gallery-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 15px 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
-
-.gallery-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-.gallery-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.clear-btn {
-  color: #ff6b6b !important;
-  border-color: #ff6b6b !important;
-  transition: all 0.2s;
-}
-
-.clear-btn:hover {
-  background: #ff6b6b !important;
-  color: white !important;
-}
-
-.history-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.history-item {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.history-item:hover {
-  background-color: #f5f5f5;
-}
-
-.history-thumbnail {
-  width: 50px;
-  height: 50px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-
-.history-info {
-  flex: 1;
-}
-
-.history-prompt {
-  font-size: 0.9rem;
-  margin: 0 0 5px 0;
-  color: #333;
-}
-
-.history-time {
-  font-size: 0.8rem;
-  margin: 0;
-  color: #666;
-}
-
-.display-panel {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.generating-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-}
-
-.loading-container {
-  text-align: center;
-}
-
-.loading-container h3 {
-  margin: 20px 0 10px 0;
-  color: #333;
-}
-
-.loading-container p {
-  color: #666;
-  margin-bottom: 20px;
-}
-
-.progress-bar {
-  width: 200px;
-  height: 4px;
-  background: #f0f0f0;
-  border-radius: 2px;
-  overflow: hidden;
-  margin: 0 auto;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  transition: width 0.3s ease;
-}
-
-.image-grid {
-  display: grid;
-  gap: 20px;
-  width: 100%;
-}
-
-/* 主图片网格布局 - 根据图片数量调整 */
-.image-grid[data-count="1"] {
-  grid-template-columns: 400px;
-}
-
-.image-grid[data-count="2"] {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.image-grid[data-count="3"] {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.image-grid[data-count="4"] {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.image-grid[data-count="5"], .image-grid[data-count="6"] {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-/* 超过6张图片时使用响应式布局 */
-.image-grid:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]):not([data-count="4"]):not([data-count="5"]):not([data-count="6"]) {
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
-
-.image-card {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s;
-}
-
-.image-card:hover {
-  transform: translateY(-5px);
-}
-
-.image-container {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 1;
-  border-radius: 8px;
-}
-
-.generated-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s;
-}
-
-.image-container:hover .generated-image {
-  transform: scale(1.05);
-}
-
-
-
-.image-info {
-  padding: 15px;
-}
-
-.image-prompt {
-  font-weight: 600;
-  margin: 0 0 5px 0;
-  color: #333;
-}
-
-.image-meta {
-  font-size: 0.9rem;
-  color: #666;
-  margin: 0;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 500px;
-}
-
-.empty-container {
-  text-align: center;
-  max-width: 400px;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 20px;
-}
-
-.empty-container h3 {
-  font-size: 1.5rem;
-  margin: 0 0 10px 0;
-  color: #333;
-}
-
-.empty-container p {
-  color: #666;
-  margin-bottom: 30px;
-  line-height: 1.6;
-}
-
-.example-prompts h4 {
-  margin: 0 0 15px 0;
-  color: #333;
-}
-
-.example-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.example-tag {
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.example-tag:hover {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: transparent;
-}
-
+/* 媒体查询 */
 @media (max-width: 768px) {
   .main-content {
     grid-template-columns: 1fr;
@@ -1853,11 +598,47 @@ onMounted(() => {
     font-size: 2rem;
   }
   
-  .image-grid {
-    grid-template-columns: 1fr;
+  .main-container {
+    padding: 10px;
+    padding-bottom: 200px;
   }
 }
-/* 深色主题全局覆盖 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</style>
+
+<style>
+/* 全局Ant Design组件样式覆盖 */
 .image-generator .ant-input,
 .image-generator .ant-input-affix-wrapper,
 .image-generator .ant-select-selector,
@@ -1933,169 +714,6 @@ onMounted(() => {
   color: #fff !important;
 }
 
-/* 参考图上传区域样式 */
-.reference-upload {
-  background: #1a1a1a;
-  border-radius: 8px;
-  text-align: center;
-  transition: border-color 0.3s;
-}
-
-.reference-upload .ant-upload-list-picture-card {
-  height: 80px !important;
-  width: 80px !important;
-}
-
-.reference-upload .ant-upload-select {
-  height: 80px !important;
-  width: 80px !important;
-  border: none !important;
-  border-style: none !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #2a2a2a !important;
-  border-radius: 6px !important;
-}
-
-/* 强制覆盖Ant Design默认样式 */
-.image-generator .reference-upload .ant-upload.ant-upload-select {
-  border: none !important;
-  border-style: none !important;
-  background: #2a2a2a !important;
-}
-
-.image-generator .reference-section .ant-upload.ant-upload-select {
-  border: none !important;
-  border-style: none !important;
-  background: #2a2a2a !important;
-}
-
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item {
-  border: none !important;
-  height: 80px !important;
-  width: 80px !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  border-radius: 6px !important;
-}
-
-/* 上传图片预览样式 */
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  border-radius: 6px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
-  background: none !important;
-}
-
-/* 上传图片容器样式 */
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-info {
-  width: 100% !important;
-  height: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border-radius: 6px !important;
-  background: none !important;
-  border: none !important;
-}
-
-/* 上传图片缩略图容器 */
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-thumbnail {
-  width: 100% !important;
-  height: 100% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  overflow: hidden !important;
-  border-radius: 6px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: none !important;
-  border: none !important;
-}
-
-/* 移除可能的遮罩层白边 */
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-actions {
-  background: rgba(0, 0, 0, 0.5) !important;
-}
-
-/* 强制移除所有可能的内边距和边框 */
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item * {
-  box-sizing: border-box !important;
-}
-
-.reference-upload .ant-upload-list-picture-card .ant-upload-list-item-image {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  border-radius: 6px !important;
-}
-.reference-upload:hover {
-  border-color: #667eea;
-}
-
-.reference-upload .ant-upload {
-  width: 100%;
-}
-
-.reference-upload .ant-upload-drag {
-  background: transparent !important;
-  border: none !important;
-}
-
-.reference-upload .ant-upload-drag:hover {
-  background: rgba(102, 126, 234, 0.1) !important;
-}
-
-.reference-upload .ant-upload-drag-icon {
-  color: #667eea !important;
-}
-
-.reference-upload .ant-upload-text {
-  color: #fff !important;
-}
-
-.reference-upload .ant-upload-hint {
-  color: #999 !important;
-}
-
-/* 修复上传组件内所有文字颜色 */
-.reference-upload .ant-upload-select .ant-upload {
-  color: #fff !important;
-}
-
-.reference-upload .ant-upload-select .ant-upload * {
-  color: #fff !important;
-}
-
-.reference-upload .ant-upload-select-picture-card {
-  color: #fff !important;
-}
-
-.reference-upload .ant-upload-select-picture-card .ant-upload-text {
-  color: #fff !important;
-}
-
-.reference-upload .ant-upload-select-picture-card .ant-upload-hint {
-  color: #999 !important;
-}
-
-.reference-images {
-  margin-top: 15px;
-}
-
-.reference-images .ant-upload-list-item {
-  background: #2a2a2a !important;
-  border-color: #444 !important;
-}
-
-</style>
-
-<style>
 /* 全局强制覆盖Ant Design上传组件样式 */
 .ant-upload.ant-upload-select {
   border: none !important;

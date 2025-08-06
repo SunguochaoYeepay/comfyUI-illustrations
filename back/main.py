@@ -842,13 +842,52 @@ async def get_history(limit: int = 50):
     
     history = []
     for task in tasks:
-        history.append({
+        task_data = {
             "task_id": task["id"],
             "created_at": task["created_at"],
             "description": task["description"],
             "status": task["status"],
-            "result_url": f"/api/image/{task['id']}" if task["status"] == "completed" else None
-        })
+            "result_url": None,
+            "filenames": None,
+            "direct_urls": None
+        }
+        
+        # 如果任务已完成，添加图片信息
+        if task["status"] == "completed" and task.get("result_path"):
+            try:
+                # 尝试解析JSON格式的多个结果路径
+                import json
+                result_paths = json.loads(task["result_path"])
+                
+                if isinstance(result_paths, list):
+                    # 多个图像
+                    filenames = [Path(path).name for path in result_paths]
+                    task_data.update({
+                        "result_url": f"/api/image/{task['id']}",
+                        "filenames": json.dumps(filenames),
+                        "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}" for filename in filenames])
+                    })
+                else:
+                    # 单个图像
+                    filename = Path(result_paths).name
+                    task_data.update({
+                        "result_url": f"/api/image/{task['id']}",
+                        "filenames": json.dumps([filename]),
+                        "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
+                    })
+            except (json.JSONDecodeError, TypeError):
+                # 如果不是JSON格式，按单个图像处理
+                try:
+                    filename = Path(task["result_path"]).name
+                    task_data.update({
+                        "result_url": f"/api/image/{task['id']}",
+                        "filenames": json.dumps([filename]),
+                        "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
+                    })
+                except:
+                    task_data["result_url"] = f"/api/image/{task['id']}"
+        
+        history.append(task_data)
     
     return {"tasks": history}
 

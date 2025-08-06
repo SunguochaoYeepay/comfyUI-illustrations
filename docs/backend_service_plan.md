@@ -238,7 +238,7 @@ cd ComfyUI
 python main.py --api-only
 
 # 启动后端服务
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 9000
 ```
 
 ### 6.2 生产环境

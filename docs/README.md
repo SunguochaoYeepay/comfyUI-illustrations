@@ -98,9 +98,9 @@ python start_server.py
 
 ### 5. 访问服务
 
-- **前端界面**: http://localhost:8000/frontend.html
-- **API文档**: http://localhost:8000/docs
-- **健康检查**: http://localhost:8000/api/health
+- **前端界面**: http://localhost:9000/frontend.html
+- **API文档**: http://localhost:9000/docs
+- **健康检查**: http://localhost:9000/api/health
 
 ## 📖 API 文档
 
@@ -183,7 +183,7 @@ GET /api/history?limit=50
 ```bash
 # 服务器配置
 HOST=0.0.0.0
-PORT=8000
+PORT=9000
 DEBUG=false
 
 # ComfyUI配置
@@ -234,7 +234,7 @@ DATABASE_URL = "postgresql://user:password@localhost/dbname"
 
 ```nginx
 upstream backend {
-    server 127.0.0.1:8000;
+    server 127.0.0.1:9000;
     server 127.0.0.1:8001;
     server 127.0.0.1:8002;
 }
@@ -259,7 +259,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
-EXPOSE 8000
+EXPOSE 9000
 
 CMD ["python", "start_server.py"]
 ```
@@ -272,7 +272,7 @@ services:
   backend:
     build: .
     ports:
-      - "8000:8000"
+      - "9000:9000"
     environment:
       - COMFYUI_URL=http://comfyui:8188
     depends_on:

@@ -84,9 +84,9 @@ const allImages = computed(() => {
     }))
   )
   
-  // 按时间升序排列，确保最新生成的图片显示在最后面
+  // 按时间降序排列，确保最新生成的图片显示在最前面
   const result = historyImages
-    .sort((a, b) => new Date(a.createdAt || a.timestamp) - new Date(b.createdAt || b.timestamp))
+    .sort((a, b) => new Date(b.createdAt || b.timestamp) - new Date(a.createdAt || a.timestamp))
   
   return result
 })
@@ -105,9 +105,9 @@ const imageGroups = computed(() => {
     taskGroups.get(taskId).push(image)
   })
   
-  // 将每个任务组转换为数组，并按时间升序排序（最新的在后面）
+  // 将每个任务组转换为数组，并按时间降序排序（最新的在前面）
   Array.from(taskGroups.values())
-    .sort((a, b) => new Date(a[0].createdAt) - new Date(b[0].createdAt))
+    .sort((a, b) => new Date(b[0].createdAt) - new Date(a[0].createdAt))
     .forEach(group => {
       groups.push(group)
     })
@@ -209,6 +209,12 @@ const generateImage = async () => {
               
               // 再次检查是否成功刷新
               console.log('📊 刷新后历史记录数量:', history.value.length)
+              console.log('📋 刷新后历史记录内容:', history.value.map(item => ({
+                id: item.id,
+                task_id: item.task_id,
+                status: item.status,
+                image_count: item.images?.length || 0
+              })))
               
               // 检查是否包含新生成的任务
               const hasNewTask = history.value.some(item => 
@@ -690,7 +696,7 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     const queryParams = new URLSearchParams({
       limit: pageSize.value.toString(),
       offset: offset.toString(),
-      order: 'asc',
+      order: 'desc', // 改为降序，最新的任务在前面
       _t: Date.now().toString() // 添加时间戳避免缓存
     })
     
@@ -702,7 +708,7 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
       queryParams.append('time_filter', filterParams.timeFilter)
     }
     
-    // 添加order参数，按创建时间升序排列（最新的在后）
+    // 添加order参数，按创建时间降序排列（最新的在前）
     const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
       signal: controller.signal,
       method: 'GET',

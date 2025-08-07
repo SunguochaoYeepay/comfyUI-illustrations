@@ -199,7 +199,33 @@ const generateImage = async () => {
               }))
               
               // 重新加载第一页历史记录以显示最新生成的图像
+              console.log('🔄 开始刷新历史记录...')
+              
+              // 等待一下确保数据库更新
+              await new Promise(resolve => setTimeout(resolve, 500))
+              
+              // 强制刷新历史记录，添加时间戳避免缓存
               await loadHistory(1, false)
+              
+              // 再次检查是否成功刷新
+              console.log('📊 刷新后历史记录数量:', history.value.length)
+              
+              // 检查是否包含新生成的任务
+              const hasNewTask = history.value.some(item => 
+                item.images && item.images.some(img => img.task_id === taskId)
+              )
+              
+              if (!hasNewTask && history.value.length > 0) {
+                console.log('⚠️ 刷新后没有找到新任务，等待后再次尝试...')
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                await loadHistory(1, false)
+                
+                // 再次检查
+                const hasNewTaskAfterRetry = history.value.some(item => 
+                  item.images && item.images.some(img => img.task_id === taskId)
+                )
+                console.log('📊 重试后是否找到新任务:', hasNewTaskAfterRetry)
+              }
               
               // 同时保存到本地存储作为备份
               saveHistory()
@@ -207,6 +233,15 @@ const generateImage = async () => {
               isGenerating.value = false
               progress.value = 100
               message.success('图像生成成功！')
+              
+              // 滚动到页面底部显示新生成的内容
+              setTimeout(() => {
+                window.scrollTo({
+                  top: document.documentElement.scrollHeight,
+                  behavior: 'smooth'
+                })
+              }, 500)
+              
               return
             } else if (statusData.status === 'failed') {
               isGenerating.value = false
@@ -655,7 +690,8 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     const queryParams = new URLSearchParams({
       limit: pageSize.value.toString(),
       offset: offset.toString(),
-      order: 'asc'
+      order: 'asc',
+      _t: Date.now().toString() // 添加时间戳避免缓存
     })
     
     // 添加筛选参数

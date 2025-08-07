@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+修复版本的main.py，包含正确的错误处理
+"""
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -57,7 +63,17 @@ class TaskStatusResponse(BaseModel):
 # 全局变量
 import os
 COMFYUI_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188")
-COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output"))
+
+# 支持Docker和本地环境的路径配置
+# 本地开发环境
+if os.getenv("ENVIRONMENT", "local") == "local":
+    COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay"))
+    COMFYUI_MAIN_OUTPUT_DIR = Path(os.getenv("COMFYUI_MAIN_OUTPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output"))
+else:
+    # Docker环境
+    COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "/app/comfyui/output/yeepay"))
+    COMFYUI_MAIN_OUTPUT_DIR = Path(os.getenv("COMFYUI_MAIN_OUTPUT_DIR", "/app/comfyui/output"))
+
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
 DB_PATH = "tasks.db"
@@ -73,36 +89,178 @@ class WorkflowTemplate:
     
     def customize_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any]):
         """自定义工作流参数"""
-        workflow = json.loads(json.dumps(self.template))  # 深拷贝
+        # 创建一个简化的Flux Kontext工作流，避免原始模板的复杂节点连接问题
+        import random
         
-        # 更新文本描述
-        workflow["6"]["inputs"]["text"] = description
+        workflow = {
+            "6": {
+                "inputs": {
+                    "text": description,
+                    "clip": ["38", 0]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "CLIP文本编码器"}
+            },
+            "8": {
+                "inputs": {
+                    "samples": ["31", 0],
+                    "vae": ["39", 0]
+                },
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE解码"}
+            },
+            "31": {
+                "inputs": {
+                    "seed": parameters.get("seed", random.randint(1, 2**32 - 1)),
+                    "steps": parameters.get("steps", 20),
+                    "cfg": 1,
+                    "sampler_name": "euler",
+                    "scheduler": "simple",
+                    "denoise": 1,
+                    "batch_size": parameters.get("count", 1),
+                    "model": ["37", 0],
+                    "positive": ["35", 0],
+                    "negative": ["135", 0],
+                    "latent_image": ["124", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": {"title": "K采样器"}
+            },
+            "35": {
+                "inputs": {
+                    "guidance": 2.5,
+                    "conditioning": ["177", 0]
+                },
+                "class_type": "FluxGuidance",
+                "_meta": {"title": "Flux引导"}
+            },
+            "37": {
+                "inputs": {
+                    "unet_name": "flux1-dev-kontext_fp8_scaled.safetensors",
+                    "weight_dtype": "default"
+                },
+                "class_type": "UNETLoader",
+                "_meta": {"title": "UNET加载器"}
+            },
+            "38": {
+                "inputs": {
+                    "clip_name1": "clip_l.safetensors",
+                    "clip_name2": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+                    "type": "flux",
+                    "device": "default"
+                },
+                "class_type": "DualCLIPLoader",
+                "_meta": {"title": "双CLIP加载器"}
+            },
+            "39": {
+                "inputs": {
+                    "vae_name": "ae.safetensors"
+                },
+                "class_type": "VAELoader",
+                "_meta": {"title": "VAE加载器"}
+            },
+            "42": {
+                "inputs": {
+                    "width": 512,
+                    "height": 512,
+                    "batch_size": 1,
+                    "color": 0
+                },
+                "class_type": "EmptyImage",
+                "_meta": {"title": "空图像"}
+            },
+            "124": {
+                "inputs": {
+                    "pixels": ["42", 0],
+                    "vae": ["39", 0]
+                },
+                "class_type": "VAEEncode",
+                "_meta": {"title": "VAE编码"}
+            },
+            "135": {
+                "inputs": {
+                    "conditioning": ["6", 0]
+                },
+                "class_type": "ConditioningZeroOut",
+                "_meta": {"title": "条件零化"}
+            },
+            "136": {
+                "inputs": {
+                    "filename_prefix": "yeepay/yeepay",
+                    "images": ["8", 0],
+                    "save_all": True
+                },
+                "class_type": "SaveImage",
+                "_meta": {"title": "保存图像"}
+            },
+            "177": {
+                "inputs": {
+                    "conditioning": ["6", 0],
+                    "latent": ["124", 0]
+                },
+                "class_type": "ReferenceLatent",
+                "_meta": {"title": "ReferenceLatent"}
+            }
+        }
         
-        # 更新参考图像路径 - LoadImageOutput需要相对于ComfyUI输出目录的文件名
-        # 我们需要将图像复制到ComfyUI的输出目录
-        import shutil
-        from pathlib import Path
+        print(f"✅ 创建简化工作流，包含 {len(workflow)} 个节点")
         
-        # 获取文件名并确保是支持的格式
-        source_path = Path(reference_image_path)
-        image_filename = source_path.name
+        # 检查是否有参考图
+        has_reference_image = reference_image_path and reference_image_path.strip() and not reference_image_path.endswith('blank.png')
         
-        # 如果不是webp格式，转换文件扩展名为webp（ComfyUI工作流期望webp格式）
-        if not image_filename.lower().endswith('.webp'):
-            name_without_ext = source_path.stem
-            image_filename = f"{name_without_ext}.webp"
-        
-        # 在Docker环境中，需要转换为宿主机路径
-        # 容器内的 /app/uploads 对应宿主机的 D:/AI-Image/YeePay/back/uploads
-        container_path = Path(reference_image_path)
-        if str(container_path).startswith('uploads/'):
-            # 转换为宿主机绝对路径
-            host_path = Path("D:/AI-Image/YeePay/back") / reference_image_path
-            print(f"转换路径: {reference_image_path} -> {host_path}")
-            workflow["142"]["inputs"]["image"] = str(host_path)
+        if has_reference_image:
+            print("检测到参考图，使用参考图模式")
+            # 更新参考图像路径 - 将上传的图像复制到ComfyUI输出目录并使用[output]后缀
+            container_path = Path(reference_image_path)
+            # 统一路径分隔符，确保能正确匹配
+            normalized_path = str(container_path).replace('\\', '/')
+            if normalized_path.startswith('uploads/'):
+                # 将上传的图像复制到ComfyUI输出目录
+                import shutil
+                source_file = Path(reference_image_path)
+                dest_file = COMFYUI_MAIN_OUTPUT_DIR / source_file.name
+                
+                try:
+                    shutil.copy2(source_file, dest_file)
+                    print(f"✅ 文件复制成功: {source_file} -> {dest_file}")
+                except Exception as e:
+                    print(f"❌ 文件复制失败: {e}")
+                    raise Exception(f"无法复制参考图像到ComfyUI输出目录: {e}")
+                
+                # 使用文件名加上[output]后缀
+                image_filename = f"{source_file.name} [output]"
+                print(f"设置LoadImageOutput图像路径: {image_filename}")
+                
+                # 添加LoadImageOutput节点
+                workflow["142"] = {
+                    "inputs": {
+                        "image": image_filename,
+                        "refresh": "refresh"
+                    },
+                    "class_type": "LoadImageOutput",
+                    "_meta": {"title": "加载图像（来自输出）"}
+                }
+                
+                # 添加FluxKontextImageScale节点
+                workflow["42"] = {
+                    "inputs": {
+                        "width": 512,
+                        "height": 512,
+                        "image": ["142", 0]
+                    },
+                    "class_type": "FluxKontextImageScale",
+                    "_meta": {"title": "FluxKontextImageScale"}
+                }
+                
+                # 更新VAEEncode节点使用FluxKontextImageScale的输出
+                workflow["124"]["inputs"]["pixels"] = ["42", 0]
+                
+                print(f"✅ 配置参考图模式工作流")
+            else:
+                print(f"使用原始路径: {reference_image_path}")
         else:
-            print(f"使用原始路径: {reference_image_path}")
-            workflow["142"]["inputs"]["image"] = str(reference_image_path)
+            print("未检测到参考图，使用无参考图模式")
+            print(f"✅ 配置无参考图模式工作流")
         
         # 更新生成参数
         if parameters.get("steps"):
@@ -121,11 +279,37 @@ class WorkflowTemplate:
             # 解析尺寸字符串 (例如: "512x512")
             try:
                 width, height = map(int, parameters["size"].split('x'))
-                # 注意：当前工作流模板可能需要根据具体的ComfyUI节点来调整尺寸设置
-                # 这里先记录参数，实际的尺寸调整可能需要修改工作流模板
-                print(f"图像尺寸设置为: {width}x{height}")
+                
+                if has_reference_image:
+                    # 有参考图模式：设置FluxKontextImageScale节点的尺寸参数
+                    if "42" in workflow and "inputs" in workflow["42"]:
+                        workflow["42"]["inputs"]["width"] = width
+                        workflow["42"]["inputs"]["height"] = height
+                        print(f"设置FluxKontextImageScale尺寸为: {width}x{height}")
+                else:
+                    # 无参考图模式：更新EmptyImage节点的尺寸
+                    if "42" in workflow and "inputs" in workflow["42"]:
+                        workflow["42"]["inputs"]["width"] = width
+                        workflow["42"]["inputs"]["height"] = height
+                        print(f"更新EmptyImage节点尺寸为: {width}x{height}")
+                
             except ValueError:
                 print(f"无法解析图像尺寸: {parameters['size']}，使用默认尺寸")
+                # 使用默认尺寸
+                if has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
+                    workflow["42"]["inputs"]["width"] = 512
+                    workflow["42"]["inputs"]["height"] = 512
+                elif not has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
+                    workflow["42"]["inputs"]["width"] = 512
+                    workflow["42"]["inputs"]["height"] = 512
+        else:
+            # 使用默认尺寸
+            if has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
+                workflow["42"]["inputs"]["width"] = 512
+                workflow["42"]["inputs"]["height"] = 512
+            elif not has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
+                workflow["42"]["inputs"]["width"] = 512
+                workflow["42"]["inputs"]["height"] = 512
         
         # 处理生成数量
         count = parameters.get("count", 1)
@@ -299,153 +483,6 @@ class DatabaseManager:
             columns = [desc[0] for desc in cursor.description]
             return dict(zip(columns, row))
         return None
-    
-    def get_all_tasks(self, limit: int = 50, offset: int = 0, order: str = "desc", favorite_filter: str = "all", time_filter: str = "all") -> dict:
-        """获取所有任务（支持分页、排序和筛选）
-        
-        Args:
-            limit: 每页数量
-            offset: 偏移量
-            order: 排序方式，'desc'为倒序（最新在前），'asc'为正序（最旧在前）
-            favorite_filter: 收藏筛选，'all'全部，'favorited'已收藏，'unfavorited'未收藏
-            time_filter: 时间筛选，'all'全部，'today'今天，'week'本周，'month'本月
-        """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 构建WHERE条件
-        where_conditions = []
-        params = []
-        
-        # 收藏状态筛选
-        if favorite_filter == "favorited":
-            where_conditions.append("is_favorited = 1")
-        elif favorite_filter == "unfavorited":
-            where_conditions.append("is_favorited = 0")
-        
-        # 时间筛选
-        if time_filter == "today":
-            where_conditions.append("DATE(created_at) = DATE('now', 'localtime')")
-        elif time_filter == "week":
-            where_conditions.append("created_at >= DATE('now', 'localtime', '-7 days')")
-        elif time_filter == "month":
-            where_conditions.append("created_at >= DATE('now', 'localtime', '-30 days')")
-        
-        # 构建WHERE子句
-        where_clause = ""
-        if where_conditions:
-            where_clause = "WHERE " + " AND ".join(where_conditions)
-        
-        # 获取筛选后的总数
-        count_query = f"SELECT COUNT(*) FROM tasks {where_clause}"
-        cursor.execute(count_query, params)
-        total = cursor.fetchone()[0]
-        
-        # 根据order参数确定排序方式
-        order_clause = "DESC" if order.lower() == "desc" else "ASC"
-        
-        # 获取分页数据
-        data_query = f"""
-            SELECT * FROM tasks 
-            {where_clause}
-            ORDER BY created_at {order_clause} 
-            LIMIT ? OFFSET ?
-        """
-        cursor.execute(data_query, params + [limit, offset])
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        conn.close()
-        
-        tasks = [dict(zip(columns, row)) for row in rows]
-        
-        return {
-            "tasks": tasks,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "has_more": offset + limit < total
-        }
-    
-    def delete_task(self, task_id: str) -> bool:
-        """删除任务"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 首先获取任务信息，以便删除相关文件
-        cursor.execute("SELECT result_path FROM tasks WHERE id = ?", (task_id,))
-        row = cursor.fetchone()
-        
-        if row and row[0]:
-            # 删除结果文件
-            result_path = Path(row[0])
-            if result_path.exists():
-                try:
-                    result_path.unlink()
-                except Exception as e:
-                    print(f"删除文件失败: {e}")
-        
-        # 删除数据库记录
-        cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-        deleted = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
-        
-        return deleted
-    
-    def clear_all_tasks(self) -> int:
-        """清空所有任务"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 获取所有任务的结果文件路径
-        cursor.execute("SELECT result_path FROM tasks WHERE result_path IS NOT NULL")
-        rows = cursor.fetchall()
-        
-        # 删除所有结果文件
-        deleted_files = 0
-        for row in rows:
-            if row[0]:
-                result_path = Path(row[0])
-                if result_path.exists():
-                    try:
-                        result_path.unlink()
-                        deleted_files += 1
-                    except Exception as e:
-                        print(f"删除文件失败: {e}")
-        
-        # 清空数据库
-        cursor.execute("DELETE FROM tasks")
-        deleted_tasks = cursor.rowcount
-        conn.commit()
-        conn.close()
-        
-        return deleted_tasks
-    
-    def toggle_favorite(self, task_id: str) -> bool:
-        """切换任务收藏状态"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 获取当前收藏状态
-        cursor.execute("SELECT is_favorited FROM tasks WHERE id = ?", (task_id,))
-        row = cursor.fetchone()
-        
-        if row is None:
-            conn.close()
-            return False
-        
-        # 切换收藏状态
-        current_status = row[0]
-        new_status = 1 if current_status == 0 else 0
-        
-        cursor.execute(
-            "UPDATE tasks SET is_favorited = ?, updated_at = ? WHERE id = ?",
-            (new_status, datetime.now(), task_id)
-        )
-        conn.commit()
-        conn.close()
-        
-        return True
 
 class TaskManager:
     def __init__(self, db_manager: DatabaseManager, comfyui_client: ComfyUIClient, workflow_template: WorkflowTemplate):
@@ -468,6 +505,11 @@ class TaskManager:
     async def execute_task(self, task_id: str, reference_image_path: str, description: str, parameters: Dict[str, Any]):
         """执行任务"""
         try:
+            print(f"🚀 开始执行任务: {task_id}")
+            print(f"   描述: {description}")
+            print(f"   参数: {parameters}")
+            print(f"   参考图像: {reference_image_path}")
+            
             # 更新状态为处理中
             self.db.update_task_status(task_id, "processing")
             
@@ -481,33 +523,43 @@ class TaskManager:
             for i in range(count):
                 print(f"📸 正在生成第 {i+1}/{count} 张图片...")
                 
-                # 为每次生成创建独立的参数副本
-                current_params = parameters.copy()
-                current_params["count"] = 1  # 每次只生成一张
-                
-                # 如果没有指定种子，为每张图片生成不同的随机种子
-                if not parameters.get("seed"):
-                    import random
-                    current_params["seed"] = random.randint(1, 2**32 - 1)
-                    print(f"🎲 使用随机种子: {current_params['seed']}")
-                
-                # 准备工作流
-                workflow = self.workflow_template.customize_workflow(
-                    reference_image_path, description, current_params
-                )
-                
-                # 提交到ComfyUI
-                prompt_id = await self.comfyui.submit_workflow(workflow)
-                print(f"📤 已提交工作流，prompt_id: {prompt_id}")
-                
-                # 等待完成
-                batch_result = await self.wait_for_completion(task_id, prompt_id)
-                
-                if batch_result:
-                    result_paths.extend(batch_result)
-                    print(f"✅ 第 {i+1} 张图片生成完成: {batch_result}")
-                else:
-                    print(f"❌ 第 {i+1} 张图片生成失败")
+                try:
+                    # 为每次生成创建独立的参数副本
+                    current_params = parameters.copy()
+                    current_params["count"] = 1  # 每次只生成一张
+                    
+                    # 如果没有指定种子，为每张图片生成不同的随机种子
+                    if not parameters.get("seed"):
+                        import random
+                        current_params["seed"] = random.randint(1, 2**32 - 1)
+                        print(f"🎲 使用随机种子: {current_params['seed']}")
+                    
+                    # 准备工作流
+                    print(f"🔧 准备工作流...")
+                    workflow = self.workflow_template.customize_workflow(
+                        reference_image_path, description, current_params
+                    )
+                    print(f"✅ 工作流准备完成")
+                    
+                    # 提交到ComfyUI
+                    print(f"📤 提交工作流到ComfyUI...")
+                    prompt_id = await self.comfyui.submit_workflow(workflow)
+                    print(f"✅ 已提交工作流，prompt_id: {prompt_id}")
+                    
+                    # 等待完成
+                    print(f"⏳ 等待任务完成...")
+                    batch_result = await self.wait_for_completion(task_id, prompt_id)
+                    
+                    if batch_result:
+                        result_paths.extend(batch_result)
+                        print(f"✅ 第 {i+1} 张图片生成完成: {batch_result}")
+                    else:
+                        print(f"❌ 第 {i+1} 张图片生成失败")
+                        raise Exception(f"第 {i+1} 张图片生成失败，没有返回结果")
+                        
+                except Exception as e:
+                    print(f"❌ 生成第 {i+1} 张图片时出错: {str(e)}")
+                    raise Exception(f"生成第 {i+1} 张图片失败: {str(e)}")
                 
                 # 更新进度
                 progress = int((i + 1) / count * 100)
@@ -532,28 +584,42 @@ class TaskManager:
                     print(f"💾 保存多张图片JSON: {result_data}")
                     self.db.update_task_status(task_id, "completed", result_path=result_data)
             else:
-                self.db.update_task_status(task_id, "failed", error="No output generated")
+                error_msg = "No output generated"
+                print(f"❌ {error_msg}")
+                self.db.update_task_status(task_id, "failed", error=error_msg)
                 
         except Exception as e:
-            print(f"❌ 任务执行失败: {str(e)}")
-            self.db.update_task_status(task_id, "failed", error=str(e))
+            error_msg = f"任务执行失败: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            print(f"详细错误信息:")
+            print(traceback.format_exc())
+            self.db.update_task_status(task_id, "failed", error=error_msg)
     
     async def wait_for_completion(self, task_id: str, prompt_id: str, max_wait_time: int = 300) -> Optional[list]:
         """等待任务完成"""
         start_time = datetime.now()
+        print(f"⏰ 开始等待任务完成，最大等待时间: {max_wait_time}秒")
         
         while (datetime.now() - start_time).seconds < max_wait_time:
             try:
+                print(f"🔍 检查任务状态: {prompt_id}")
                 history = await self.comfyui.get_task_status(prompt_id)
                 
                 if prompt_id in history:
                     task_info = history[prompt_id]
+                    print(f"✅ 找到任务信息")
+                    
                     if "outputs" in task_info:
+                        print(f"🎉 任务完成，开始处理输出")
                         # 任务完成，查找输出图像
                         outputs = task_info["outputs"]
                         result_paths = []
                         import shutil
-                        comfyui_output_dir = COMFYUI_OUTPUT_DIR
+                        comfyui_output_dir = COMFYUI_MAIN_OUTPUT_DIR
+                        
+                        print(f"📁 ComfyUI输出目录: {comfyui_output_dir}")
+                        print(f"📁 本地输出目录: {OUTPUT_DIR}")
                         
                         # 首先尝试从节点输出获取图片
                         for node_id, output in outputs.items():
@@ -561,131 +627,33 @@ class TaskManager:
                                 print(f"🖼️ 找到图像输出节点 {node_id}，包含 {len(output['images'])} 张图片")
                                 for image_info in output["images"]:
                                     filename = image_info['filename']
-                                    source_path = comfyui_output_dir / filename
+                                    # 检查图片是否在yeepay子目录中
+                                    source_path = comfyui_output_dir / "yeepay" / filename
+                                    if not source_path.exists():
+                                        # 如果不在yeepay子目录，尝试直接在输出目录中查找
+                                        source_path = comfyui_output_dir / filename
+                                    
                                     dest_path = OUTPUT_DIR / filename
+                                    
+                                    print(f"📄 处理图片: {filename}")
+                                    print(f"   源路径: {source_path}")
+                                    print(f"   目标路径: {dest_path}")
                                     
                                     if source_path.exists():
                                         shutil.copy2(source_path, dest_path)
                                         result_paths.append(f"outputs/{filename}")
-                                        print(f"✅ 复制图片: {filename}")
+                                        print(f"✅ 复制图片成功: {filename}")
                                     else:
                                         print(f"❌ 源文件不存在: {source_path}")
                         
-                        # 如果从节点输出获取的图片数量不足，尝试查找最新的文件
-                        # 从任务信息中获取期望的图片数量
-                        expected_count = 1  # 默认为1
-                        try:
-                            # 尝试从工作流中获取batch_size参数
-                            if "31" in task_info.get("prompt", {}) and "inputs" in task_info["prompt"]["31"]:
-                                expected_count = task_info["prompt"]["31"]["inputs"].get("batch_size", 1)
-                                print(f"🔢 从工作流中获取期望图片数量: {expected_count}")
-                        except Exception as e:
-                            print(f"⚠️ 获取期望图片数量失败: {e}")
-                            # 保持默认值
-                        if len(result_paths) < expected_count:
-                            print(f"⚠️ 节点输出图片数量不足({len(result_paths)}/{expected_count})，尝试查找最新文件")
-                            try:
-                                # 从SaveImage节点的输出中获取文件名模式
-                                # ComfyUI的批量生成通常会使用相同的前缀，但添加不同的索引
-                                # 例如：ComfyUI_00001_.png, ComfyUI_00002_.png 等
-                                
-                                # 首先检查是否有已知的文件名作为基础
-                                base_filename = None
-                                if result_paths and len(result_paths) > 0:
-                                    # 从已有的结果中提取基本文件名模式
-                                    first_file = Path(result_paths[0].replace("outputs/", ""))
-                                    # 提取数字部分前的前缀和后缀
-                                    import re
-                                    # 尝试多种可能的文件名模式
-                                    # 1. ComfyUI_00001_.png 格式
-                                    match = re.search(r'(.+?)_(\d+)_(.+)', first_file.name)
-                                    # 2. ComfyUI_00001.png 格式
-                                    if not match:
-                                        match = re.search(r'(.+?)_(\d+)(\.\w+)', first_file.name)
-                                    if match:
-                                        prefix = match.group(1)  # 例如 "ComfyUI"
-                                        # 数字部分
-                                        index = int(match.group(2))
-                                        suffix = match.group(3)  # 例如 ".png"
-                                        print(f"📋 提取的文件名模式: 前缀={prefix}, 索引={index}, 后缀={suffix}")
-                                        
-                                        # 查找具有相同前缀和后缀但索引不同的文件
-                                        potential_files = []
-                                        # 确定文件名格式
-                                        has_underscore_suffix = '_' in suffix if suffix else False
-                                        
-                                        for i in range(index, index + expected_count * 2):  # 搜索范围扩大一些
-                                            # 构建可能的文件名，保持相同的数字格式（例如 00001）
-                                            formatted_index = str(i).zfill(len(str(index)))
-                                            
-                                            # 尝试多种可能的文件名格式
-                                            potential_filenames = []
-                                            if has_underscore_suffix:
-                                                # ComfyUI_00001_.png 格式
-                                                potential_filenames.append(f"{prefix}_{formatted_index}_{suffix}")
-                                            else:
-                                                # ComfyUI_00001.png 格式
-                                                potential_filenames.append(f"{prefix}_{formatted_index}{suffix}")
-                                            
-                                            # 检查所有可能的文件名
-                                            for potential_filename in potential_filenames:
-                                                potential_path = comfyui_output_dir / potential_filename
-                                                if potential_path.exists():
-                                                    potential_files.append(potential_path)
-                                                    print(f"🔍 找到潜在的批量文件: {potential_filename}")
-                                                    break  # 找到一个就跳出内层循环
-                                        
-                                        if len(potential_files) >= expected_count:
-                                            print(f"✅ 找到足够的批量文件: {len(potential_files)} 张")
-                                            matching_files = potential_files[:expected_count]
-                                        else:
-                                            print(f"⚠️ 未找到足够的批量文件，回退到通配符搜索")
-                                            pattern = "ComfyUI*.png"
-                                            matching_files = list(comfyui_output_dir.glob(pattern))
-                                    else:
-                                        print(f"⚠️ 无法从现有文件提取模式: {first_file.name}，回退到通配符搜索")
-                                        pattern = "ComfyUI*.png"
-                                        matching_files = list(comfyui_output_dir.glob(pattern))
-                                else:
-                                    print(f"⚠️ 没有现有文件作为参考，回退到通配符搜索")
-                                    pattern = "ComfyUI*.png"
-                                    matching_files = list(comfyui_output_dir.glob(pattern))
-                                
-                                if matching_files:
-                                    # 按修改时间排序，获取最新的文件
-                                    matching_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-                                    
-                                    # 尝试查找具有相似时间戳的文件组（批量生成的图片通常时间戳接近）
-                                    if expected_count > 1 and len(matching_files) >= expected_count:
-                                        print(f"🔍 尝试查找批量生成的图片组...")
-                                        # 获取最新文件的时间戳
-                                        latest_time = matching_files[0].stat().st_mtime
-                                        # 查找时间戳接近的文件（5秒内）
-                                        batch_files = [f for f in matching_files if abs(f.stat().st_mtime - latest_time) < 5]
-                                        
-                                        if len(batch_files) >= expected_count:
-                                            print(f"✅ 找到可能的批量生成图片组: {len(batch_files)} 张")
-                                            files_to_copy = batch_files[:expected_count]
-                                        else:
-                                            print(f"⚠️ 未找到足够的批量图片，使用最新的 {expected_count} 张")
-                                            files_to_copy = matching_files[:expected_count]
-                                    else:
-                                        # 复制最新的文件，补足数量
-                                        files_to_copy = matching_files[:expected_count]
-                                    
-                                    result_paths = []  # 重新开始，使用最新文件
-                                    
-                                    for latest_file in files_to_copy:
-                                        dest_path = OUTPUT_DIR / latest_file.name
-                                        shutil.copy2(latest_file, dest_path)
-                                        result_paths.append(f"outputs/{latest_file.name}")
-                                        print(f"✅ 复制最新文件: {latest_file.name}")
-                            except Exception as e:
-                                print(f"❌ 查找最新文件失败: {e}")
-                        
                         print(f"📊 总共处理了 {len(result_paths)} 张图片: {result_paths}")
-                        return result_paths if result_paths else None
-                        return None
+                        if result_paths:
+                            return result_paths
+                        else:
+                            print(f"❌ 没有找到任何输出图片")
+                            return None
+                    else:
+                        print(f"⏳ 任务还在处理中，等待...")
                 
                 # 检查是否还在队列中
                 queue_status = await self.comfyui.get_queue_status()
@@ -696,13 +664,16 @@ class TaskManager:
                 in_queue = any(item[1] == prompt_id for item in queue_running + queue_pending)
                 if not in_queue and prompt_id not in history:
                     # 任务不在队列中也不在历史中，可能失败了
+                    print(f"❌ 任务不在队列中也不在历史中，可能失败了")
                     break
                 
                 await asyncio.sleep(2)  # 等待2秒后再检查
                 
-            except Exception:
+            except Exception as e:
+                print(f"❌ 检查任务状态时出错: {e}")
                 await asyncio.sleep(5)
         
+        print(f"⏰ 等待超时，任务可能失败")
         return None
     
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
@@ -729,6 +700,24 @@ app.add_middleware(
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="."), name="static")
+
+# 添加uploads路由
+@app.get("/api/uploads/{file_path:path}")
+async def get_upload_file(file_path: str):
+    """获取上传的文件"""
+    try:
+        file_path_obj = Path(file_path)
+        # 确保路径在uploads目录内，防止路径遍历攻击
+        if ".." in str(file_path_obj) or file_path_obj.is_absolute():
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        
+        full_path = UPLOAD_DIR / file_path_obj
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        return FileResponse(str(full_path))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
 # 添加前端页面路由
 @app.get("/frontend.html")
@@ -858,13 +847,7 @@ async def get_task_status(task_id: str):
 
 @app.get("/api/image/{task_id}")
 async def get_generated_image(task_id: str, index: int = 0, filename: str = None):
-    """获取生成的图像
-    
-    参数:
-        task_id: 任务ID
-        index: 图像索引（批量生成时使用）
-        filename: 可选，指定要获取的文件名
-    """
+    """获取生成的图像"""
     task = task_manager.get_task_status(task_id)
     
     if not task or task["status"] != "completed" or not task["result_path"]:
@@ -909,160 +892,211 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
         if index != 0:
             raise HTTPException(status_code=404, detail="图像索引不存在")
         image_path = Path(task["result_path"])
+    
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="图像文件不存在")
     
     return FileResponse(image_path)
 
-@app.get("/api/reference-image/{task_id}")
-async def get_reference_image(task_id: str):
-    """获取任务的参考图像"""
-    task = task_manager.get_task_status(task_id)
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    
-    if not task.get("reference_image_path"):
-        raise HTTPException(status_code=404, detail="该任务没有参考图像")
-    
-    reference_path = Path(task["reference_image_path"])
-    if not reference_path.exists():
-        raise HTTPException(status_code=404, detail="参考图像文件不存在")
-    
-    return FileResponse(reference_path)
-
 @app.get("/api/history")
-async def get_history(
-    limit: int = 20, 
-    offset: int = 0, 
-    order: str = "desc",
-    favorite_filter: str = "all",  # all, favorited, unfavorited
-    time_filter: str = "all"       # all, today, week, month
-):
-    """获取历史记录（支持分页、排序和筛选）"""
+async def get_history(limit: int = 20, offset: int = 0, order: str = "desc", favorite_filter: str = None, time_filter: str = None):
+    """获取历史记录"""
     try:
-        # 限制最大查询数量，防止性能问题
-        if limit > 50:
-            limit = 50
+        # 构建查询条件
+        query_conditions = []
+        query_params = []
         
-        result = db_manager.get_all_tasks(limit, offset, order, favorite_filter, time_filter)
-        tasks = result["tasks"]
+        # 处理收藏筛选
+        if favorite_filter and favorite_filter != "all":
+            if favorite_filter == "favorite":
+                query_conditions.append("is_favorited = ?")
+                query_params.append(1)
+            elif favorite_filter == "not_favorite":
+                query_conditions.append("is_favorited = ?")
+                query_params.append(0)
         
-        history = []
-        for task in tasks:
+        # 处理时间筛选
+        if time_filter and time_filter != "all":
+            from datetime import timedelta
+            now = datetime.now()
+            if time_filter == "today":
+                start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif time_filter == "week":
+                start_time = now - timedelta(days=7)
+            elif time_filter == "month":
+                start_time = now - timedelta(days=30)
+            else:
+                start_time = None
+            
+            if start_time:
+                query_conditions.append("created_at >= ?")
+                query_params.append(start_time.isoformat())
+        
+        # 构建WHERE子句
+        where_clause = ""
+        if query_conditions:
+            where_clause = "WHERE " + " AND ".join(query_conditions)
+        
+        # 获取总数
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        count_query = f"SELECT COUNT(*) FROM tasks {where_clause}"
+        cursor.execute(count_query, query_params)
+        total_count = cursor.fetchone()[0]
+        
+        # 获取分页数据
+        order_clause = "ORDER BY created_at DESC" if order == "desc" else "ORDER BY created_at ASC"
+        limit_clause = f"LIMIT {limit} OFFSET {offset}"
+        
+        query = f"""
+            SELECT id, status, description, reference_image_path, parameters, 
+                   prompt_id, result_path, error, progress, created_at, updated_at, is_favorited
+            FROM tasks 
+            {where_clause}
+            {order_clause}
+            {limit_clause}
+        """
+        
+        cursor.execute(query, query_params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # 处理结果
+        tasks = []
+        for row in rows:
+            columns = ['id', 'status', 'description', 'reference_image_path', 'parameters', 
+                      'prompt_id', 'result_path', 'error', 'progress', 'created_at', 'updated_at', 'is_favorited']
+            task = dict(zip(columns, row))
+            
+            # 解析参数
             try:
-                task_data = {
-                    "task_id": task["id"],
-                    "created_at": task["created_at"],
-                    "description": task["description"],
-                    "status": task["status"],
-                    "result_url": None,
-                    "filenames": None,
-                    "direct_urls": None,
-                    "reference_image_url": None,
-                    "is_favorited": bool(task.get("is_favorited", 0))
-                }
-                
-                # 添加参考图URL
-                if task.get("reference_image_path"):
-                    reference_path = Path(task["reference_image_path"])
-                    if reference_path.exists():
-                        # 构建参考图的访问URL
-                        task_data["reference_image_url"] = f"/api/reference-image/{task['id']}"
-                
-                # 如果任务已完成，添加图片信息
-                if task["status"] == "completed" and task.get("result_path"):
-                    try:
-                        # 尝试解析JSON格式的多个结果路径
-                        import json
-                        result_paths = json.loads(task["result_path"])
-                        
-                        if isinstance(result_paths, list):
-                            # 多个图像
-                            filenames = [Path(path).name for path in result_paths]
-                            task_data.update({
-                                "result_url": f"/api/image/{task['id']}",
-                                "filenames": json.dumps(filenames),
-                                "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}" for filename in filenames])
-                            })
-                        else:
-                            # 单个图像
-                            filename = Path(result_paths).name
-                            task_data.update({
-                                "result_url": f"/api/image/{task['id']}",
-                                "filenames": json.dumps([filename]),
-                                "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
-                            })
-                    except (json.JSONDecodeError, TypeError):
-                        # 如果不是JSON格式，按单个图像处理
-                        try:
-                            filename = Path(task["result_path"]).name
-                            task_data.update({
-                                "result_url": f"/api/image/{task['id']}",
-                                "filenames": json.dumps([filename]),
-                                "direct_urls": json.dumps([f"/api/image/{task['id']}?filename={filename}"])
-                            })
-                        except Exception as e:
-                            print(f"处理任务 {task['id']} 的图片信息失败: {e}")
-                            task_data["result_url"] = f"/api/image/{task['id']}"
-                
-                history.append(task_data)
-            except Exception as e:
-                print(f"处理任务 {task.get('id', 'unknown')} 时出错: {e}")
-                continue
+                task['parameters'] = json.loads(task['parameters']) if task['parameters'] else {}
+            except:
+                task['parameters'] = {}
+            
+            # 处理结果路径
+            if task['result_path']:
+                try:
+                    result_paths = json.loads(task['result_path'])
+                    if isinstance(result_paths, list):
+                        task['image_count'] = len(result_paths)
+                        task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
+                    else:
+                        task['image_count'] = 1
+                        task['image_urls'] = [f"/api/image/{task['id']}"]
+                except:
+                    task['image_count'] = 1
+                    task['image_urls'] = [f"/api/image/{task['id']}"]
+            else:
+                task['image_count'] = 0
+                task['image_urls'] = []
+            
+            # 添加task_id字段以兼容前端
+            task['task_id'] = task['id']
+            
+            tasks.append(task)
+        
+        # 计算是否有更多数据
+        has_more = (offset + limit) < total_count
         
         return {
-            "tasks": history,
-            "total": result["total"],
-            "limit": result["limit"],
-            "offset": result["offset"],
-            "has_more": result["has_more"]
+            "tasks": tasks,
+            "total": total_count,
+            "has_more": has_more,
+            "limit": limit,
+            "offset": offset,
+            "order": order
         }
+        
     except Exception as e:
         print(f"获取历史记录失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取历史记录失败: {str(e)}")
 
-@app.delete("/api/history/{task_id}")
-async def delete_history_item(task_id: str):
-    """删除单个历史记录"""
-    try:
-        deleted = db_manager.delete_task(task_id)
-        if deleted:
-            return {"message": "历史记录已删除", "task_id": task_id}
-        else:
-            raise HTTPException(status_code=404, detail="任务不存在")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
-
-@app.post("/api/history/{task_id}/toggle-favorite")
+@app.post("/api/task/{task_id}/favorite")
 async def toggle_favorite(task_id: str):
     """切换任务收藏状态"""
     try:
-        success = db_manager.toggle_favorite(task_id)
-        if success:
-            # 获取更新后的任务信息
-            task = db_manager.get_task(task_id)
-            if task:
-                return {
-                    "message": "收藏状态已更新",
-                    "task_id": task_id,
-                    "is_favorited": bool(task.get("is_favorited", 0))
-                }
-            else:
-                raise HTTPException(status_code=404, detail="任务不存在")
-        else:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # 获取当前收藏状态
+        cursor.execute("SELECT is_favorited FROM tasks WHERE id = ?", (task_id,))
+        result = cursor.fetchone()
+        
+        if not result:
             raise HTTPException(status_code=404, detail="任务不存在")
+        
+        current_favorite = result[0]
+        new_favorite = 0 if current_favorite else 1
+        
+        # 更新收藏状态
+        cursor.execute("UPDATE tasks SET is_favorited = ?, updated_at = ? WHERE id = ?", 
+                      (new_favorite, datetime.now(), task_id))
+        conn.commit()
+        conn.close()
+        
+        return {
+            "task_id": task_id,
+            "is_favorited": bool(new_favorite),
+            "message": "收藏状态已更新"
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"切换收藏状态失败: {e}")
         raise HTTPException(status_code=500, detail=f"切换收藏状态失败: {str(e)}")
 
-@app.delete("/api/history")
-async def clear_all_history():
-    """清空所有历史记录"""
+@app.delete("/api/task/{task_id}")
+async def delete_task(task_id: str):
+    """删除任务"""
     try:
-        deleted_count = db_manager.clear_all_tasks()
-        return {"message": f"已清空 {deleted_count} 条历史记录"}
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # 检查任务是否存在
+        cursor.execute("SELECT result_path FROM tasks WHERE id = ?", (task_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        result_path = result[0]
+        
+        # 删除相关的图像文件
+        if result_path:
+            try:
+                result_paths = json.loads(result_path)
+                if isinstance(result_paths, list):
+                    for path in result_paths:
+                        file_path = Path(path)
+                        if file_path.exists():
+                            file_path.unlink()
+                            print(f"删除文件: {file_path}")
+                else:
+                    file_path = Path(result_path)
+                    if file_path.exists():
+                        file_path.unlink()
+                        print(f"删除文件: {file_path}")
+            except Exception as file_error:
+                print(f"删除文件失败: {file_error}")
+        
+        # 删除数据库记录
+        cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+        conn.close()
+        
+        return {
+            "task_id": task_id,
+            "message": "任务已删除"
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"清空失败: {str(e)}")
+        print(f"删除任务失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除任务失败: {str(e)}")
 
 @app.get("/api/health")
 async def health_check():
@@ -1083,5 +1117,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    from config import config
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    uvicorn.run(app, host="0.0.0.0", port=9000)

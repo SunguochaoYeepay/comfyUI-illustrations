@@ -446,7 +446,7 @@ const regenerateImage = async (image) => {
 const deleteImage = async (image) => {
   try {
     // 调用后端删除API
-    const response = await fetch(`${API_BASE}/api/history/${image.task_id}`, {
+    const response = await fetch(`${API_BASE}/api/task/${image.task_id}`, {
       method: 'DELETE'
     })
     
@@ -465,22 +465,33 @@ const deleteImage = async (image) => {
 }
 
 // 切换收藏状态
-const toggleFavorite = (image) => {
+const toggleFavorite = async (image) => {
   try {
-    // 在allImages中找到对应的图片并更新收藏状态
-    const targetImage = allImages.value.find(img => 
-      img.url === image.url && img.task_id === image.task_id
-    )
+    // 调用后端API切换收藏状态
+    const response = await fetch(`${API_BASE}/api/task/${image.task_id}/favorite`, {
+      method: 'POST'
+    })
     
-    if (targetImage) {
-      targetImage.isFavorited = !targetImage.isFavorited
+    if (response.ok) {
+      const result = await response.json()
       
-      // 显示提示信息
-      if (targetImage.isFavorited) {
-        message.success('已添加到收藏')
-      } else {
-        message.success('已取消收藏')
+      // 在allImages中找到对应的图片并更新收藏状态
+      const targetImage = allImages.value.find(img => 
+        img.url === image.url && img.task_id === image.task_id
+      )
+      
+      if (targetImage) {
+        targetImage.isFavorited = result.is_favorited
+        
+        // 显示提示信息
+        if (targetImage.isFavorited) {
+          message.success('已添加到收藏')
+        } else {
+          message.success('已取消收藏')
+        }
       }
+    } else {
+      throw new Error('切换收藏状态失败')
     }
   } catch (error) {
     console.error('切换收藏状态失败:', error)
@@ -512,88 +523,75 @@ const processTaskImages = (task) => {
       return []
     }
     
-    if (!task.result_url || task.status !== 'completed') {
+    // 对于失败的任务，返回一个表示失败状态的图片对象
+    if (task.status === 'failed') {
+      return [{
+        url: null, // 失败的任务没有图片URL
+        directUrl: null,
+        filename: `failed_${task.task_id}.png`,
+        task_id: task.task_id,
+        prompt: task.description || '',
+        createdAt: new Date(task.created_at || Date.now()),
+        referenceImage: task.reference_image_path ? `/api/uploads/${task.reference_image_path}` : null,
+        isFavorited: task.is_favorited === 1 || task.is_favorited === true,
+        status: 'failed',
+        error: task.error || '生成失败'
+      }]
+    }
+    
+    // 对于其他非完成状态，也返回一个状态对象
+    if (task.status !== 'completed') {
+      return [{
+        url: null,
+        directUrl: null,
+        filename: `${task.status}_${task.task_id}.png`,
+        task_id: task.task_id,
+        prompt: task.description || '',
+        createdAt: new Date(task.created_at || Date.now()),
+        referenceImage: task.reference_image_path ? `/api/uploads/${task.reference_image_path}` : null,
+        isFavorited: task.is_favorited === 1 || task.is_favorited === true,
+        status: task.status,
+        error: task.error || `状态: ${task.status}`
+      }]
+    }
+    
+    // 检查是否有image_urls数组
+    if (!task.image_urls || !Array.isArray(task.image_urls) || task.image_urls.length === 0) {
+      console.warn('任务没有有效的image_urls:', task)
       return []
-    }
-    
-    // 获取文件名和直接URL（如果有）
-    let filenames = []
-    let directUrls = []
-    
-    if (task.filenames) {
-      try {
-        filenames = JSON.parse(task.filenames)
-        if (!Array.isArray(filenames)) {
-          console.warn('文件名不是数组格式:', task.filenames)
-          filenames = []
-        }
-      } catch (e) {
-        console.warn('解析文件名失败:', e, task.filenames)
-        filenames = []
-      }
-    }
-    
-    if (task.direct_urls) {
-      try {
-        directUrls = JSON.parse(task.direct_urls)
-        if (!Array.isArray(directUrls)) {
-          console.warn('直接URL不是数组格式:', task.direct_urls)
-          directUrls = []
-        }
-      } catch (e) {
-        console.warn('解析直接URL失败:', e, task.direct_urls)
-        directUrls = []
-      }
     }
     
     // 获取参考图信息
     let referenceImageUrl = null
-    if (task.reference_image_url) {
-      referenceImageUrl = task.reference_image_url
+    if (task.reference_image_path && task.reference_image_path !== 'uploads/blank.png') {
+      // 如果路径已经包含uploads/前缀，直接使用，否则添加前缀
+      if (task.reference_image_path.startsWith('uploads/')) {
+        referenceImageUrl = `/api/uploads/${task.reference_image_path}`
+      } else {
+        referenceImageUrl = `/api/uploads/uploads/${task.reference_image_path}`
+      }
     }
     
-    // 如果有文件名信息，说明是多张图片
-    if (filenames.length > 0) {
-      const images = filenames.map((filename, index) => {
-        try {
-          const imageUrl = directUrls[index] || `${task.result_url}?index=${index}`
-          return {
-            url: imageUrl,
-            directUrl: directUrls[index] || null,
-            filename: filename || `generated_${task.task_id}_${index + 1}.png`,
-            task_id: task.task_id,
-            prompt: task.description || '',
-            createdAt: new Date(task.created_at || Date.now()),
-            referenceImage: referenceImageUrl,
-            isFavorited: task.is_favorited === 1 || task.is_favorited === true  // 使用后端返回的收藏状态
-          }
-        } catch (imageError) {
-          console.error('处理单个图片数据失败:', imageError, { filename, index, task })
-          return null
-        }
-      }).filter(img => img !== null) // 过滤掉处理失败的图片
-      
-      return images
-    } else {
-      // 单张图片或没有详细信息
+    // 处理image_urls数组
+    const images = task.image_urls.map((imageUrl, index) => {
       try {
-        const imageUrl = task.result_url
-        
-        return [{
+        return {
           url: imageUrl,
           directUrl: null,
-          filename: `generated_${task.task_id}.png`,
+          filename: `generated_${task.task_id}_${index + 1}.png`,
           task_id: task.task_id,
           prompt: task.description || '',
           createdAt: new Date(task.created_at || Date.now()),
           referenceImage: referenceImageUrl,
-          isFavorited: false  // 添加收藏状态，默认为false
-        }]
-      } catch (singleImageError) {
-        console.error('处理单张图片数据失败:', singleImageError, task)
-        return []
+          isFavorited: task.is_favorited === 1 || task.is_favorited === true  // 使用后端返回的收藏状态
+        }
+      } catch (imageError) {
+        console.error('处理单个图片数据失败:', imageError, { imageUrl, index, task })
+        return null
       }
-    }
+    }).filter(img => img !== null) // 过滤掉处理失败的图片
+    
+    return images
   } catch (error) {
     console.error('processTaskImages 函数执行失败:', error, task)
     return []

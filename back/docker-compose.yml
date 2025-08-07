@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  yeepay-backend:
+    build: .
+    ports:
+      - "9000:9000"
+    environment:
+      - ENVIRONMENT=docker
+      - COMFYUI_URL=http://comfyui:8188
+      - COMFYUI_OUTPUT_DIR=/app/comfyui/output/yeepay
+      - COMFYUI_MAIN_OUTPUT_DIR=/app/comfyui/output
+    volumes:
+      # 映射ComfyUI输出目录
+      - ./comfyui_output:/app/comfyui/output
+      # 映射上传目录
+      - ./uploads:/app/uploads
+      # 映射输出目录
+      - ./outputs:/app/outputs
+      # 映射数据库
+      - ./data:/app/data
+    depends_on:
+      - comfyui
+    networks:
+      - yeepay-network
+
+  comfyui:
+    image: comfyui/comfyui:latest
+    ports:
+      - "8188:8188"
+    volumes:
+      # 映射ComfyUI输出目录
+      - ./comfyui_output:/app/ComfyUI/output
+      # 映射模型目录（如果有的话）
+      - ./models:/app/ComfyUI/models
+    environment:
+      - PYTHONPATH=/app/ComfyUI
+    networks:
+      - yeepay-network
+
+networks:
+  yeepay-network:
+    driver: bridge
+
+volumes:
+  comfyui_output:
+  uploads:
+  outputs:
+  data:

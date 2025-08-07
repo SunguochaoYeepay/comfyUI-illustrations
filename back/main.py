@@ -206,7 +206,7 @@ class WorkflowTemplate:
         print(f"✅ 创建简化工作流，包含 {len(workflow)} 个节点")
         
         # 检查是否有参考图
-        has_reference_image = reference_image_path and reference_image_path.strip() and not reference_image_path.endswith('blank.png')
+        has_reference_image = reference_image_path and reference_image_path.strip() and not reference_image_path.endswith('blank.png') and reference_image_path != ""
         
         if has_reference_image:
             print("检测到参考图，使用参考图模式")
@@ -215,17 +215,38 @@ class WorkflowTemplate:
             # 统一路径分隔符，确保能正确匹配
             normalized_path = str(container_path).replace('\\', '/')
             if normalized_path.startswith('uploads/'):
-                # 将上传的图像复制到ComfyUI输出目录
+                # 将上传的图像压缩到512x512并复制到ComfyUI输出目录
                 import shutil
+                from PIL import Image
+                import io
+                
                 source_file = Path(reference_image_path)
                 dest_file = COMFYUI_MAIN_OUTPUT_DIR / source_file.name
                 
                 try:
-                    shutil.copy2(source_file, dest_file)
-                    print(f"✅ 文件复制成功: {source_file} -> {dest_file}")
+                    # 使用PIL压缩图像到512x512
+                    with Image.open(source_file) as img:
+                        # 转换为RGB模式（如果需要）
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        
+                        # 压缩到512x512，保持宽高比
+                        img.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                        
+                        # 创建512x512的白色背景
+                        background = Image.new('RGB', (512, 512), (255, 255, 255))
+                        
+                        # 将压缩后的图像居中放置
+                        offset = ((512 - img.width) // 2, (512 - img.height) // 2)
+                        background.paste(img, offset)
+                        
+                        # 保存压缩后的图像
+                        background.save(dest_file, 'PNG')
+                    
+                    print(f"✅ 参考图压缩到512x512并保存成功: {source_file} -> {dest_file}")
                 except Exception as e:
-                    print(f"❌ 文件复制失败: {e}")
-                    raise Exception(f"无法复制参考图像到ComfyUI输出目录: {e}")
+                    print(f"❌ 参考图压缩失败: {e}")
+                    raise Exception(f"无法压缩参考图像到512x512: {e}")
                 
                 # 使用文件名加上[output]后缀
                 image_filename = f"{source_file.name} [output]"
@@ -241,15 +262,18 @@ class WorkflowTemplate:
                     "_meta": {"title": "加载图像（来自输出）"}
                 }
                 
-                # 添加FluxKontextImageScale节点
+                # 使用ImageScale节点替代FluxKontextImageScale，强制固定尺寸
                 workflow["42"] = {
                     "inputs": {
+                        "image": ["142", 0],
                         "width": 512,
                         "height": 512,
-                        "image": ["142", 0]
+                        "crop": "disabled",
+                        "upscale_method": "lanczos",
+                        "downscale_method": "area"
                     },
-                    "class_type": "FluxKontextImageScale",
-                    "_meta": {"title": "FluxKontextImageScale"}
+                    "class_type": "ImageScale",
+                    "_meta": {"title": "图像缩放"}
                 }
                 
                 # 更新VAEEncode节点使用FluxKontextImageScale的输出
@@ -274,42 +298,15 @@ class WorkflowTemplate:
         if parameters.get("guidance"):
             workflow["35"]["inputs"]["guidance"] = parameters["guidance"]
         
-        # 处理图像尺寸
-        if parameters.get("size"):
-            # 解析尺寸字符串 (例如: "512x512")
-            try:
-                width, height = map(int, parameters["size"].split('x'))
-                
-                if has_reference_image:
-                    # 有参考图模式：设置FluxKontextImageScale节点的尺寸参数
-                    if "42" in workflow and "inputs" in workflow["42"]:
-                        workflow["42"]["inputs"]["width"] = width
-                        workflow["42"]["inputs"]["height"] = height
-                        print(f"设置FluxKontextImageScale尺寸为: {width}x{height}")
-                else:
-                    # 无参考图模式：更新EmptyImage节点的尺寸
-                    if "42" in workflow and "inputs" in workflow["42"]:
-                        workflow["42"]["inputs"]["width"] = width
-                        workflow["42"]["inputs"]["height"] = height
-                        print(f"更新EmptyImage节点尺寸为: {width}x{height}")
-                
-            except ValueError:
-                print(f"无法解析图像尺寸: {parameters['size']}，使用默认尺寸")
-                # 使用默认尺寸
-                if has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
-                    workflow["42"]["inputs"]["width"] = 512
-                    workflow["42"]["inputs"]["height"] = 512
-                elif not has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
-                    workflow["42"]["inputs"]["width"] = 512
-                    workflow["42"]["inputs"]["height"] = 512
-        else:
-            # 使用默认尺寸
-            if has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
-                workflow["42"]["inputs"]["width"] = 512
-                workflow["42"]["inputs"]["height"] = 512
-            elif not has_reference_image and "42" in workflow and "inputs" in workflow["42"]:
-                workflow["42"]["inputs"]["width"] = 512
-                workflow["42"]["inputs"]["height"] = 512
+        # 处理图像尺寸 - 永远使用512x512
+        target_width = 512
+        target_height = 512
+        
+        # 无论是否有参考图，都使用固定的512x512尺寸
+        if "42" in workflow and "inputs" in workflow["42"]:
+            workflow["42"]["inputs"]["width"] = target_width
+            workflow["42"]["inputs"]["height"] = target_height
+            print(f"设置生成图片尺寸为: {target_width}x{target_height} (固定尺寸)")
         
         # 处理生成数量
         count = parameters.get("count", 1)
@@ -647,6 +644,35 @@ class TaskManager:
                                         print(f"❌ 源文件不存在: {source_path}")
                         
                         print(f"📊 总共处理了 {len(result_paths)} 张图片: {result_paths}")
+                        
+                        # 如果没有从ComfyUI输出中找到图片，尝试从文件系统中查找最新的图片
+                        if not result_paths:
+                            print("🔍 尝试从文件系统中查找最新生成的图片...")
+                            try:
+                                # 查找yeepay目录中最新的图片文件
+                                yeepay_dir = comfyui_output_dir / "yeepay"
+                                if yeepay_dir.exists():
+                                    # 获取所有png文件并按修改时间排序
+                                    png_files = list(yeepay_dir.glob("*.png"))
+                                    if png_files:
+                                        # 按修改时间排序，获取最新的文件
+                                        latest_file = max(png_files, key=lambda f: f.stat().st_mtime)
+                                        print(f"📄 找到最新图片文件: {latest_file.name}")
+                                        
+                                        # 复制到输出目录
+                                        dest_path = OUTPUT_DIR / latest_file.name
+                                        shutil.copy2(latest_file, dest_path)
+                                        result_paths.append(f"outputs/{latest_file.name}")
+                                        print(f"✅ 复制图片成功: {latest_file.name}")
+                                        
+                                        return result_paths
+                                    else:
+                                        print("❌ yeepay目录中没有找到png文件")
+                                else:
+                                    print("❌ yeepay目录不存在")
+                            except Exception as e:
+                                print(f"❌ 从文件系统查找图片时出错: {e}")
+                        
                         if result_paths:
                             return result_paths
                         else:
@@ -733,7 +759,7 @@ async def root():
 @app.post("/api/generate-image", response_model=TaskResponse)
 async def generate_image(
     description: str = Form(...),
-    reference_image: UploadFile = File(...),
+    reference_image: Optional[UploadFile] = File(None),
     count: int = Form(1),
     size: str = Form("512x512"),
     steps: int = Form(20),
@@ -741,13 +767,50 @@ async def generate_image(
 ):
     """生成图像API"""
     try:
-        # 保存上传的参考图像
-        image_filename = f"{uuid.uuid4()}_{reference_image.filename}"
-        image_path = UPLOAD_DIR / image_filename
-        
-        async with aiofiles.open(image_path, 'wb') as f:
-            content = await reference_image.read()
-            await f.write(content)
+        # 处理参考图像
+        image_path = None
+        if reference_image:
+            try:
+                # 保存上传的参考图像
+                image_filename = f"{uuid.uuid4()}_{reference_image.filename}"
+                image_path = UPLOAD_DIR / image_filename
+                
+                # 读取文件内容
+                content = await reference_image.read()
+                
+                # 验证文件内容
+                if len(content) == 0:
+                    print("❌ 参考图像文件为空")
+                    raise HTTPException(status_code=400, detail="参考图像文件为空")
+                
+                if len(content) < 100:  # 图片文件通常至少100字节
+                    print(f"❌ 参考图像文件过小: {len(content)} 字节")
+                    raise HTTPException(status_code=400, detail="参考图像文件过小或损坏")
+                
+                # 保存文件
+                async with aiofiles.open(image_path, 'wb') as f:
+                    await f.write(content)
+                
+                # 验证保存的文件
+                if not image_path.exists() or image_path.stat().st_size == 0:
+                    print("❌ 参考图像保存失败")
+                    raise HTTPException(status_code=500, detail="参考图像保存失败")
+                
+                print(f"✅ 保存参考图像成功: {image_path} ({image_path.stat().st_size} 字节)")
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"❌ 保存参考图像时出错: {e}")
+                # 如果保存失败，清理可能创建的文件
+                if image_path and image_path.exists():
+                    try:
+                        image_path.unlink()
+                    except:
+                        pass
+                raise HTTPException(status_code=500, detail=f"保存参考图像失败: {str(e)}")
+        else:
+            print("📸 无参考图像，使用无参考图模式")
         
         # 准备参数
         parameters = {
@@ -762,7 +825,7 @@ async def generate_image(
         
         # 创建任务
         task_id = await task_manager.create_task(
-            str(image_path), description, parameters
+            str(image_path) if image_path else "", description, parameters
         )
         
         return TaskResponse(

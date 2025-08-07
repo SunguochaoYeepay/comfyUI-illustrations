@@ -156,17 +156,8 @@ const generateImage = async () => {
         message.error('参考图片文件无效，请重新选择')
         return
       }
-    } else {
-      // 如果没有参考图片，创建一个空白图片
-      const canvas = document.createElement('canvas')
-      canvas.width = 512
-      canvas.height = 512
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, 512, 512)
-      const blob = await new Promise(resolve => canvas.toBlob(resolve))
-      formData.append('reference_image', blob, 'blank.png')
     }
+    // 如果没有参考图片，不添加任何文件，让后端处理无参考图的情况
 
     // 调用后端API
     const response = await fetch(`${API_BASE}/api/generate-image`, {
@@ -371,7 +362,23 @@ const editImage = async (image) => {
     try {
       // 从URL获取图片文件
       const response = await fetch(image.referenceImage)
+      
+      // 检查响应状态
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const blob = await response.blob()
+      
+      // 检查blob是否为空或无效
+      if (blob.size === 0) {
+        throw new Error('图片文件为空')
+      }
+      
+      // 检查blob是否过小（可能是错误信息）
+      if (blob.size < 100) {
+        throw new Error('图片文件过小，可能损坏')
+      }
       
       // 创建File对象
       const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
@@ -385,7 +392,7 @@ const editImage = async (image) => {
         originFileObj: file  // 添加originFileObj属性
       }]
     } catch (error) {
-      console.error('获取参考图失败:', error)
+      console.error('获取参考图失败:', error, 'URL:', image.referenceImage)
       message.warning('无法获取原参考图，将不显示参考图')
       referenceImages.value = []
     }
@@ -414,7 +421,23 @@ const regenerateImage = async (image) => {
     try {
       // 从URL获取图片文件
       const response = await fetch(image.referenceImage)
+      
+      // 检查响应状态
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const blob = await response.blob()
+      
+      // 检查blob是否为空或无效
+      if (blob.size === 0) {
+        throw new Error('图片文件为空')
+      }
+      
+      // 检查blob是否过小（可能是错误信息）
+      if (blob.size < 100) {
+        throw new Error('图片文件过小，可能损坏')
+      }
       
       // 创建File对象
       const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
@@ -428,7 +451,7 @@ const regenerateImage = async (image) => {
         originFileObj: file  // 添加originFileObj属性
       }]
     } catch (error) {
-      console.error('获取参考图失败:', error)
+      console.error('获取参考图失败:', error, 'URL:', image.referenceImage)
       message.warning('无法获取原参考图，将不使用参考图重新生成')
       referenceImages.value = []
     }
@@ -563,13 +586,20 @@ const processTaskImages = (task) => {
     
     // 获取参考图信息
     let referenceImageUrl = null
-    if (task.reference_image_path && task.reference_image_path !== 'uploads/blank.png') {
-      // 如果路径已经包含uploads/前缀，直接使用，否则添加前缀
-      if (task.reference_image_path.startsWith('uploads/')) {
-        referenceImageUrl = `/api/uploads/${task.reference_image_path}`
-      } else {
-        referenceImageUrl = `/api/uploads/uploads/${task.reference_image_path}`
+    if (task.reference_image_path && task.reference_image_path !== 'uploads/blank.png' && task.reference_image_path !== 'uploads\\blank.png') {
+      // 统一处理参考图片路径，支持Windows和Unix路径分隔符
+      let cleanPath = task.reference_image_path
+      
+      // 处理uploads/或uploads\前缀
+      if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('uploads\\')) {
+        // 去掉uploads/或uploads\前缀
+        cleanPath = cleanPath.replace(/^uploads[\/\\]/, '')
       }
+      
+      // 将Windows路径分隔符转换为URL路径分隔符
+      cleanPath = cleanPath.replace(/\\/g, '/')
+      
+      referenceImageUrl = `/api/uploads/${cleanPath}`
     }
     
     // 处理image_urls数组

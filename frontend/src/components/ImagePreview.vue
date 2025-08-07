@@ -75,7 +75,13 @@
                   alt="参考图"
                   class="reference-img"
                   @click="viewReferenceImage"
+                  @error="handleReferenceImageError"
+                  v-show="!referenceImageError"
                 />
+                <div v-if="referenceImageError" class="reference-image-error">
+                  <span class="error-icon">⚠️</span>
+                  <span class="error-text">参考图加载失败</span>
+                </div>
               </div>
             </div>
             
@@ -134,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { CloseOutlined, DownloadOutlined, CopyOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 
@@ -160,6 +166,20 @@ const props = defineProps({
 
 // Emits
 const emit = defineEmits(['close', 'navigate'])
+
+// 参考图错误状态
+const referenceImageError = ref(false)
+
+// 处理参考图加载错误
+const handleReferenceImageError = () => {
+  console.warn('参考图加载失败:', props.imageData.referenceImage)
+  referenceImageError.value = true
+}
+
+// 监听图片数据变化，重置错误状态
+watch(() => props.imageData, () => {
+  referenceImageError.value = false
+}, { deep: true })
 
 // 关闭预览
 const closePreview = () => {
@@ -561,6 +581,31 @@ onUnmounted(() => {
 .reference-img:hover {
   border-color: #667eea;
   transform: scale(1.05);
+}
+
+.reference-image-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  background: #333;
+  border: 2px dashed #666;
+  border-radius: 6px;
+  color: #999;
+  font-size: 12px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.error-text {
+  font-size: 10px;
+  line-height: 1.2;
 }
 
 /* 响应式设计 */

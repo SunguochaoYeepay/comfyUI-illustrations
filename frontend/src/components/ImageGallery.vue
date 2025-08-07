@@ -1,11 +1,14 @@
 <template>
   <div class="gallery-container">
-    <!-- 右上角筛选器触发按钮 -->
-    <div v-if="allImages.length > 0" class="filter-trigger" @click="toggleFilter">
-      <div class="filter-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
-        </svg>
+    <!-- 右上角控制按钮 -->
+    <div v-if="allImages.length > 0" class="gallery-controls">
+      <!-- 筛选器触发按钮 -->
+      <div class="filter-trigger" @click="toggleFilter">
+        <div class="filter-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+          </svg>
+        </div>
       </div>
       
       <!-- 筛选面板 -->
@@ -72,20 +75,20 @@
        </div>
      </div>
      
-     <!-- 图像展示网格 - 历史图片始终显示 -->
-     <div v-if="filteredImages.length > 0" class="image-gallery">
-       <TaskCard
-         v-for="(group, groupIndex) in filteredImageGroups"
-         :key="groupIndex"
-         :group="group"
-         @edit-image="$emit('editImage', $event)"
-         @regenerate-image="$emit('regenerateImage', $event)"
-         @delete-image="$emit('deleteImage', $event)"
-         @download-image="$emit('downloadImage', $event)"
-         @preview-image="handlePreviewImage"
-         @toggle-favorite="handleToggleFavorite"
-       />
-     </div>
+           <!-- 图像展示区域 -->
+      <div v-if="filteredImages.length > 0" class="image-gallery">
+        <TaskCard
+          v-for="(group, groupIndex) in filteredImageGroups"
+          :key="groupIndex"
+          :group="group"
+          @edit-image="$emit('editImage', $event)"
+          @regenerate-image="$emit('regenerateImage', $event)"
+          @delete-image="$emit('deleteImage', $event)"
+          @download-image="$emit('downloadImage', $event)"
+          @preview-image="handlePreviewImage"
+          @toggle-favorite="handleToggleFavorite"
+        />
+      </div>
     
     <!-- 空状态 -->
     <div v-if="!isGenerating && allImages.length === 0" class="empty-gallery">
@@ -146,6 +149,7 @@ import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { PictureOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import { Select as ASelect, SelectOption as ASelectOption } from 'ant-design-vue'
 import TaskCard from './TaskCard.vue'
+import SingleImageGrid from './SingleImageGrid.vue'
 import GeneratingState from './GeneratingState.vue'
 import ImagePreview from './ImagePreview.vue'
 
@@ -215,6 +219,7 @@ let isAutoLoading = false
 let lastScrollTime = 0
 let scrollTimeout = null
 let lastLoadTime = 0 // 记录上次加载时间
+let isInitialized = false // 标记是否已完成初始化
 
 // 获取图片尺寸的公共函数
 const getImageDimensions = (url) => {
@@ -238,27 +243,27 @@ const handlePreviewImage = async (image) => {
       return
     }
     
-    console.log('=== 图片预览调试信息 ===')
-    console.log('点击的图片:', image)
-    console.log('filteredImageGroups数量:', filteredImageGroups.value.length)
-    
-    // 创建扁平化的图片列表（基于filteredImageGroups的顺序）
-    flatImageList.value = []
-    filteredImageGroups.value.forEach((group, groupIndex) => {
-      console.log(`第${groupIndex}组图片数量:`, group.length)
-      group.forEach((img, imgIndex) => {
-        console.log(`  组${groupIndex}-图片${imgIndex}:`, {
-          url: img.url,
-          directUrl: img.directUrl,
-          id: img.id,
-          task_id: img.task_id,
-          createdAt: img.createdAt || img.timestamp
-        })
-        flatImageList.value.push(img)
-      })
-    })
-    
-    console.log('flatImageList总数量:', flatImageList.value.length)
+         console.log('=== 图片预览调试信息 ===')
+     console.log('点击的图片:', image)
+     console.log('filteredImageGroups数量:', filteredImageGroups.value.length)
+     
+     // 创建扁平化的图片列表（基于filteredImageGroups的顺序）
+     flatImageList.value = []
+     filteredImageGroups.value.forEach((group, groupIndex) => {
+       console.log(`第${groupIndex}组图片数量:`, group.length)
+       group.forEach((img, imgIndex) => {
+         console.log(`  组${groupIndex}-图片${imgIndex}:`, {
+           url: img.url,
+           directUrl: img.directUrl,
+           id: img.id,
+           task_id: img.task_id,
+           createdAt: img.createdAt || img.timestamp
+         })
+         flatImageList.value.push(img)
+       })
+     })
+     
+     console.log('flatImageList总数量:', flatImageList.value.length)
     
          // 找到当前图片在列表中的索引 - 使用更精确的匹配
      currentImageIndex.value = flatImageList.value.findIndex(img => {
@@ -474,70 +479,23 @@ const filteredImageGroups = computed(() => {
     }
   })
   
-  // 将每个任务组转换为数组，并按时间升序排序（最新的在后面）
-  Array.from(taskGroups.values())
-    .sort((a, b) => {
-      const timeA = new Date(a[0]?.createdAt || a[0]?.timestamp || 0).getTime()
-      const timeB = new Date(b[0]?.createdAt || b[0]?.timestamp || 0).getTime()
-      return timeA - timeB // 最新的在后
-    })
-    .forEach(group => {
-      groups.push(group)
-    })
+  // 将每个任务组转换为数组（后端已经按时间降序排列，前端不需要再排序）
+  Array.from(taskGroups.values()).forEach(group => {
+    groups.push(group)
+  })
   
   return groups
 })
 
-// 计算属性：将图像按任务分组，每组四张图片（保留原有逻辑用于其他地方）
-const imageGroups = computed(() => {
-  // 如果数据为空，直接返回空数组
-  if (!props.allImages || props.allImages.length === 0) {
-    return []
-  }
-  
-  const groups = []
-  const taskGroups = new Map()
-  
-  // 按task_id分组
-  props.allImages.forEach(image => {
-    try {
-      const taskId = image.task_id || 'unknown'
-      if (!taskGroups.has(taskId)) {
-        taskGroups.set(taskId, [])
-      }
-      taskGroups.get(taskId).push(image)
-    } catch (error) {
-      console.error('处理图像分组时出错:', error, image)
-    }
-  })
-  
-  // 将每个任务组转换为数组，并按时间升序排序（最新的在后面）
-  try {
-    Array.from(taskGroups.values())
-      .sort((a, b) => {
-        try {
-          const timeA = new Date(a[0]?.createdAt || a[0]?.timestamp || Date.now())
-          const timeB = new Date(b[0]?.createdAt || b[0]?.timestamp || Date.now())
-          return timeA - timeB
-        } catch (sortError) {
-          console.error('排序时出错:', sortError)
-          return 0
-        }
-      })
-      .forEach(group => {
-        if (group && group.length > 0) {
-          groups.push(group)
-        }
-      })
-  } catch (error) {
-    console.error('处理任务组时出错:', error)
-  }
-  
-  return groups
-})
+
 
 // 滚动监听函数 - 改为监听滚动到顶部（作为备用机制）
 const handleScroll = () => {
+  // 如果还未初始化完成，不处理滚动事件
+  if (!isInitialized) {
+    return
+  }
+  
   if (isAutoLoading || !props.hasMore || props.isLoadingHistory) {
     return
   }
@@ -588,6 +546,11 @@ const setupIntersectionObserver = () => {
   observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
+        // 如果还未初始化完成，不处理滚动事件
+        if (!isInitialized) {
+          return
+        }
+        
         if (entry.isIntersecting && props.hasMore && !props.isLoadingHistory && !isAutoLoading) {
           const now = Date.now()
           
@@ -638,8 +601,12 @@ onMounted(() => {
   // 设置Intersection Observer
   nextTick(() => {
     setupIntersectionObserver()
-    // 页面加载时滚动到底部
-    scrollToBottom()
+    
+    // 延迟标记初始化完成，避免页面加载时的滚动触发翻页
+    setTimeout(() => {
+      isInitialized = true
+      console.log('页面初始化完成，滚动监听已启用')
+    }, 2000) // 2秒后启用滚动监听
   })
 })
 
@@ -768,12 +735,22 @@ onUnmounted(() => {
   padding: 0 20px;
 }
 
-/* 右上角筛选器样式 */
-.filter-trigger {
+/* 右上角控制按钮样式 */
+.gallery-controls {
   position: fixed;
   top: 20px;
   right: 20px;
   z-index: 1000;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+
+
+/* 右上角筛选器样式 */
+.filter-trigger {
+  position: relative;
 }
 
 .filter-icon {

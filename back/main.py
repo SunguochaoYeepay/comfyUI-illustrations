@@ -294,7 +294,7 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
     return FileResponse(image_path)
 
 @app.get("/api/history")
-async def get_history(limit: int = 20, offset: int = 0, order: str = "desc", favorite_filter: str = None, time_filter: str = None):
+async def get_history(limit: int = 20, offset: int = 0, order: str = "asc", favorite_filter: str = None, time_filter: str = None):
     """获取历史记录"""
     try:
         result = db_manager.get_tasks_with_filters(
@@ -311,7 +311,7 @@ async def get_history(limit: int = 20, offset: int = 0, order: str = "desc", fav
 
 @app.post("/api/task/{task_id}/favorite")
 async def toggle_favorite(task_id: str):
-    """切换任务收藏状态"""
+    """切换任务收藏状态（向后兼容）"""
     try:
         new_favorite = db_manager.toggle_favorite(task_id)
         if new_favorite is False and not db_manager.get_task(task_id):
@@ -328,6 +328,32 @@ async def toggle_favorite(task_id: str):
     except Exception as e:
         print(f"切换收藏状态失败: {e}")
         raise HTTPException(status_code=500, detail=f"切换收藏状态失败: {str(e)}")
+
+@app.post("/api/image/{task_id}/{image_index}/favorite")
+async def toggle_image_favorite(task_id: str, image_index: int, filename: str = None):
+    """切换单张图片收藏状态"""
+    try:
+        # 验证任务是否存在
+        task = db_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        new_favorite = db_manager.toggle_image_favorite(task_id, image_index, filename)
+        
+        return {
+            "task_id": task_id,
+            "image_index": image_index,
+            "is_favorited": new_favorite,
+            "message": "图片收藏状态已更新"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"切换图片收藏状态失败: {e}")
+        raise HTTPException(status_code=500, detail=f"切换图片收藏状态失败: {str(e)}")
+
+
 
 @app.delete("/api/task/{task_id}")
 async def delete_task(task_id: str):

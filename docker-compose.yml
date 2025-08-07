@@ -9,12 +9,13 @@ services:
     container_name: yeepay-backend
     ports:
       - "9001:9000"
+
     environment:
       - ENVIRONMENT=production
       - HOST=0.0.0.0
       - PORT=9000
-      - COMFYUI_URL=${COMFYUI_URL:-http://host.docker.internal:8188}
-      - COMFYUI_OUTPUT_DIR=/app/comfyui_yeepay_output
+      - COMFYUI_URL=http://host.docker.internal:8188
+      - COMFYUI_OUTPUT_DIR=/app/comfyui/output/yeepay
       - COMFYUI_TIMEOUT=300
       - MAX_CONCURRENT_TASKS=3
       - CORS_ORIGINS=*
@@ -24,8 +25,9 @@ services:
       - ./back/uploads:/app/uploads
       - ./back/outputs:/app/outputs
       - ./back/tasks.db:/app/tasks.db
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui_output
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui_yeepay_output
+      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
+      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
+
     networks:
       - yeepay-network
     restart: unless-stopped
@@ -35,6 +37,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+
 
   # 前端服务
   frontend:

@@ -61,7 +61,7 @@ const generatedImages = ref([])
 // 历史记录和分页状态
 const history = ref([])
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10) // 改为10个任务组一页，便于测试翻页功能
 const totalCount = ref(0)
 const hasMore = ref(false)
 const isLoadingHistory = ref(false)
@@ -74,7 +74,7 @@ const previewImage = ref('')
 const allImages = computed(() => {
   const hist = history.value || []
   
-  // 将历史记录中的图片展开
+  // 将历史记录中的图片展开（后端按时间降序排列，最新的在前面）
   const historyImages = hist.flatMap(item => 
     (item.images || []).map(img => ({
       ...img,
@@ -84,11 +84,8 @@ const allImages = computed(() => {
     }))
   )
   
-  // 按时间降序排列，确保最新生成的图片显示在最前面
-  const result = historyImages
-    .sort((a, b) => new Date(b.createdAt || b.timestamp) - new Date(a.createdAt || a.timestamp))
-  
-  return result
+  // 反转数组，让最新的内容显示在底部
+  return historyImages.reverse()
 })
 
 // 计算属性：将图像按任务分组，每组四张图片
@@ -105,12 +102,10 @@ const imageGroups = computed(() => {
     taskGroups.get(taskId).push(image)
   })
   
-  // 将每个任务组转换为数组，并按时间降序排序（最新的在前面）
-  Array.from(taskGroups.values())
-    .sort((a, b) => new Date(b[0].createdAt) - new Date(a[0].createdAt))
-    .forEach(group => {
-      groups.push(group)
-    })
+  // 将每个任务组转换为数组（后端按时间降序排列，最新的在前面）
+  Array.from(taskGroups.values()).forEach(group => {
+    groups.push(group)
+  })
   
   return groups
 })
@@ -240,12 +235,19 @@ const generateImage = async () => {
               progress.value = 100
               message.success('图像生成成功！')
               
-              // 滚动到页面底部显示新生成的内容
+              // 滚动到页面底部显示新生成的内容，使用直接设置滚动位置避免触发滚动事件
               setTimeout(() => {
-                window.scrollTo({
-                  top: document.documentElement.scrollHeight,
-                  behavior: 'smooth'
-                })
+                // 临时禁用滚动监听器，避免触发翻页
+                const originalScrollHandler = window.onscroll
+                window.onscroll = null
+                
+                // 直接设置滚动位置到底部，不触发滚动事件
+                window.scrollTo(0, document.documentElement.scrollHeight)
+                
+                // 恢复滚动监听器
+                setTimeout(() => {
+                  window.onscroll = originalScrollHandler
+                }, 100)
               }, 500)
               
               return
@@ -502,8 +504,6 @@ const regenerateImage = async (image) => {
   
   // 开始生成
   await generateImage()
-  
-  message.info('正在使用原提示词和参考图重新生成图像...')
 }
 
 // 删除图像
@@ -515,8 +515,12 @@ const deleteImage = async (image) => {
     })
     
     if (response.ok) {
-      // 重新加载第一页历史记录以保持数据同步
-      await loadHistory(1, false)
+      // 从当前历史记录中移除被删除的任务，而不是重新加载整个第一页
+      const taskIdToDelete = image.task_id
+      history.value = history.value.filter(item => item.task_id !== taskIdToDelete)
+      
+      // 更新总数
+      totalCount.value = Math.max(0, totalCount.value - 1)
       
       message.success('图像已删除')
     } else {
@@ -528,11 +532,13 @@ const deleteImage = async (image) => {
   }
 }
 
+
+
 // 切换收藏状态
 const toggleFavorite = async (image) => {
   try {
-    // 调用后端API切换收藏状态
-    const response = await fetch(`${API_BASE}/api/task/${image.task_id}/favorite`, {
+    // 调用后端API切换单张图片收藏状态
+    const response = await fetch(`${API_BASE}/api/image/${image.task_id}/${image.imageIndex || 0}/favorite`, {
       method: 'POST'
     })
     
@@ -541,7 +547,7 @@ const toggleFavorite = async (image) => {
       
       // 在allImages中找到对应的图片并更新收藏状态
       const targetImage = allImages.value.find(img => 
-        img.url === image.url && img.task_id === image.task_id
+        img.url === image.url && img.task_id === image.task_id && img.imageIndex === image.imageIndex
       )
       
       if (targetImage) {
@@ -643,18 +649,28 @@ const processTaskImages = (task) => {
       referenceImageUrl = `/api/uploads/${cleanPath}`
     }
     
-    // 处理image_urls数组
+    // 处理image_urls数组，使用后端提供的收藏状态
     const images = task.image_urls.map((imageUrl, index) => {
       try {
+        // 从后端提供的images数组中获取收藏状态
+        let isFavorited = false
+        if (task.images && Array.isArray(task.images)) {
+          const imageData = task.images.find(img => img.image_index === index)
+          if (imageData) {
+            isFavorited = imageData.isFavorited || false
+          }
+        }
+        
         return {
           url: imageUrl,
           directUrl: null,
           filename: `generated_${task.task_id}_${index + 1}.png`,
           task_id: task.task_id,
+          imageIndex: index, // 添加图片索引
           prompt: task.description || '',
           createdAt: new Date(task.created_at || Date.now()),
           referenceImage: referenceImageUrl,
-          isFavorited: task.is_favorited === 1 || task.is_favorited === true  // 使用后端返回的收藏状态
+          isFavorited: isFavorited  // 使用后端提供的收藏状态
         }
       } catch (imageError) {
         console.error('处理单个图片数据失败:', imageError, { imageUrl, index, task })
@@ -693,12 +709,12 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     console.log('开始加载历史记录，页面:', page, '偏移量:', offset, '筛选参数:', filterParams)
     
     // 构建查询参数
-    const queryParams = new URLSearchParams({
-      limit: pageSize.value.toString(),
-      offset: offset.toString(),
-      order: 'desc', // 改为降序，最新的任务在前面
-      _t: Date.now().toString() // 添加时间戳避免缓存
-    })
+            const queryParams = new URLSearchParams({
+          limit: pageSize.value.toString(),
+          offset: offset.toString(),
+          order: 'desc', // 降序排列，最新的任务在第一页
+          _t: Date.now().toString() // 添加时间戳避免缓存
+        })
     
     // 添加筛选参数
     if (filterParams.favoriteFilter && filterParams.favoriteFilter !== 'all') {
@@ -707,8 +723,6 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     if (filterParams.timeFilter && filterParams.timeFilter !== 'all') {
       queryParams.append('time_filter', filterParams.timeFilter)
     }
-    
-    // 添加order参数，按创建时间降序排列（最新的在前）
     const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
       signal: controller.signal,
       method: 'GET',
@@ -750,25 +764,20 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
             }
           }).filter(item => item !== null) // 过滤掉处理失败的项目
           
-          if (prepend) {
-            // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
-            history.value = [...newHistoryItems, ...history.value]
-            
-            // 计算新内容的位置并滚动到该位置
-            const newContentCount = newHistoryItems.length
-            if (newContentCount > 0) {
-              // 延迟滚动，确保DOM已更新
-              setTimeout(() => {
-                scrollToNewContent(newContentCount)
-              }, 100)
-            }
-          } else {
-            // 替换模式：替换现有历史记录（首次加载）
-            history.value = newHistoryItems
-          }
+                          if (prepend) {
+                  // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
+                  // 由于后端返回的是降序排列，新加载的内容是更早的数据，应该放在现有内容的后面
+                  history.value = [...history.value, ...newHistoryItems]
+                } else {
+                  // 替换模式：替换现有历史记录（首次加载）
+                  history.value = newHistoryItems
+                }
           
           const endTime = performance.now()
           console.log(`[性能监控] 数据处理完成，历史记录数量: ${history.value.length}, 耗时: ${(endTime - startTime).toFixed(2)}ms`)
+          
+          // 获取所有图片的收藏状态
+          await updateImageFavoriteStatus()
         } catch (error) {
           console.error('处理历史数据时出错:', error)
           // 即使处理失败也要清除loading状态
@@ -895,7 +904,7 @@ const handleFilterChange = async (filterParams) => {
   currentPage.value = 1
   hasMore.value = true
   
-  // 重新加载历史记录
+  // 直接使用后端API进行筛选
   await loadHistory(1, false, filterParams)
 }
 
@@ -911,12 +920,19 @@ const saveHistory = () => {
 // 组件挂载时加载历史记录
 onMounted(async () => {
   await loadHistory()
-  // 页面加载完成后滚动到底部，确保控制面板可见
+  // 页面加载完成后直接定位到底部显示最新内容，不触发滚动事件
   setTimeout(() => {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'smooth'
-    })
+    // 临时禁用滚动监听器，避免触发翻页
+    const originalScrollHandler = window.onscroll
+    window.onscroll = null
+    
+    // 直接设置滚动位置到底部，不触发滚动事件
+    window.scrollTo(0, document.documentElement.scrollHeight)
+    
+    // 恢复滚动监听器
+    setTimeout(() => {
+      window.onscroll = originalScrollHandler
+    }, 100)
   }, 500) // 延迟500ms确保DOM渲染完成
 })
 </script>

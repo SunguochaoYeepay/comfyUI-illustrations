@@ -44,6 +44,19 @@ class DatabaseManager:
             )
         """)
         
+        # 创建单张图片收藏表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS image_favorites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                image_index INTEGER NOT NULL,
+                filename TEXT,
+                is_favorited INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(task_id, image_index)
+            )
+        """)
+        
         # 检查是否需要添加字段（兼容旧数据库）
         cursor.execute("PRAGMA table_info(tasks)")
         columns = [column[1] for column in cursor.fetchall()]
@@ -161,18 +174,49 @@ class DatabaseManager:
         Returns:
             包含任务列表和统计信息的字典
         """
-        # 构建查询条件
-        query_conditions = []
-        query_params = []
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
-        # 处理收藏筛选
+        # 处理收藏筛选 - 支持单张图片收藏筛选
         if favorite_filter and favorite_filter != "all":
-            if favorite_filter == "favorite":
-                query_conditions.append("is_favorited = ?")
-                query_params.append(1)
+            if favorite_filter == "favorited":
+                # 筛选包含收藏图片的任务
+                query = """
+                    SELECT DISTINCT t.id, t.status, t.description, t.reference_image_path, t.parameters, 
+                           t.prompt_id, t.result_path, t.error, t.progress, t.created_at, t.updated_at, t.is_favorited
+                    FROM tasks t
+                    INNER JOIN image_favorites f ON t.id = f.task_id
+                    WHERE f.is_favorited = 1
+                """
+                query_params = []
             elif favorite_filter == "not_favorite":
-                query_conditions.append("is_favorited = ?")
-                query_params.append(0)
+                # 筛选不包含收藏图片的任务
+                query = """
+                    SELECT t.id, t.status, t.description, t.reference_image_path, t.parameters, 
+                           t.prompt_id, t.result_path, t.error, t.progress, t.created_at, t.updated_at, t.is_favorited
+                    FROM tasks t
+                    WHERE t.id NOT IN (
+                        SELECT DISTINCT task_id FROM image_favorites WHERE is_favorited = 1
+                    )
+                """
+                query_params = []
+            else:
+                # 任务级别的收藏筛选（向后兼容）
+                query = """
+                    SELECT id, status, description, reference_image_path, parameters, 
+                           prompt_id, result_path, error, progress, created_at, updated_at, is_favorited
+                    FROM tasks 
+                    WHERE is_favorited = ?
+                """
+                query_params = [1 if favorite_filter == "favorite" else 0]
+        else:
+            # 没有收藏筛选
+            query = """
+                SELECT id, status, description, reference_image_path, parameters, 
+                       prompt_id, result_path, error, progress, created_at, updated_at, is_favorited
+                FROM tasks
+            """
+            query_params = []
         
         # 处理时间筛选
         if time_filter and time_filter != "all":
@@ -188,36 +232,28 @@ class DatabaseManager:
                 start_time = None
             
             if start_time:
-                query_conditions.append("created_at >= ?")
+                if "WHERE" in query:
+                    query += " AND t.created_at >= ?"
+                else:
+                    query += " WHERE t.created_at >= ?"
                 query_params.append(start_time.isoformat())
         
-        # 构建WHERE子句
-        where_clause = ""
-        if query_conditions:
-            where_clause = "WHERE " + " AND ".join(query_conditions)
-        
         # 获取总数
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        count_query = f"SELECT COUNT(*) FROM tasks {where_clause}"
+        count_query = f"SELECT COUNT(*) FROM ({query})"
         cursor.execute(count_query, query_params)
         total_count = cursor.fetchone()[0]
         
-        # 获取分页数据
-        order_clause = "ORDER BY created_at DESC" if order == "desc" else "ORDER BY created_at ASC"
+        # 添加排序和分页
+        # 根据查询是否包含JOIN来决定使用哪个表名
+        if "INNER JOIN" in query or "NOT IN" in query:
+            order_clause = "ORDER BY t.created_at ASC" if order == "asc" else "ORDER BY t.created_at DESC"
+        else:
+            order_clause = "ORDER BY created_at ASC" if order == "asc" else "ORDER BY created_at DESC"
         limit_clause = f"LIMIT {limit} OFFSET {offset}"
         
-        query = f"""
-            SELECT id, status, description, reference_image_path, parameters, 
-                   prompt_id, result_path, error, progress, created_at, updated_at, is_favorited
-            FROM tasks 
-            {where_clause}
-            {order_clause}
-            {limit_clause}
-        """
+        final_query = f"{query} {order_clause} {limit_clause}"
         
-        cursor.execute(query, query_params)
+        cursor.execute(final_query, query_params)
         rows = cursor.fetchall()
         conn.close()
         
@@ -234,22 +270,49 @@ class DatabaseManager:
             except:
                 task['parameters'] = {}
             
-            # 处理结果路径
+            # 处理结果路径和图片收藏状态
             if task['result_path']:
                 try:
                     result_paths = json.loads(task['result_path'])
                     if isinstance(result_paths, list):
                         task['image_count'] = len(result_paths)
                         task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
+                        # 为每个图片添加收藏状态
+                        task['images'] = []
+                        for i in range(len(result_paths)):
+                            is_favorited = self.get_image_favorite_status(task['id'], i)
+                            task['images'].append({
+                                'task_id': task['id'],
+                                'image_index': i,
+                                'url': f"/api/image/{task['id']}?index={i}",
+                                'isFavorited': is_favorited
+                            })
                     else:
                         task['image_count'] = 1
                         task['image_urls'] = [f"/api/image/{task['id']}"]
+                        # 为单个图片添加收藏状态
+                        is_favorited = self.get_image_favorite_status(task['id'], 0)
+                        task['images'] = [{
+                            'task_id': task['id'],
+                            'image_index': 0,
+                            'url': f"/api/image/{task['id']}",
+                            'isFavorited': is_favorited
+                        }]
                 except:
                     task['image_count'] = 1
                     task['image_urls'] = [f"/api/image/{task['id']}"]
+                    # 为单个图片添加收藏状态
+                    is_favorited = self.get_image_favorite_status(task['id'], 0)
+                    task['images'] = [{
+                        'task_id': task['id'],
+                        'image_index': 0,
+                        'url': f"/api/image/{task['id']}",
+                        'isFavorited': is_favorited
+                    }]
             else:
                 task['image_count'] = 0
                 task['image_urls'] = []
+                task['images'] = []
             
             # 添加task_id字段以兼容前端
             task['task_id'] = task['id']
@@ -269,7 +332,7 @@ class DatabaseManager:
         }
     
     def toggle_favorite(self, task_id: str) -> bool:
-        """切换任务收藏状态
+        """切换任务收藏状态（保留向后兼容）
         
         Args:
             task_id: 任务ID
@@ -298,6 +361,69 @@ class DatabaseManager:
         conn.close()
         
         return bool(new_favorite)
+    
+    def toggle_image_favorite(self, task_id: str, image_index: int, filename: str = None) -> bool:
+        """切换单张图片收藏状态
+        
+        Args:
+            task_id: 任务ID
+            image_index: 图片索引
+            filename: 文件名（可选）
+            
+        Returns:
+            新的收藏状态
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # 检查是否已存在收藏记录
+            cursor.execute("SELECT is_favorited FROM image_favorites WHERE task_id = ? AND image_index = ?", 
+                          (task_id, image_index))
+            result = cursor.fetchone()
+            
+            if result:
+                # 更新现有记录
+                current_favorite = result[0]
+                new_favorite = 0 if current_favorite else 1
+                cursor.execute("UPDATE image_favorites SET is_favorited = ?, updated_at = ? WHERE task_id = ? AND image_index = ?", 
+                              (new_favorite, datetime.now(), task_id, image_index))
+            else:
+                # 创建新记录
+                new_favorite = 1
+                cursor.execute("INSERT INTO image_favorites (task_id, image_index, filename, is_favorited, created_at) VALUES (?, ?, ?, ?, ?)", 
+                              (task_id, image_index, filename, new_favorite, datetime.now()))
+            
+            conn.commit()
+            return bool(new_favorite)
+        except Exception as e:
+            print(f"切换图片收藏状态失败: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def get_image_favorite_status(self, task_id: str, image_index: int) -> bool:
+        """获取单张图片的收藏状态
+        
+        Args:
+            task_id: 任务ID
+            image_index: 图片索引
+            
+        Returns:
+            是否已收藏
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT is_favorited FROM image_favorites WHERE task_id = ? AND image_index = ?", 
+                      (task_id, image_index))
+        result = cursor.fetchone()
+        
+        conn.close()
+        return bool(result[0]) if result else False
+    
+
     
     def delete_task(self, task_id: str) -> Optional[str]:
         """删除任务

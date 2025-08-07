@@ -81,8 +81,10 @@ class ComfyUIClient:
             True表示服务正常，False表示服务异常
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self.base_url}/system_stats") as response:
+            timeout = aiohttp.ClientTimeout(total=5)  # 5秒超时
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(f"{self.base_url}/") as response:
                     return response.status == 200
-        except:
+        except Exception as e:
+            print(f"ComfyUI健康检查失败: {e}")
             return False

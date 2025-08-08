@@ -10,8 +10,10 @@
         :prompt="prompt"
         :image-count="imageCount"
         :progress="progress"
-
-        
+        :is-upscaling="isUpscaling"
+        :upscaling-progress="upscalingProgress"
+        :current-scale-factor="currentScaleFactor"
+        :upscaling-prompt="upscalingPrompt"
         :has-more="hasMore"
         :is-loading-history="isLoadingHistory"
         :total-count="totalCount"
@@ -22,6 +24,7 @@
         @load-more="loadMoreHistory"
         @toggle-favorite="toggleFavorite"
         @filter-change="handleFilterChange"
+        @upscale="handleUpscale"
       />
 
       <!-- 控制面板 -->
@@ -68,6 +71,12 @@ const isLoadingHistory = ref(false)
 const referenceImages = ref([])
 const previewVisible = ref(false)
 const previewImage = ref('')
+
+// 放大状态管理
+const isUpscaling = ref(false)
+const upscalingProgress = ref(0)
+const currentScaleFactor = ref(2)
+const upscalingPrompt = ref('')
 // 移除了图片索引存储变量
 
 // 计算属性：只从历史记录获取图像用于展示
@@ -228,8 +237,7 @@ const generateImage = async () => {
                 console.log('📊 重试后是否找到新任务:', hasNewTaskAfterRetry)
               }
               
-              // 同时保存到本地存储作为备份
-              saveHistory()
+                             // 历史记录已由后端数据库管理
               
               isGenerating.value = false
               progress.value = 100
@@ -534,6 +542,34 @@ const deleteImage = async (image) => {
 
 
 
+// 更新所有图片的收藏状态
+const updateImageFavoriteStatus = async () => {
+  try {
+    // 遍历所有历史记录中的图片，确保收藏状态正确
+    for (const historyItem of history.value) {
+      if (historyItem.images && Array.isArray(historyItem.images)) {
+        for (const image of historyItem.images) {
+          // 如果图片没有收藏状态，设置为false
+          if (typeof image.isFavorited === 'undefined') {
+            image.isFavorited = false
+          }
+        }
+      }
+    }
+    
+    // 同时更新allImages中的收藏状态
+    for (const image of allImages.value) {
+      if (typeof image.isFavorited === 'undefined') {
+        image.isFavorited = false
+      }
+    }
+    
+    console.log('图片收藏状态更新完成')
+  } catch (error) {
+    console.error('更新图片收藏状态失败:', error)
+  }
+}
+
 // 切换收藏状态
 const toggleFavorite = async (image) => {
   try {
@@ -585,6 +621,146 @@ const handlePreview = (file) => {
   previewVisible.value = true
 }
 
+// 处理放大请求
+const handleUpscale = async (imageData, scaleFactor) => {
+  try {
+    isUpscaling.value = true
+    upscalingProgress.value = 10
+    currentScaleFactor.value = scaleFactor
+    upscalingPrompt.value = `放大图片 - ${scaleFactor}倍`
+    
+    // 获取图片数据
+    const response = await fetch(imageData.url)
+    const blob = await response.blob()
+    
+    // 创建FormData
+    const formData = new FormData()
+    formData.append('image', blob, 'image.png')
+    formData.append('scale_factor', scaleFactor.toString())
+    formData.append('algorithm', 'ultimate')
+    
+    upscalingProgress.value = 20
+    
+    // 调用放大API
+    const upscaleResponse = await fetch(`${API_BASE}/api/upscale/`, {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!upscaleResponse.ok) {
+      throw new Error(`放大请求失败: ${upscaleResponse.status}`)
+    }
+    
+    const result = await upscaleResponse.json()
+    
+    if (result.status === 'processing') {
+      upscalingProgress.value = 30
+      message.success(`开始${scaleFactor}倍放大，正在处理中...`)
+      
+      // 轮询检查任务状态
+      await pollUpscaleStatus(result.task_id)
+    } else {
+      throw new Error('放大任务提交失败')
+    }
+    
+  } catch (error) {
+    console.error('放大失败:', error)
+    message.error(`放大失败: ${error.message}`)
+    // 只有在出错时才重置状态
+    isUpscaling.value = false
+  }
+  // 移除finally块，让pollUpscaleStatus函数来控制状态重置
+}
+
+// 轮询放大任务状态
+const pollUpscaleStatus = async (taskId) => {
+  const maxAttempts = 60
+  let attempts = 0
+  
+  const checkStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/upscale/${taskId}`)
+      const status = await response.json()
+      
+      // 更新进度
+      const progress = Math.min(30 + (attempts / maxAttempts) * 60, 90)
+      upscalingProgress.value = progress
+      
+      if (status.status === 'completed') {
+        upscalingProgress.value = 100
+        message.success('图片放大完成！')
+        
+        // 将放大结果添加到历史记录
+        if (status.result && status.result.upscaled_images && status.result.upscaled_images.length > 0) {
+          const upscaledImageUrl = status.result.upscaled_images[0]
+          
+          // 确保URL格式正确，参考文字生成图片的处理方式
+          let finalImageUrl = upscaledImageUrl
+          // 如果URL不是以http开头，说明是相对路径，需要添加API_BASE前缀
+          if (upscaledImageUrl && !upscaledImageUrl.startsWith('http')) {
+            // 如果已经是完整的API路径（以/api开头），直接添加API_BASE
+            if (upscaledImageUrl.startsWith('/api/')) {
+              finalImageUrl = `${API_BASE}${upscaledImageUrl}`
+            } else {
+              // 如果是相对路径，添加API_BASE
+              finalImageUrl = `${API_BASE}/${upscaledImageUrl}`
+            }
+          }
+          
+          // 创建新的历史记录项
+          const upscaleHistoryItem = {
+            task_id: `upscale_${Date.now()}`,
+            prompt: upscalingPrompt.value,
+            images: [{
+              url: finalImageUrl,
+              prompt: upscalingPrompt.value,
+              task_id: `upscale_${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              status: 'completed'
+            }],
+            timestamp: new Date().toISOString(),
+            status: 'completed'
+          }
+          
+          // 添加到历史记录开头
+          history.value.unshift(upscaleHistoryItem)
+          
+          // 显示成功消息
+          message.success({
+            content: '图片放大完成！已添加到历史记录',
+            duration: 3
+          })
+        }
+        
+        // 重置放大状态
+        isUpscaling.value = false
+        return
+      } else if (status.status === 'failed') {
+        message.error('图片放大失败')
+        // 重置放大状态
+        isUpscaling.value = false
+        return
+      }
+      
+      attempts++
+      if (attempts < maxAttempts) {
+        setTimeout(checkStatus, 2000)
+      } else {
+        message.warning('放大任务超时，请稍后查看结果')
+        // 重置放大状态
+        isUpscaling.value = false
+      }
+    } catch (error) {
+      console.error('检查放大状态失败:', error)
+      message.error('检查放大状态失败')
+      // 重置放大状态
+      isUpscaling.value = false
+    }
+  }
+  
+  await checkStatus()
+}
+
 // 处理任务图片数据的辅助函数
 const processTaskImages = (task) => {
   try {
@@ -602,7 +778,7 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? `/api/uploads/${task.reference_image_path}` : null,
+        referenceImage: task.reference_image_path ? `${API_BASE}/api/uploads/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: 'failed',
         error: task.error || '生成失败'
@@ -618,7 +794,7 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? `/api/uploads/${task.reference_image_path}` : null,
+        referenceImage: task.reference_image_path ? `${API_BASE}/api/uploads/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: task.status,
         error: task.error || `状态: ${task.status}`
@@ -646,7 +822,7 @@ const processTaskImages = (task) => {
       // 将Windows路径分隔符转换为URL路径分隔符
       cleanPath = cleanPath.replace(/\\/g, '/')
       
-      referenceImageUrl = `/api/uploads/${cleanPath}`
+      referenceImageUrl = `${API_BASE}/api/uploads/${cleanPath}`
     }
     
     // 处理image_urls数组，使用后端提供的收藏状态
@@ -807,16 +983,9 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
       console.log('请求被取消')
     } else {
       console.error('加载历史记录失败:', error)
-      // 如果API失败且是第一页，尝试从localStorage加载
+      // 如果API失败且是第一页，显示错误信息
       if (page === 1) {
-        try {
-          const savedHistory = localStorage.getItem('imageGeneratorHistory')
-          if (savedHistory) {
-            history.value = JSON.parse(savedHistory)
-          }
-        } catch (localError) {
-          console.error('从本地存储加载历史记录也失败:', localError)
-        }
+        console.error('无法从后端加载历史记录，请检查网络连接')
       }
       message.error('加载历史记录失败')
     }
@@ -908,14 +1077,7 @@ const handleFilterChange = async (filterParams) => {
   await loadHistory(1, false, filterParams)
 }
 
-// 保存历史记录到本地存储（作为备份）
-const saveHistory = () => {
-  try {
-    localStorage.setItem('imageGeneratorHistory', JSON.stringify(history.value))
-  } catch (error) {
-    console.error('保存历史记录失败:', error)
-  }
-}
+// 历史记录现在由后端数据库管理，无需本地存储
 
 // 组件挂载时加载历史记录
 onMounted(async () => {

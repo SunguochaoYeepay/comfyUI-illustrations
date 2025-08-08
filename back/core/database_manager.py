@@ -8,6 +8,7 @@
 import json
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 
@@ -40,7 +41,8 @@ class DatabaseManager:
                 progress INTEGER DEFAULT 0,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP,
-                is_favorited INTEGER DEFAULT 0
+                is_favorited INTEGER DEFAULT 0,
+                task_type TEXT DEFAULT 'generate'
             )
         """)
         
@@ -64,11 +66,13 @@ class DatabaseManager:
             cursor.execute("ALTER TABLE tasks ADD COLUMN progress INTEGER DEFAULT 0")
         if 'is_favorited' not in columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN is_favorited INTEGER DEFAULT 0")
+        if 'task_type' not in columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN task_type TEXT DEFAULT 'generate'")
         
         conn.commit()
         conn.close()
     
-    def create_task(self, task_id: str, description: str, reference_image_path: str, parameters: Dict[str, Any]) -> None:
+    def create_task(self, task_id: str, description: str, reference_image_path: str, parameters: Dict[str, Any], task_type: str = "generate") -> None:
         """创建任务记录
         
         Args:
@@ -76,15 +80,16 @@ class DatabaseManager:
             description: 任务描述
             reference_image_path: 参考图像路径
             parameters: 任务参数
+            task_type: 任务类型 ('generate' 或 'upscale')
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO tasks (id, status, description, reference_image_path, parameters, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, status, description, reference_image_path, parameters, created_at, updated_at, task_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             task_id, "pending", description, reference_image_path, 
-            json.dumps(parameters), datetime.now(), datetime.now()
+            json.dumps(parameters), datetime.now(), datetime.now(), task_type
         ))
         conn.commit()
         conn.close()
@@ -183,7 +188,7 @@ class DatabaseManager:
                 # 筛选包含收藏图片的任务
                 query = """
                     SELECT DISTINCT t.id, t.status, t.description, t.reference_image_path, t.parameters, 
-                           t.prompt_id, t.result_path, t.error, t.progress, t.created_at, t.updated_at, t.is_favorited
+                           t.prompt_id, t.result_path, t.error, t.progress, t.created_at, t.updated_at, t.is_favorited, t.task_type
                     FROM tasks t
                     INNER JOIN image_favorites f ON t.id = f.task_id
                     WHERE f.is_favorited = 1
@@ -193,7 +198,7 @@ class DatabaseManager:
                 # 筛选不包含收藏图片的任务
                 query = """
                     SELECT t.id, t.status, t.description, t.reference_image_path, t.parameters, 
-                           t.prompt_id, t.result_path, t.error, t.progress, t.created_at, t.updated_at, t.is_favorited
+                           t.prompt_id, t.result_path, t.error, t.progress, t.created_at, t.updated_at, t.is_favorited, t.task_type
                     FROM tasks t
                     WHERE t.id NOT IN (
                         SELECT DISTINCT task_id FROM image_favorites WHERE is_favorited = 1
@@ -204,7 +209,7 @@ class DatabaseManager:
                 # 任务级别的收藏筛选（向后兼容）
                 query = """
                     SELECT id, status, description, reference_image_path, parameters, 
-                           prompt_id, result_path, error, progress, created_at, updated_at, is_favorited
+                           prompt_id, result_path, error, progress, created_at, updated_at, is_favorited, task_type
                     FROM tasks 
                     WHERE is_favorited = ?
                 """
@@ -213,7 +218,7 @@ class DatabaseManager:
             # 没有收藏筛选
             query = """
                 SELECT id, status, description, reference_image_path, parameters, 
-                       prompt_id, result_path, error, progress, created_at, updated_at, is_favorited
+                       prompt_id, result_path, error, progress, created_at, updated_at, is_favorited, task_type
                 FROM tasks
             """
             query_params = []
@@ -261,7 +266,7 @@ class DatabaseManager:
         tasks = []
         for row in rows:
             columns = ['id', 'status', 'description', 'reference_image_path', 'parameters', 
-                      'prompt_id', 'result_path', 'error', 'progress', 'created_at', 'updated_at', 'is_favorited']
+                      'prompt_id', 'result_path', 'error', 'progress', 'created_at', 'updated_at', 'is_favorited', 'task_type']
             task = dict(zip(columns, row))
             
             # 解析参数
@@ -273,31 +278,49 @@ class DatabaseManager:
             # 处理结果路径和图片收藏状态
             if task['result_path']:
                 try:
-                    result_paths = json.loads(task['result_path'])
-                    if isinstance(result_paths, list):
-                        task['image_count'] = len(result_paths)
-                        task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
-                        # 为每个图片添加收藏状态
-                        task['images'] = []
-                        for i in range(len(result_paths)):
-                            is_favorited = self.get_image_favorite_status(task['id'], i)
-                            task['images'].append({
-                                'task_id': task['id'],
-                                'image_index': i,
-                                'url': f"/api/image/{task['id']}?index={i}",
-                                'isFavorited': is_favorited
-                            })
-                    else:
+                    # 对于放大任务，结果路径是单个文件路径
+                    if task.get('task_type') == 'upscale':
+                        # 放大任务的结果路径是单个文件
+                        image_path = Path(task['result_path'])
+                        # 从路径中提取文件名
+                        filename = image_path.name
                         task['image_count'] = 1
-                        task['image_urls'] = [f"/api/image/{task['id']}"]
-                        # 为单个图片添加收藏状态
+                        task['image_urls'] = [f"/api/upscale/image/{task['id']}/{filename}"]
+                        # 为放大图片添加收藏状态
                         is_favorited = self.get_image_favorite_status(task['id'], 0)
                         task['images'] = [{
                             'task_id': task['id'],
                             'image_index': 0,
-                            'url': f"/api/image/{task['id']}",
+                            'url': f"/api/upscale/image/{task['id']}/{filename}",
                             'isFavorited': is_favorited
                         }]
+                    else:
+                        # 生成任务的结果路径是JSON数组
+                        result_paths = json.loads(task['result_path'])
+                        if isinstance(result_paths, list):
+                            task['image_count'] = len(result_paths)
+                            task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
+                            # 为每个图片添加收藏状态
+                            task['images'] = []
+                            for i in range(len(result_paths)):
+                                is_favorited = self.get_image_favorite_status(task['id'], i)
+                                task['images'].append({
+                                    'task_id': task['id'],
+                                    'image_index': i,
+                                    'url': f"/api/image/{task['id']}?index={i}",
+                                    'isFavorited': is_favorited
+                                })
+                        else:
+                            task['image_count'] = 1
+                            task['image_urls'] = [f"/api/image/{task['id']}"]
+                            # 为单个图片添加收藏状态
+                            is_favorited = self.get_image_favorite_status(task['id'], 0)
+                            task['images'] = [{
+                                'task_id': task['id'],
+                                'image_index': 0,
+                                'url': f"/api/image/{task['id']}",
+                                'isFavorited': is_favorited
+                            }]
                 except:
                     task['image_count'] = 1
                     task['image_urls'] = [f"/api/image/{task['id']}"]

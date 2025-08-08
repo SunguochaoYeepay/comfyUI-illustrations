@@ -22,10 +22,12 @@ if ENVIRONMENT == "local":
     # 本地开发环境
     COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay"))
     COMFYUI_MAIN_OUTPUT_DIR = Path(os.getenv("COMFYUI_MAIN_OUTPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output"))
+    COMFYUI_INPUT_DIR = Path(os.getenv("COMFYUI_INPUT_DIR", "D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input"))
 else:
     # Docker环境
     COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "/app/comfyui/output/yeepay"))
     COMFYUI_MAIN_OUTPUT_DIR = Path(os.getenv("COMFYUI_MAIN_OUTPUT_DIR", "/app/comfyui/output"))
+    COMFYUI_INPUT_DIR = Path(os.getenv("COMFYUI_INPUT_DIR", "/app/comfyui/input"))
 
 # =============================================================================
 # 应用目录配置

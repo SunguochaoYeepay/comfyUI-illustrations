@@ -15,12 +15,15 @@
       <div class="task-actions">
         <!-- 操作按钮 -->
         <div class="action-buttons">
-          <a-button type="text" size="small" @click.stop="$emit('editImage', group[0])" class="action-btn">
-            重新编辑
-          </a-button>
-          <a-button type="text" size="small" @click.stop="$emit('regenerateImage', group[0])" class="action-btn">
-            再次生成
-          </a-button>
+          <!-- 只有非放大任务才显示重新编辑和再次生成按钮 -->
+          <template v-if="!isUpscaleTask">
+            <a-button type="text" size="small" @click.stop="$emit('editImage', group[0])" class="action-btn">
+              重新编辑
+            </a-button>
+            <a-button type="text" size="small" @click.stop="$emit('regenerateImage', group[0])" class="action-btn">
+              再次生成
+            </a-button>
+          </template>
           <a-button type="text" size="small" @click.stop="$emit('deleteImage', group[0])" class="action-btn delete-btn">
             删除
           </a-button>
@@ -82,14 +85,31 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { DownloadOutlined, EyeOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons-vue'
 
 // Props
-defineProps({
+const props = defineProps({
   group: {
     type: Array,
     required: true
   }
+})
+
+// 计算属性：判断是否为放大任务
+const isUpscaleTask = computed(() => {
+  if (props.group && props.group.length > 0) {
+    const firstImage = props.group[0]
+    // 通过描述或URL来判断是否为放大任务
+    if (firstImage.prompt && firstImage.prompt.includes('图像放大')) {
+      return true
+    }
+    // 也可以通过URL路径判断
+    if (firstImage.url && firstImage.url.includes('/api/upscale/')) {
+      return true
+    }
+  }
+  return false
 })
 
 // Emits
@@ -99,7 +119,8 @@ defineEmits([
   'deleteImage', 
   'downloadImage',
   'previewImage',
-  'toggleFavorite'
+  'toggleFavorite',
+  'upscale'
 ])
 </script>
 

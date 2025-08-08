@@ -55,15 +55,33 @@
             <h3>生成信息</h3>
           </div>
           
-          <!-- 图片操作按钮 -->
-          <div class="image-actions">
-            <a-button type="primary" @click="downloadImage">
-              <DownloadOutlined /> 下载
-            </a-button>
-            <a-button @click="copyImageUrl">
-              <CopyOutlined /> 复制链接
-            </a-button>
-          </div>
+                     <!-- 图片操作按钮 -->
+           <div class="image-actions">
+             <a-button type="primary" @click="downloadImage">
+               <DownloadOutlined /> 下载
+             </a-button>
+             <a-dropdown :disabled="isUpscaling">
+               <a-button type="primary" ghost :loading="isUpscaling">
+                 <ZoomInOutlined /> 高清放大
+                 <DownOutlined />
+               </a-button>
+               <template #overlay>
+                 <a-menu @click="handleUpscaleSelect">
+                   <a-menu-item key="2" :disabled="isUpscaling">
+                     <ZoomInOutlined /> 2倍放大 (1024×1024)
+                   </a-menu-item>
+                   <a-menu-item key="3" :disabled="isUpscaling">
+                     <ZoomInOutlined /> 3倍放大 (1536×1536)
+                   </a-menu-item>
+                   <a-menu-item key="4" :disabled="isUpscaling">
+                     <ZoomInOutlined /> 4倍放大 (2048×2048)
+                   </a-menu-item>
+                 </a-menu>
+               </template>
+             </a-dropdown>
+           </div>
+          
+          
           
           <div class="info-content">
             <!-- 参考图 -->
@@ -132,17 +150,19 @@
                 <pre>{{ JSON.stringify(imageData.parameters, null, 2) }}</pre>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
+                     </div>
+         </div>
+       </div>
+     </div>
+     
+     
+   </div>
+ </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseOutlined, DownloadOutlined, CopyOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
+import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined } from '@ant-design/icons-vue'
 
 // Props
 const props = defineProps({
@@ -161,14 +181,20 @@ const props = defineProps({
   currentIndex: {
     type: Number,
     default: 0
+  },
+  isUpscaling: {
+    type: Boolean,
+    default: false
   }
 })
 
 // Emits
-const emit = defineEmits(['close', 'navigate'])
+const emit = defineEmits(['close', 'navigate', 'upscale'])
 
 // 参考图错误状态
 const referenceImageError = ref(false)
+
+// 移除本地的isUpscaling状态，使用props中的isUpscaling
 
 // 处理参考图加载错误
 const handleReferenceImageError = () => {
@@ -213,16 +239,15 @@ const downloadImage = async () => {
   }
 }
 
-// 复制图片链接
-const copyImageUrl = async () => {
-  try {
-    await navigator.clipboard.writeText(props.imageData.url)
-    message.success('链接已复制到剪贴板')
-  } catch (error) {
-    console.error('复制失败:', error)
-    message.error('复制链接失败')
-  }
+// 处理放大倍数选择
+const handleUpscaleSelect = async (e) => {
+  const scaleFactor = parseInt(e.key)
+  console.log('选择放大倍数:', scaleFactor)
+  // 触发放大事件，传递给父组件处理
+  emit('upscale', props.imageData, scaleFactor)
 }
+
+
 
 // 格式化日期
 const formatDate = (dateString) => {
@@ -654,4 +679,6 @@ onUnmounted(() => {
 .parameters::-webkit-scrollbar-thumb:hover {
   background: #888;
 }
+
+
 </style>

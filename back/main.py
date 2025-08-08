@@ -32,6 +32,9 @@ from core.comfyui_client import ComfyUIClient
 from core.workflow_template import WorkflowTemplate
 from core.task_manager import TaskManager
 
+# 导入放大服务
+from api.upscale_routes import router as upscale_router
+
 # =============================================================================
 # 初始化组件
 # =============================================================================
@@ -58,6 +61,9 @@ app.add_middleware(
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="."), name="static")
+
+# 注册放大服务路由
+app.include_router(upscale_router)
 
 # 添加uploads路由
 @app.get("/api/uploads/{file_path:path}")

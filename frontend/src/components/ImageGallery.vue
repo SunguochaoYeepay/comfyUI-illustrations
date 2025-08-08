@@ -87,8 +87,16 @@
           @download-image="$emit('downloadImage', $event)"
           @preview-image="handlePreviewImage"
           @toggle-favorite="handleToggleFavorite"
+          @upscale="$emit('upscale', $event)"
         />
       </div>
+    
+    <!-- 放大状态 - 显示在图片列表底部 -->
+    <UpscalingState
+      v-if="isUpscaling && !isGenerating"
+      :scale-factor="currentScaleFactor"
+      :progress="upscalingProgress"
+    />
     
     <!-- 空状态 -->
     <div v-if="!isGenerating && allImages.length === 0" class="empty-gallery">
@@ -137,8 +145,10 @@
       :image-data="selectedImage"
       :image-list="flatImageList"
       :current-index="currentImageIndex"
+      :is-upscaling="isUpscaling"
       @close="closePreview"
       @navigate="handleImageNavigate"
+      @upscale="handleUpscaleFromPreview"
     />
     </div>
   </div>
@@ -148,6 +158,7 @@
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { PictureOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import { Select as ASelect, SelectOption as ASelectOption } from 'ant-design-vue'
+import UpscalingState from './UpscalingState.vue'
 import TaskCard from './TaskCard.vue'
 import SingleImageGrid from './SingleImageGrid.vue'
 import GeneratingState from './GeneratingState.vue'
@@ -175,6 +186,22 @@ const props = defineProps({
     type: Number,
     default: 0
   },
+  isUpscaling: {
+    type: Boolean,
+    default: false
+  },
+  upscalingProgress: {
+    type: Number,
+    default: 0
+  },
+  currentScaleFactor: {
+    type: Number,
+    default: 2
+  },
+  upscalingPrompt: {
+    type: String,
+    default: ''
+  },
   hasMore: {
     type: Boolean,
     default: false
@@ -197,7 +224,8 @@ const emit = defineEmits([
   'downloadImage',
   'loadMore',
   'toggleFavorite',
-  'filterChange'
+  'filterChange',
+  'upscale'
 ])
 
 // 筛选器相关
@@ -373,6 +401,11 @@ const closePreview = () => {
       height: dimensions.height
     }
   }
+}
+
+// 处理从预览组件触发的放大请求
+const handleUpscaleFromPreview = (imageData, scaleFactor) => {
+  emit('upscale', imageData, scaleFactor)
 }
 
 // 处理收藏切换

@@ -21,6 +21,8 @@ services:
       - CORS_ORIGINS=*
       - DEBUG=false
       - LOG_LEVEL=INFO
+    networks:
+      - yeepay-network
     volumes:
       - ./back/uploads:/app/uploads
       - ./back/outputs:/app/outputs
@@ -28,8 +30,6 @@ services:
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
 
-    networks:
-      - yeepay-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
@@ -61,10 +61,10 @@ services:
     image: nginx:alpine
     container_name: yeepay-nginx
     ports:
-      - "443:443"
-      - "80:80"
+      - "8080:80"
+      - "8443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
       - frontend

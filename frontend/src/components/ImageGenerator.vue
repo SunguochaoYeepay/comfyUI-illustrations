@@ -45,8 +45,15 @@ import { message } from 'ant-design-vue'
 import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
 
-// API基础URL - 使用环境变量，空字符串表示相对路径通过nginx代理
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+// API基础URL - 自动检测环境
+const API_BASE = (() => {
+  // 开发环境：使用代理
+  if (import.meta.env.DEV) {
+    return ''
+  }
+  // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
+  return import.meta.env.VITE_API_BASE_URL || ''
+})()
 
 
 
@@ -688,7 +695,6 @@ const pollUpscaleStatus = async (taskId) => {
       
       if (status.status === 'completed') {
         upscalingProgress.value = 100
-        message.success('图片放大完成！')
         
         // 将放大结果添加到历史记录
         if (status.result && status.result.upscaled_images && status.result.upscaled_images.length > 0) {
@@ -726,10 +732,7 @@ const pollUpscaleStatus = async (taskId) => {
           history.value.unshift(upscaleHistoryItem)
           
           // 显示成功消息
-          message.success({
-            content: '图片放大完成！已添加到历史记录',
-            duration: 3
-          })
+          message.success('图片放大完成！')
         }
         
         // 重置放大状态
@@ -778,7 +781,7 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? `${API_BASE}/api/uploads/${task.reference_image_path}` : null,
+                    referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: 'failed',
         error: task.error || '生成失败'
@@ -794,7 +797,7 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? `${API_BASE}/api/uploads/${task.reference_image_path}` : null,
+                    referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: task.status,
         error: task.error || `状态: ${task.status}`
@@ -822,7 +825,7 @@ const processTaskImages = (task) => {
       // 将Windows路径分隔符转换为URL路径分隔符
       cleanPath = cleanPath.replace(/\\/g, '/')
       
-      referenceImageUrl = `${API_BASE}/api/uploads/${cleanPath}`
+                referenceImageUrl = `${API_BASE}/api/image/upload/${cleanPath}`
     }
     
     // 处理image_urls数组，使用后端提供的收藏状态

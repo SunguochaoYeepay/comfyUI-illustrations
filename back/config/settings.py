@@ -34,7 +34,13 @@ else:
 # =============================================================================
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
-DB_PATH = "tasks.db"
+
+# 数据库路径配置
+if ENVIRONMENT == "local":
+    DB_PATH = "tasks.db"
+else:
+    # Docker环境使用数据卷
+    DB_PATH = "/app/data/tasks.db"
 
 # =============================================================================
 # 应用常量

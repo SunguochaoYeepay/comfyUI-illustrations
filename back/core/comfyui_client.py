@@ -39,7 +39,10 @@ class ComfyUIClient:
                 json={"prompt": workflow}
             ) as response:
                 if response.status != 200:
-                    raise HTTPException(status_code=500, detail="Failed to submit workflow to ComfyUI")
+                    error_detail = await response.text()
+                    print(f"ComfyUI提交失败，状态码: {response.status}")
+                    print(f"错误详情: {error_detail}")
+                    raise HTTPException(status_code=500, detail=f"Failed to submit workflow to ComfyUI: {error_detail}")
                 result = await response.json()
                 return result["prompt_id"]
     

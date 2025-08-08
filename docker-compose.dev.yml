@@ -1,17 +1,17 @@
 version: '3.8'
 
 services:
-  # 后端API服务
+  # 后端API服务（开发环境）
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    container_name: yeepay-backend
+    container_name: yeepay-backend-dev
     ports:
       - "9001:9000"
 
     environment:
-      - ENVIRONMENT=production
+      - ENVIRONMENT=development
       - HOST=0.0.0.0
       - PORT=9000
       - COMFYUI_URL=http://host.docker.internal:8188
@@ -19,14 +19,14 @@ services:
       - COMFYUI_TIMEOUT=300
       - MAX_CONCURRENT_TASKS=3
       - CORS_ORIGINS=*
-      - DEBUG=false
-      - LOG_LEVEL=INFO
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
     networks:
-      - yeepay-network
+      - yeepay-dev-network
     volumes:
-      - yeepay-uploads:/app/uploads
-      - yeepay-outputs:/app/outputs
-      - yeepay-database:/app/data
+      - yeepay-dev-uploads:/app/uploads
+      - yeepay-dev-outputs:/app/outputs
+      - yeepay-dev-database:/app/tasks.db
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input:/app/comfyui/input
@@ -39,28 +39,11 @@ services:
       retries: 3
       start_period: 40s
 
-
-
-  # 统一Web服务（前端+nginx）
-  web:
-    image: nginx:alpine
-    container_name: yeepay-web
-    ports:
-      - "3000:80"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./frontend/dist:/usr/share/nginx/html
-    depends_on:
-      - backend
-    networks:
-      - yeepay-network
-    restart: unless-stopped
-
 networks:
-  yeepay-network:
+  yeepay-dev-network:
     driver: bridge
 
 volumes:
-  yeepay-uploads:
-  yeepay-outputs:
-  yeepay-database: 
+  yeepay-dev-uploads:
+  yeepay-dev-outputs:
+  yeepay-dev-database:

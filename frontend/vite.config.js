@@ -5,22 +5,37 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    vue(),
-    vueDevTools(),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+export default defineConfig(({ command, mode }) => {
+  const isDev = command === 'serve'
+  
+  return {
+    plugins: [
+      vue(),
+      vueDevTools(),
+    ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url))
+      },
     },
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:9000',
-        changeOrigin: true,
-        secure: false
+    // 开发环境配置
+    server: isDev ? {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:9000',
+          changeOrigin: true,
+          secure: false
+        }
+      }
+    } : undefined,
+    // 生产环境配置
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['vue', 'ant-design-vue']
+          }
+        }
       }
     }
   }

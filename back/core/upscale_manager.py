@@ -166,9 +166,18 @@ class UpscaleManager:
         from config.settings import ENVIRONMENT
         
         if ENVIRONMENT == "production":
-            # Docker环境：使用完整路径
-            workflow["14"]["inputs"]["image"] = str(image_path)
-            print(f"🐳 Docker环境：使用完整图像路径: {image_path}")
+            # Docker环境：复制图像到ComfyUI输入目录，然后使用文件名
+            from config.settings import COMFYUI_INPUT_DIR
+            import shutil
+            
+            # 复制图像到ComfyUI输入目录
+            input_image_path = COMFYUI_INPUT_DIR / Path(image_path).name
+            print(f"🐳 Docker环境：复制图像到ComfyUI输入目录: {image_path} -> {input_image_path}")
+            shutil.copy2(image_path, input_image_path)
+            
+            # 使用文件名，ComfyUI会在其输入目录中查找
+            workflow["14"]["inputs"]["image"] = Path(image_path).name
+            print(f"🐳 Docker环境：使用图像文件名: {Path(image_path).name}")
         else:
             # 本地环境：使用文件名，ComfyUI会在其输入目录中查找
             workflow["14"]["inputs"]["image"] = Path(image_path).name
@@ -240,56 +249,39 @@ class UpscaleManager:
                 except (json.JSONDecodeError, KeyError):
                     scale_factor = 2
         
-        # 查找当前任务的放大文件（根据放大倍数和创建时间）
+        # 查找当前任务的放大文件（根据放大倍数）
         upscaled_files = list(comfyui_output_dir.glob(f"ultimate_upscaled_{scale_factor}x_*.png"))
         print(f"📁 在ComfyUI输出目录中找到的{scale_factor}倍放大文件: {upscaled_files}")
         
         if upscaled_files:
-            # 获取任务创建时间，只检查之后生成的文件
-            task_info = self.tasks.get(task_id, {})
-            task_created_time = None
+            # 简化逻辑：直接使用最新的文件
+            latest_file = max(upscaled_files, key=lambda f: f.stat().st_mtime)
+            print(f"✅ 找到最新的放大文件: {latest_file.name} (时间: {latest_file.stat().st_mtime})")
             
-            # 检查任务目录的创建时间
-            if task_output_dir.exists():
-                task_created_time = task_output_dir.stat().st_ctime
-                print(f"📅 任务创建时间: {task_created_time}")
+            # 找到放大文件，任务完成
+            if task_id in self.tasks:
+                self.tasks[task_id]["status"] = "completed"
             
-            # 过滤出任务创建后生成的文件
-            recent_files = []
-            for file in upscaled_files:
-                file_time = file.stat().st_mtime
-                if task_created_time is None or file_time >= task_created_time:
-                    recent_files.append(file)
-                    print(f"✅ 找到任务后生成的文件: {file.name} (时间: {file_time})")
+            # 将最新的放大文件复制到任务目录
+            task_upscaled_file = task_output_dir / latest_file.name
+            shutil.copy2(latest_file, task_upscaled_file)
+            print(f"📁 复制放大文件到任务目录: {latest_file} -> {task_upscaled_file}")
             
-            if recent_files:
-                # 找到任务后生成的放大文件，任务完成
-                if task_id in self.tasks:
-                    self.tasks[task_id]["status"] = "completed"
-                
-                # 将最新的放大文件复制到任务目录
-                latest_file = max(recent_files, key=lambda f: f.stat().st_mtime)
-                task_upscaled_file = task_output_dir / latest_file.name
-                shutil.copy2(latest_file, task_upscaled_file)
-                print(f"📁 复制放大文件到任务目录: {latest_file} -> {task_upscaled_file}")
-                
-                # 更新数据库状态
-                if self.db_manager:
-                    self.db_manager.update_task_status(
-                        task_id=task_id,
-                        status="completed",
-                        result_path=str(task_upscaled_file)
-                    )
-                
-                return {
-                    "task_id": task_id,
-                    "status": "completed",
-                    "original_image": str(task_output_dir / "yeepay_00193_.png"),
-                    "upscaled_images": [str(task_upscaled_file)],
-                    "output_dir": str(task_output_dir)
-                }
-            else:
-                print(f"⚠️ 没有找到任务创建后生成的放大文件")
+            # 更新数据库状态
+            if self.db_manager:
+                self.db_manager.update_task_status(
+                    task_id=task_id,
+                    status="completed",
+                    result_path=str(task_upscaled_file)
+                )
+            
+            return {
+                "task_id": task_id,
+                "status": "completed",
+                "original_image": str(task_output_dir / "input_image.png"),
+                "upscaled_images": [f"/api/upscale/image/{task_id}/{latest_file.name}"],
+                "output_dir": str(task_output_dir)
+            }
         
         # 如果没有找到放大后的文件，检查ComfyUI任务状态
         if task_id in self.tasks:
@@ -334,7 +326,7 @@ class UpscaleManager:
                                 "task_id": task_id,
                                 "status": "completed",
                                 "original_image": str(task_output_dir / "input_image.png"),
-                                "upscaled_images": [str(f) for f in upscaled_files],
+                                "upscaled_images": [f"/api/image/{task_id}?filename={f.name}" for f in upscaled_files],
                                 "output_dir": str(task_output_dir)
                             }
                         else:

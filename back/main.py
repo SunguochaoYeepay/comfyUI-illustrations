@@ -62,10 +62,7 @@ app.add_middleware(
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="."), name="static")
 
-# 注册放大服务路由
-app.include_router(upscale_router)
-
-# 添加uploads路由
+# 添加uploads路由（必须在upscale路由之前注册）
 @app.get("/api/uploads/{file_path:path}")
 async def get_upload_file(file_path: str):
     """获取上传的文件"""
@@ -82,6 +79,27 @@ async def get_upload_file(file_path: str):
         return FileResponse(str(full_path))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
+
+# 添加image/upload路由（兼容前端请求）
+@app.get("/api/image/upload/{file_path:path}")
+async def get_upload_image(file_path: str):
+    """获取上传的图片文件（兼容前端请求）"""
+    try:
+        file_path_obj = Path(file_path)
+        # 确保路径在uploads目录内，防止路径遍历攻击
+        if ".." in str(file_path_obj) or file_path_obj.is_absolute():
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        
+        full_path = UPLOAD_DIR / file_path_obj
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        return FileResponse(str(full_path))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
+
+# 注册放大服务路由
+app.include_router(upscale_router)
 
 # 添加前端页面路由
 @app.get("/frontend.html")

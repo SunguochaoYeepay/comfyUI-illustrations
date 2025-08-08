@@ -16,7 +16,7 @@
   - `yeepay-dev-database`: 开发环境数据库
 - **端口**: 
   - 前端: `localhost:5173` (Vite开发服务器)
-  - 后端: `localhost:9001`
+  - 后端: `localhost:9000`
 - **调试模式**: 启用
 
 ### 生产环境

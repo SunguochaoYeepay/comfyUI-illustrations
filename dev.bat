@@ -12,5 +12,5 @@ npm run dev
 
 echo 开发环境启动完成！
 echo 前端地址: http://localhost:5173
-echo 后端API: http://localhost:9001
+echo 后端API: http://localhost:9000
 pause

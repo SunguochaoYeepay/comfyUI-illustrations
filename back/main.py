@@ -7,6 +7,7 @@ YeePay AI图像生成服务 - 后端主程序
 
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -34,6 +35,9 @@ from core.task_manager import TaskManager
 
 # 导入放大服务
 from api.upscale_routes import router as upscale_router
+
+# 导入翻译服务
+from core.translation_client import get_translation_client
 
 # =============================================================================
 # 初始化组件
@@ -415,6 +419,107 @@ async def delete_task(task_id: str):
     except Exception as e:
         print(f"删除任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"删除任务失败: {str(e)}")
+
+@app.post("/api/translate")
+async def translate_text(text: str = Form(...)):
+    """翻译文本API"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"🌐 收到翻译API请求")
+        logger.info(f"   请求文本: {text}")
+        logger.info(f"   文本长度: {len(text)}字符")
+        
+        if not text.strip():
+            logger.warning(f"⚠️ 翻译请求被拒绝: 文本为空")
+            raise HTTPException(status_code=400, detail="文本不能为空")
+        
+        # 获取翻译客户端
+        logger.info(f"🔧 获取翻译客户端")
+        translation_client = get_translation_client()
+        
+        # 检查Ollama服务是否可用
+        logger.info(f"🏥 检查Ollama服务健康状态")
+        if not await translation_client.check_ollama_health():
+            logger.error(f"❌ Ollama服务不可用")
+            raise HTTPException(status_code=503, detail="Ollama服务不可用")
+        
+        # 检查qwen2.5:7b模型是否可用
+        logger.info(f"🔍 检查模型可用性")
+        if not await translation_client.check_model_available():
+            logger.error(f"❌ qwen2.5:7b模型不可用")
+            raise HTTPException(status_code=503, detail="qwen2.5:7b模型不可用")
+        
+        # 执行翻译
+        logger.info(f"🔄 开始执行翻译")
+        translated_text = await translation_client.translate_to_english(text)
+        
+        if translated_text:
+            logger.info(f"✅ 翻译API成功")
+            logger.info(f"   原文: {text}")
+            logger.info(f"   译文: {translated_text}")
+            logger.info(f"   翻译比例: {len(translated_text)}/{len(text)}字符")
+            
+            return {
+                "original": text,
+                "translated": translated_text,
+                "success": True,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            logger.error(f"❌ 翻译失败: 返回空结果")
+            raise HTTPException(status_code=500, detail="翻译失败")
+            
+    except HTTPException:
+        logger.error(f"❌ 翻译API HTTP异常")
+        raise
+    except Exception as e:
+        logger.error(f"❌ 翻译API异常: {str(e)}")
+        logger.error(f"   异常类型: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"翻译服务出错: {str(e)}")
+
+@app.get("/api/translate/health")
+async def translate_health_check():
+    """翻译服务健康检查"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"🏥 收到翻译服务健康检查请求")
+        
+        translation_client = get_translation_client()
+        
+        logger.info(f"🔍 检查Ollama服务状态")
+        ollama_health = await translation_client.check_ollama_health()
+        
+        model_available = False
+        if ollama_health:
+            logger.info(f"🔍 检查模型可用性")
+            model_available = await translation_client.check_model_available()
+        
+        service_ready = ollama_health and model_available
+        
+        logger.info(f"📊 健康检查结果:")
+        logger.info(f"   Ollama服务: {'✅ 正常' if ollama_health else '❌ 异常'}")
+        logger.info(f"   模型可用: {'✅ 正常' if model_available else '❌ 异常'}")
+        logger.info(f"   服务就绪: {'✅ 是' if service_ready else '❌ 否'}")
+        
+        return {
+            "ollama_available": ollama_health,
+            "qwen_model_available": model_available,
+            "translation_service_ready": service_ready,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"❌ 健康检查异常: {str(e)}")
+        return {
+            "ollama_available": False,
+            "qwen_model_available": False,
+            "translation_service_ready": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/api/health")
 async def health_check():

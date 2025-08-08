@@ -15,12 +15,14 @@
           <!-- 提示词和生成按钮区域 -->
           <div class="input-group">
             <div class="prompt-generate-row">
-              <a-textarea
-                v-model:value="localPrompt"
-                placeholder="请详细描述您想要生成的图像，例如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格"
-                :rows="2"
-                class="prompt-input"
-              />
+              <div class="prompt-input-group">
+                <a-textarea
+                  v-model:value="localPrompt"
+                  placeholder="请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）"
+                  :rows="2"
+                  class="prompt-input"
+                />
+              </div>
               
               <a-button
                 type="primary"
@@ -147,6 +149,13 @@ const handleGenerate = () => {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+}
+
+.prompt-input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .prompt-input {

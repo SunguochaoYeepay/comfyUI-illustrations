@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: yeepay-backend-dev
     ports:
-      - "9001:9000"
+      - "9000:9000"
 
     environment:
       - ENVIRONMENT=development

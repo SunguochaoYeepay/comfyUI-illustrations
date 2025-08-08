@@ -17,6 +17,7 @@ from config.settings import MAX_WAIT_TIME, COMFYUI_MAIN_OUTPUT_DIR, OUTPUT_DIR
 from core.database_manager import DatabaseManager
 from core.comfyui_client import ComfyUIClient
 from core.workflow_template import WorkflowTemplate
+from core.translation_client import get_translation_client
 
 
 class TaskManager:
@@ -74,6 +75,27 @@ class TaskManager:
             # 更新状态为处理中
             self.db.update_task_status(task_id, "processing")
             
+            # 翻译中文描述为英文
+            translated_description = description
+            if self._is_chinese_text(description):
+                print(f"🌐 检测到中文描述，开始翻译...")
+                translation_client = get_translation_client()
+                
+                # 检查Ollama服务是否可用
+                if await translation_client.check_ollama_health():
+                    if await translation_client.check_model_available():
+                        translated_description = await translation_client.translate_to_english(description)
+                        if translated_description:
+                            print(f"✅ 翻译成功: {description} -> {translated_description}")
+                        else:
+                            print(f"⚠️ 翻译失败，使用原描述: {description}")
+                    else:
+                        print(f"⚠️ qianwen模型不可用，使用原描述: {description}")
+                else:
+                    print(f"⚠️ Ollama服务不可用，使用原描述: {description}")
+            else:
+                print(f"✅ 描述已经是英文，无需翻译: {description}")
+            
             # 获取生成数量
             count = int(parameters.get("count", 1))
             result_paths = []
@@ -97,7 +119,7 @@ class TaskManager:
                     # 准备工作流
                     print(f"🔧 准备工作流...")
                     workflow = self.workflow_template.customize_workflow(
-                        reference_image_path, description, current_params
+                        reference_image_path, translated_description, current_params
                     )
                     print(f"✅ 工作流准备完成")
                     
@@ -270,6 +292,24 @@ class TaskManager:
         
         print(f"⏰ 等待超时，任务可能失败")
         return None
+    
+    def _is_chinese_text(self, text: str) -> bool:
+        """检测文本是否包含中文字符
+        
+        Args:
+            text: 要检测的文本
+            
+        Returns:
+            是否包含中文字符
+        """
+        if not text:
+            return False
+        
+        # 检查是否包含中文字符（Unicode范围：4E00-9FFF）
+        for char in text:
+            if '\u4e00' <= char <= '\u9fff':
+                return True
+        return False
     
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """获取任务状态

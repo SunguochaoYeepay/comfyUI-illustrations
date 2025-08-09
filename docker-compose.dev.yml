@@ -21,6 +21,7 @@ services:
       - CORS_ORIGINS=*
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - OLLAMA_URL=http://host.docker.internal:11434
     networks:
       - yeepay-dev-network
     volumes:

@@ -84,6 +84,7 @@ const isUpscaling = ref(false)
 const upscalingProgress = ref(0)
 const currentScaleFactor = ref(2)
 const upscalingPrompt = ref('')
+const currentUpscaleTaskId = ref(null) // 当前放大任务ID
 // 移除了图片索引存储变量
 
 // 计算属性：只从历史记录获取图像用于展示
@@ -130,6 +131,82 @@ const imageGroups = computed(() => {
 watch(imageCount, (newValue) => {
   localStorage.setItem('imageCount', newValue.toString())
 })
+
+// 保存放大状态到localStorage
+const saveUpscaleState = () => {
+  if (isUpscaling.value && currentUpscaleTaskId.value) {
+    const upscaleState = {
+      isUpscaling: true,
+      taskId: currentUpscaleTaskId.value,
+      scaleFactor: currentScaleFactor.value,
+      progress: upscalingProgress.value,
+      timestamp: Date.now()
+    }
+    localStorage.setItem('upscaleState', JSON.stringify(upscaleState))
+    console.log('💾 保存放大状态:', upscaleState)
+  } else {
+    localStorage.removeItem('upscaleState')
+    console.log('🧹 清除放大状态')
+  }
+}
+
+// 从localStorage恢复放大状态
+const restoreUpscaleState = async () => {
+  try {
+    const savedState = localStorage.getItem('upscaleState')
+    if (!savedState) return false
+    
+    const upscaleState = JSON.parse(savedState)
+    console.log('🔄 尝试恢复放大状态:', upscaleState)
+    
+    // 检查状态是否过期（超过10分钟）
+    const now = Date.now()
+    if (now - upscaleState.timestamp > 10 * 60 * 1000) {
+      console.log('⏰ 放大状态已过期，清除')
+      localStorage.removeItem('upscaleState')
+      return false
+    }
+    
+    // 检查任务是否仍在进行中
+    const response = await fetch(`${API_BASE}/api/upscale/${upscaleState.taskId}`)
+    if (!response.ok) {
+      console.log('❌ 任务不存在，清除状态')
+      localStorage.removeItem('upscaleState')
+      return false
+    }
+    
+    const taskStatus = await response.json()
+    console.log('📊 任务当前状态:', taskStatus)
+    
+    if (taskStatus.status === 'completed') {
+      console.log('✅ 任务已完成，清除状态并刷新历史')
+      localStorage.removeItem('upscaleState')
+      await loadHistory(1, false)
+      return false
+    } else if (taskStatus.status === 'failed') {
+      console.log('❌ 任务已失败，清除状态')
+      localStorage.removeItem('upscaleState')
+      return false
+    } else if (taskStatus.status === 'processing') {
+      console.log('🔄 恢复放大状态，继续轮询')
+      isUpscaling.value = true
+      currentUpscaleTaskId.value = upscaleState.taskId
+      currentScaleFactor.value = upscaleState.scaleFactor
+      upscalingProgress.value = taskStatus.progress || upscaleState.progress
+      upscalingPrompt.value = `放大图片 - ${upscaleState.scaleFactor}倍`
+      
+      // 重新开始轮询
+      await pollUpscaleStatus(upscaleState.taskId)
+      return true
+    }
+    
+    return false
+  } catch (error) {
+    console.error('恢复放大状态失败:', error)
+    localStorage.removeItem('upscaleState')
+    return false
+  }
+}
 
 // 生成图像
 const generateImage = async () => {
@@ -538,8 +615,15 @@ const deleteImage = async (image) => {
       totalCount.value = Math.max(0, totalCount.value - 1)
       
       message.success('图像已删除')
+    } else if (response.status === 404) {
+      // 任务已不存在，直接从前端移除
+      console.warn(`任务 ${image.task_id} 在数据库中不存在，从前端移除`)
+      const taskIdToDelete = image.task_id
+      history.value = history.value.filter(item => item.task_id !== taskIdToDelete)
+      totalCount.value = Math.max(0, totalCount.value - 1)
+      message.warning('该图像记录已过期，已从列表中移除')
     } else {
-      throw new Error('删除失败')
+      throw new Error(`删除失败 (状态码: ${response.status})`)
     }
   } catch (error) {
     console.error('删除图像失败:', error)
@@ -677,7 +761,11 @@ const handleUpscale = async (imageData, scaleFactor) => {
     
     if (result.status === 'processing') {
       upscalingProgress.value = 30
+      currentUpscaleTaskId.value = result.task_id  // 保存任务ID
       message.success(`开始${scaleFactor}倍放大，正在处理中...`)
+      
+      // 保存状态到localStorage
+      saveUpscaleState()
       
       // 轮询检查任务状态
       await pollUpscaleStatus(result.task_id)
@@ -690,89 +778,126 @@ const handleUpscale = async (imageData, scaleFactor) => {
     message.error(`放大失败: ${error.message}`)
     // 只有在出错时才重置状态
     isUpscaling.value = false
+    currentUpscaleTaskId.value = null
+    saveUpscaleState() // 清除localStorage中的状态
   }
   // 移除finally块，让pollUpscaleStatus函数来控制状态重置
 }
 
-// 轮询放大任务状态
+// 轮询放大任务状态 - 强化版
 const pollUpscaleStatus = async (taskId) => {
-  const maxAttempts = 60
+  const maxAttempts = 180  // 增加到180次（6分钟）
   let attempts = 0
+  let consecutiveErrors = 0
+  
+  console.log(`🚀 开始轮询任务状态: ${taskId}`)
   
   const checkStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/upscale/${taskId}`)
-      const status = await response.json()
+      console.log(`🔍 检查任务状态 (${attempts + 1}/${maxAttempts}): ${taskId}`)
       
-      // 更新进度
-      const progress = Math.min(30 + (attempts / maxAttempts) * 60, 90)
-      upscalingProgress.value = progress
+      const response = await fetch(`${API_BASE}/api/upscale/${taskId}`, {
+        cache: 'no-cache',  // 强制不使用缓存
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const status = await response.json()
+      consecutiveErrors = 0  // 重置错误计数
+      
+      console.log(`📊 任务状态: ${JSON.stringify(status)}`)
+      
+      // 使用后端返回的真实进度，而不是自己计算
+      upscalingProgress.value = status.progress || 50
+      
+      // 更新进度时保存状态
+      saveUpscaleState()
       
       if (status.status === 'completed') {
         upscalingProgress.value = 100
+        console.log('✅ 任务完成！')
         
-        // 将放大结果添加到历史记录
-        if (status.result && status.result.upscaled_images && status.result.upscaled_images.length > 0) {
-          const upscaledImageUrl = status.result.upscaled_images[0]
-          
-          // 确保URL格式正确，参考文字生成图片的处理方式
-          let finalImageUrl = upscaledImageUrl
-          // 如果URL不是以http开头，说明是相对路径，需要添加API_BASE前缀
-          if (upscaledImageUrl && !upscaledImageUrl.startsWith('http')) {
-            // 如果已经是完整的API路径（以/api开头），直接添加API_BASE
-            if (upscaledImageUrl.startsWith('/api/')) {
-              finalImageUrl = `${API_BASE}${upscaledImageUrl}`
-            } else {
-              // 如果是相对路径，添加API_BASE
-              finalImageUrl = `${API_BASE}/${upscaledImageUrl}`
-            }
-          }
-          
-          // 创建新的历史记录项
-          const upscaleHistoryItem = {
-            task_id: `upscale_${Date.now()}`,
-            prompt: upscalingPrompt.value,
-            images: [{
-              url: finalImageUrl,
-              prompt: upscalingPrompt.value,
-              task_id: `upscale_${Date.now()}`,
-              timestamp: new Date().toISOString(),
-              status: 'completed'
-            }],
-            timestamp: new Date().toISOString(),
-            status: 'completed'
-          }
-          
-          // 添加到历史记录开头
-          history.value.unshift(upscaleHistoryItem)
-          
-          // 显示成功消息
-          message.success('图片放大完成！')
-        }
+        // 显示成功消息
+        message.success('图片放大完成！')
+        
+        // 等待一下确保数据库更新
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 重新加载历史记录以显示最新的放大结果
+        console.log('🔄 放大完成，刷新历史记录...')
+        await loadHistory(1, false)
+        
+        // 强制刷新一次，确保显示最新状态
+        setTimeout(async () => {
+          console.log('🔄 二次刷新确保显示最新结果...')
+          await loadHistory(1, false)
+        }, 1000)
+        
+        // 第三次刷新确保万无一失
+        setTimeout(async () => {
+          console.log('🔄 三次刷新最终确认...')
+          await loadHistory(1, false)
+        }, 3000)
         
         // 重置放大状态
         isUpscaling.value = false
+        currentUpscaleTaskId.value = null
+        saveUpscaleState() // 清除localStorage中的状态
         return
       } else if (status.status === 'failed') {
+        console.log('❌ 任务失败')
         message.error('图片放大失败')
-        // 重置放大状态
         isUpscaling.value = false
+        currentUpscaleTaskId.value = null
+        saveUpscaleState() // 清除localStorage中的状态
         return
       }
       
+      // 任务仍在处理中
       attempts++
       if (attempts < maxAttempts) {
-        setTimeout(checkStatus, 2000)
+        setTimeout(checkStatus, 1000) // 1秒轮询
       } else {
+        console.log('⏰ 轮询超时')
         message.warning('放大任务超时，请稍后查看结果')
-        // 重置放大状态
+        // 超时时也尝试刷新一次历史记录
+        await loadHistory(1, false)
         isUpscaling.value = false
+        currentUpscaleTaskId.value = null
+        saveUpscaleState() // 清除localStorage中的状态
       }
     } catch (error) {
-      console.error('检查放大状态失败:', error)
-      message.error('检查放大状态失败')
-      // 重置放大状态
-      isUpscaling.value = false
+      consecutiveErrors++
+      console.error(`❌ 检查放大状态失败 (连续错误: ${consecutiveErrors}):`, error)
+      
+      // 如果连续错误太多，可能是严重问题
+      if (consecutiveErrors >= 5) {
+        console.log('❌ 连续错误过多，终止轮询')
+        message.error('网络连接异常，请检查网络后手动刷新页面')
+        isUpscaling.value = false
+        currentUpscaleTaskId.value = null
+        saveUpscaleState() // 清除localStorage中的状态
+        return
+      }
+      
+      // 网络错误或临时问题，继续重试
+      attempts++
+      if (attempts < maxAttempts) {
+        console.log(`🔄 网络错误重试 (${attempts}/${maxAttempts})，${consecutiveErrors} 连续错误`)
+        setTimeout(checkStatus, 2000) // 网络错误时等待2秒再重试
+      } else {
+        console.log('❌ 重试次数用尽')
+        message.error('放大任务检查超时，请手动刷新页面查看结果')
+        isUpscaling.value = false
+        currentUpscaleTaskId.value = null
+        saveUpscaleState() // 清除localStorage中的状态
+      }
     }
   }
   
@@ -1100,6 +1225,16 @@ const handleFilterChange = async (filterParams) => {
 // 组件挂载时加载历史记录
 onMounted(async () => {
   await loadHistory()
+  
+  // 尝试恢复放大状态
+  console.log('🔄 检查是否有进行中的放大任务...')
+  const restored = await restoreUpscaleState()
+  if (restored) {
+    console.log('✅ 放大状态已恢复，继续轮询')
+  } else {
+    console.log('ℹ️ 没有需要恢复的放大任务')
+  }
+  
   // 页面加载完成后直接定位到底部显示最新内容，不触发滚动事件
   setTimeout(() => {
     // 临时禁用滚动监听器，避免触发翻页

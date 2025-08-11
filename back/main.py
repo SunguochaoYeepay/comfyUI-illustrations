@@ -27,11 +27,10 @@ from models.schemas import (
     FavoriteResponse, DeleteResponse, HealthResponse
 )
 
-# 导入核心业务逻辑
-from core.database_manager import DatabaseManager
-from core.comfyui_client import ComfyUIClient
-from core.workflow_template import WorkflowTemplate
-from core.task_manager import TaskManager
+# 导入统一服务管理器
+from core.service_manager import (
+    get_db_manager, get_task_manager, get_comfyui_client
+)
 
 # 导入放大服务
 from api.upscale_routes import router as upscale_router
@@ -43,11 +42,9 @@ from core.translation_client import get_translation_client
 # 初始化组件
 # =============================================================================
 
-# 初始化各个管理器
-db_manager = DatabaseManager(DB_PATH)
-comfyui_client = ComfyUIClient(COMFYUI_URL)
-workflow_template = WorkflowTemplate("./flux_kontext_dev_basic.json")
-task_manager = TaskManager(db_manager, comfyui_client, workflow_template)
+# 使用服务管理器获取实例（延迟初始化）
+db_manager = get_db_manager()
+task_manager = get_task_manager()
 
 
 
@@ -104,6 +101,62 @@ async def get_upload_image(file_path: str):
 
 # 注册放大服务路由
 app.include_router(upscale_router)
+
+# 添加放大图片下载路由（临时解决方案）
+@app.get("/api/upscale/image/{task_id}/{filename}")
+async def get_upscale_image_file(task_id: str, filename: str):
+    """获取放大后的图片文件"""
+    try:
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+        from config.settings import OUTPUT_DIR
+        
+        # 构建图片文件路径
+        image_path = Path(OUTPUT_DIR) / task_id / filename
+        
+        print(f"🔍 查找放大图片: {image_path}")
+        print(f"📁 文件是否存在: {image_path.exists()}")
+        
+        if not image_path.exists():
+            raise HTTPException(status_code=404, detail="图片文件不存在")
+        
+        return FileResponse(str(image_path))
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取图片失败: {str(e)}")
+
+@app.get("/api/upscale/image/{task_id}/original")
+async def get_upscale_original_file(task_id: str):
+    """获取原始图片文件"""
+    try:
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+        from config.settings import OUTPUT_DIR
+        
+        # 查找原始图片文件
+        task_dir = Path(OUTPUT_DIR) / task_id
+        if not task_dir.exists():
+            raise HTTPException(status_code=404, detail="任务目录不存在")
+        
+        # 查找原始图片（通常是输入图片的副本）
+        original_files = list(task_dir.glob("upscale_*"))
+        if not original_files:
+            # 如果没有找到，尝试查找任何非task_前缀的图片
+            all_images = list(task_dir.glob("*.png")) + list(task_dir.glob("*.jpg")) + list(task_dir.glob("*.jpeg"))
+            original_files = [f for f in all_images if not f.name.startswith("task_")]
+        
+        if not original_files:
+            raise HTTPException(status_code=404, detail="原始图片不存在")
+        
+        # 返回第一个找到的原始图片
+        return FileResponse(str(original_files[0]))
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取原始图片失败: {str(e)}")
 
 # 添加前端页面路由
 @app.get("/frontend.html")
@@ -525,13 +578,24 @@ async def translate_health_check():
 async def health_check():
     """健康检查"""
     try:
+        # 检查数据库连接
+        db_manager.get_task("test")  # 简单查询测试
+        db_healthy = True
+    except:
+        db_healthy = False
+    
+    try:
+        comfyui_client = get_comfyui_client()
         comfyui_status = await comfyui_client.check_health()
     except:
         comfyui_status = False
     
     from datetime import datetime
+    overall_healthy = db_healthy and comfyui_status
+    
     return {
-        "status": "healthy" if comfyui_status else "unhealthy",
+        "status": "healthy" if overall_healthy else "unhealthy",
+        "database_connected": db_healthy,
         "comfyui_connected": comfyui_status,
         "timestamp": datetime.now().isoformat()
     }

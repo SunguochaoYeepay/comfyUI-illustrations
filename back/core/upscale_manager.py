@@ -110,7 +110,7 @@ class UpscaleManager:
                 "algorithm": algorithm
             }
             
-            # 如果有数据库管理器，保存到数据库
+            # 保存到数据库
             if self.db_manager:
                 description = f"图像放大 - {scale_factor}倍 ({algorithm})"
                 parameters = {
@@ -119,14 +119,19 @@ class UpscaleManager:
                     "input_image": str(task_image_path)
                 }
                 
-                # 放大任务不需要参考图片
-                self.db_manager.create_task(
-                    task_id=task_id,
-                    description=description,
-                    reference_image_path=None,  # 放大任务不需要参考图片
-                    parameters=parameters,
-                    task_type="upscale"
-                )
+                try:
+                    self.db_manager.create_task(
+                        task_id=task_id,
+                        description=description,
+                        reference_image_path=None,
+                        parameters=parameters,
+                        task_type="upscale"
+                    )
+                except Exception as e:
+                    print(f"❌ upscale任务保存失败: {task_id}, 错误: {e}")
+                    raise Exception(f"数据库保存失败: {str(e)}")
+            else:
+                raise Exception("数据库管理器未初始化")
             
             return {
                 "task_id": task_id,
@@ -169,15 +174,39 @@ class UpscaleManager:
             # Docker环境：复制图像到ComfyUI输入目录，然后使用文件名
             from config.settings import COMFYUI_INPUT_DIR
             import shutil
+            import os
             
-            # 复制图像到ComfyUI输入目录
-            input_image_path = COMFYUI_INPUT_DIR / Path(image_path).name
-            print(f"🐳 Docker环境：复制图像到ComfyUI输入目录: {image_path} -> {input_image_path}")
-            shutil.copy2(image_path, input_image_path)
+            # 确保ComfyUI输入目录存在
+            COMFYUI_INPUT_DIR.mkdir(parents=True, exist_ok=True)
             
-            # 使用文件名，ComfyUI会在其输入目录中查找
-            workflow["14"]["inputs"]["image"] = Path(image_path).name
-            print(f"🐳 Docker环境：使用图像文件名: {Path(image_path).name}")
+            # 生成唯一的文件名避免冲突
+            import time
+            timestamp = int(time.time() * 1000)
+            original_name = Path(image_path).name
+            unique_name = f"upscale_{timestamp}_{original_name}"
+            input_image_path = COMFYUI_INPUT_DIR / unique_name
+            
+            print(f"🐳 Docker环境：复制图像到ComfyUI输入目录")
+            print(f"   源文件: {image_path}")
+            print(f"   目标文件: {input_image_path}")
+            
+            # 检查源文件是否存在
+            if not Path(image_path).exists():
+                raise FileNotFoundError(f"源图像文件不存在: {image_path}")
+            
+            # 复制文件并设置权限
+            try:
+                shutil.copy2(image_path, input_image_path)
+                # 确保文件可读
+                os.chmod(input_image_path, 0o644)
+                print(f"✅ 文件复制成功，大小: {input_image_path.stat().st_size} bytes")
+            except Exception as e:
+                print(f"❌ 文件复制失败: {e}")
+                raise Exception(f"无法复制图像文件到ComfyUI输入目录: {e}")
+            
+            # 使用唯一文件名，ComfyUI会在其输入目录中查找
+            workflow["14"]["inputs"]["image"] = unique_name
+            print(f"🐳 Docker环境：使用图像文件名: {unique_name}")
         else:
             # 本地环境：使用文件名，ComfyUI会在其输入目录中查找
             workflow["14"]["inputs"]["image"] = Path(image_path).name
@@ -210,8 +239,13 @@ class UpscaleManager:
             workflow["10"]["inputs"]["denoise"] = 0.12
         
         # 更新输出文件名
-        workflow["9"]["inputs"]["filename_prefix"] = f"ultimate_upscaled_{scale_factor}x"
+        # 创建包含时间戳的唯一文件名前缀
+        import time
+        timestamp = int(time.time())
+        workflow["9"]["inputs"]["filename_prefix"] = f"ultimate_upscaled_{scale_factor}x_{timestamp}"
+        print(f"✅ 设置输出文件前缀: ultimate_upscaled_{scale_factor}x_{timestamp}")
         
+        print(f"✅ 放大工作流配置完成")
         return workflow
     
     async def get_upscale_result(self, task_id: str) -> Optional[Dict[str, Any]]:
@@ -357,6 +391,8 @@ class UpscaleManager:
                     status="completed",
                     result_path=str(task_upscaled_file)
                 )
+                # 更新进度为100%
+                self.db_manager.update_task_progress(task_id, 100)
             
             return {
                 "task_id": task_id,

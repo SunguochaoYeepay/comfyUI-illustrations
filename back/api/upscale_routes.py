@@ -9,8 +9,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pathlib import Path
 
-from core.upscale_manager import UpscaleManager
-from core.comfyui_client import ComfyUIClient
+from core.service_manager import get_upscale_manager
 from models.upscale_schemas import (
     UpscaleRequest, 
     UpscaleResponse, 
@@ -19,26 +18,11 @@ from models.upscale_schemas import (
     AVAILABLE_ALGORITHMS
 )
 from config.settings import (
-    COMFYUI_URL, UPLOAD_DIR, OUTPUT_DIR
+    UPLOAD_DIR, OUTPUT_DIR
 )
 
 # 创建路由器
 router = APIRouter(prefix="/api/upscale", tags=["图像放大"])
-
-# 全局变量存储放大管理器实例
-upscale_manager: UpscaleManager = None
-
-def get_upscale_manager() -> UpscaleManager:
-    """获取放大管理器实例"""
-    global upscale_manager
-    if upscale_manager is None:
-        comfyui_client = ComfyUIClient(COMFYUI_URL)
-        # 导入数据库管理器
-        from core.database_manager import DatabaseManager
-        from config.settings import DB_PATH
-        db_manager = DatabaseManager(DB_PATH)
-        upscale_manager = UpscaleManager(comfyui_client, OUTPUT_DIR, db_manager)
-    return upscale_manager
 
 
 @router.post("/", response_model=UpscaleResponse)

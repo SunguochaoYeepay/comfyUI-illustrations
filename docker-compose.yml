@@ -16,6 +16,8 @@ services:
       - PORT=9000
       - COMFYUI_URL=http://host.docker.internal:8188
       - COMFYUI_OUTPUT_DIR=/app/comfyui/output/yeepay
+      - COMFYUI_MAIN_OUTPUT_DIR=/app/comfyui/output
+      - COMFYUI_INPUT_DIR=/app/comfyui/input
       - COMFYUI_TIMEOUT=300
       - MAX_CONCURRENT_TASKS=3
       - CORS_ORIGINS=*

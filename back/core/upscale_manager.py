@@ -249,15 +249,96 @@ class UpscaleManager:
                 except (json.JSONDecodeError, KeyError):
                     scale_factor = 2
         
-        # 查找当前任务的放大文件（根据放大倍数）
-        upscaled_files = list(comfyui_output_dir.glob(f"ultimate_upscaled_{scale_factor}x_*.png"))
-        print(f"📁 在ComfyUI输出目录中找到的{scale_factor}倍放大文件: {upscaled_files}")
+        # 先检查是否有对应的prompt_id，通过ComfyUI历史API获取真正的输出文件
+        latest_file = None
         
-        if upscaled_files:
-            # 按修改时间排序，获取最新的文件
-            upscaled_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-            latest_file = upscaled_files[0]
-            print(f"✅ 找到最新的放大文件: {latest_file.name} (时间: {latest_file.stat().st_mtime})")
+        if task_id in self.tasks:
+            task_info = self.tasks[task_id]
+            prompt_id = task_info.get("prompt_id")
+            
+            if prompt_id:
+                try:
+                    print(f"🔍 通过prompt_id查询ComfyUI历史: {prompt_id}")
+                    comfyui_history = await self.comfyui_client.get_task_status(prompt_id)
+                    
+                    # 从ComfyUI历史中提取输出文件
+                    if prompt_id in comfyui_history and comfyui_history[prompt_id].get("status", {}).get("completed", False):
+                        outputs = comfyui_history[prompt_id].get("outputs", {})
+                        print(f"📋 ComfyUI任务输出: {outputs}")
+                        
+                        # 查找图片输出节点的结果
+                        found_file = False
+                        for node_id, node_output in outputs.items():
+                            if "images" in node_output:
+                                for image_info in node_output["images"]:
+                                    filename = image_info.get("filename")
+                                    if filename and "upscaled" in filename.lower():
+                                        # 找到放大后的文件
+                                        latest_file = comfyui_output_dir / filename
+                                        print(f"✅ 通过prompt_id找到放大文件: {latest_file}")
+                                        
+                                        if latest_file.exists():
+                                            found_file = True
+                                            break
+                            if found_file:
+                                break
+                        
+                        if not found_file:
+                            print(f"❌ 在prompt_id {prompt_id} 的输出中没有找到放大文件")
+                            return None
+                            
+                    else:
+                        print(f"⏳ prompt_id {prompt_id} 的任务还没有完成")
+                        return None
+                        
+                except Exception as e:
+                    print(f"⚠️ 查询ComfyUI历史失败: {e}")
+                    # 如果ComfyUI历史查询失败，回退到文件系统查找（但更加谨慎）
+                    print(f"🔄 回退到文件系统查找...")
+                    
+                    # 查找最近几分钟内创建的放大文件，避免获取太旧的文件
+                    import time
+                    current_time = time.time()
+                    recent_threshold = current_time - 300  # 5分钟内
+                    
+                    upscaled_files = list(comfyui_output_dir.glob(f"ultimate_upscaled_{scale_factor}x_*.png"))
+                    recent_files = [f for f in upscaled_files if f.stat().st_mtime > recent_threshold]
+                    
+                    print(f"📁 找到最近5分钟内的{scale_factor}倍放大文件: {recent_files}")
+                    
+                    if recent_files:
+                        # 按修改时间排序，获取最新的文件
+                        recent_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                        latest_file = recent_files[0]
+                        print(f"✅ 使用最新的放大文件: {latest_file.name} (时间: {latest_file.stat().st_mtime})")
+                    else:
+                        print(f"❌ 没有找到最近的放大文件")
+                        return None
+            else:
+                print(f"❌ 任务 {task_id} 没有prompt_id")
+                return None
+        else:
+            # 任务不在内存中，尝试从数据库获取
+            print(f"⚠️ 任务 {task_id} 不在内存中，尝试从数据库获取...")
+            if self.db_manager:
+                db_task_info = self.db_manager.get_task(task_id)
+                if db_task_info and db_task_info.get('status') == 'completed':
+                    # 如果数据库中显示已完成，直接返回结果
+                    result_path = db_task_info.get('result_path')
+                    if result_path and Path(result_path).exists():
+                        print(f"✅ 从数据库找到已完成的放大任务: {result_path}")
+                        return {
+                            "task_id": task_id,
+                            "status": "completed", 
+                            "original_image": str(task_output_dir / "input_image.png"),
+                            "upscaled_images": [f"/api/upscale/image/{task_id}/{Path(result_path).name}"],
+                            "output_dir": str(task_output_dir)
+                        }
+                        
+            print(f"❌ 任务 {task_id} 不在内存中且数据库中无有效结果")
+            return None
+        
+        if latest_file and latest_file.exists():
             
             # 找到放大文件，任务完成
             if task_id in self.tasks:

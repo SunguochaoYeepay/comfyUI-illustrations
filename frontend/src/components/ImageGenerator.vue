@@ -636,29 +636,44 @@ const handleUpscale = async (imageData, scaleFactor) => {
     currentScaleFactor.value = scaleFactor
     upscalingPrompt.value = `放大图片 - ${scaleFactor}倍`
     
-    // 获取图片数据
-    const response = await fetch(imageData.url)
-    const blob = await response.blob()
+    console.log('🔍 放大请求 - 图片数据:', imageData)
+    console.log('🔍 放大倍数:', scaleFactor)
+    console.log('🔍 图片URL:', imageData.url)
+    console.log('🔍 图片directUrl:', imageData.directUrl)
+    console.log('🔍 图片task_id:', imageData.task_id)
+    console.log('🔍 图片filename:', imageData.filename)
     
-    // 创建FormData
+    // 使用图片的直接URL或URL作为路径
+    const imagePath = imageData.directUrl || imageData.url
+    
+    // 创建FormData，使用新的路径接口
     const formData = new FormData()
-    formData.append('image', blob, 'image.png')
+    formData.append('image_path', imagePath)
     formData.append('scale_factor', scaleFactor.toString())
     formData.append('algorithm', 'ultimate')
     
     upscalingProgress.value = 20
     
-    // 调用放大API
-    const upscaleResponse = await fetch(`${API_BASE}/api/upscale/`, {
+    console.log('📤 发送放大请求:', {
+      image_path: imagePath,
+      scale_factor: scaleFactor,
+      algorithm: 'ultimate'
+    })
+    
+    // 调用新的路径放大API
+    const upscaleResponse = await fetch(`${API_BASE}/api/upscale/by-path`, {
       method: 'POST',
       body: formData
     })
     
     if (!upscaleResponse.ok) {
-      throw new Error(`放大请求失败: ${upscaleResponse.status}`)
+      const errorText = await upscaleResponse.text()
+      console.error('❌ 放大API响应错误:', upscaleResponse.status, errorText)
+      throw new Error(`放大请求失败: ${upscaleResponse.status} - ${errorText}`)
     }
     
     const result = await upscaleResponse.json()
+    console.log('✅ 放大任务创建成功:', result)
     
     if (result.status === 'processing') {
       upscalingProgress.value = 30
@@ -671,7 +686,7 @@ const handleUpscale = async (imageData, scaleFactor) => {
     }
     
   } catch (error) {
-    console.error('放大失败:', error)
+    console.error('❌ 放大失败:', error)
     message.error(`放大失败: ${error.message}`)
     // 只有在出错时才重置状态
     isUpscaling.value = false

@@ -254,16 +254,18 @@ class UpscaleManager:
         print(f"📁 在ComfyUI输出目录中找到的{scale_factor}倍放大文件: {upscaled_files}")
         
         if upscaled_files:
-            # 简化逻辑：直接使用最新的文件
-            latest_file = max(upscaled_files, key=lambda f: f.stat().st_mtime)
+            # 按修改时间排序，获取最新的文件
+            upscaled_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            latest_file = upscaled_files[0]
             print(f"✅ 找到最新的放大文件: {latest_file.name} (时间: {latest_file.stat().st_mtime})")
             
             # 找到放大文件，任务完成
             if task_id in self.tasks:
                 self.tasks[task_id]["status"] = "completed"
             
-            # 将最新的放大文件复制到任务目录
-            task_upscaled_file = task_output_dir / latest_file.name
+            # 将最新的放大文件复制到任务目录，使用任务ID作为文件名前缀
+            task_upscaled_filename = f"task_{task_id}_{latest_file.name}"
+            task_upscaled_file = task_output_dir / task_upscaled_filename
             shutil.copy2(latest_file, task_upscaled_file)
             print(f"📁 复制放大文件到任务目录: {latest_file} -> {task_upscaled_file}")
             
@@ -279,7 +281,7 @@ class UpscaleManager:
                 "task_id": task_id,
                 "status": "completed",
                 "original_image": str(task_output_dir / "input_image.png"),
-                "upscaled_images": [f"/api/upscale/image/{task_id}/{latest_file.name}"],
+                "upscaled_images": [f"/api/upscale/image/{task_id}/{task_upscaled_filename}"],
                 "output_dir": str(task_output_dir)
             }
         
@@ -318,15 +320,24 @@ class UpscaleManager:
                     if comfyui_status.get("status") == "completed":
                         print(f"✅ ComfyUI任务完成，检查输出文件...")
                         # 再次检查文件
-                        upscaled_files = list(task_output_dir.glob("ultimate_upscaled_*.png"))
+                        upscaled_files = list(comfyui_output_dir.glob(f"ultimate_upscaled_{scale_factor}x_*.png"))
                         print(f"📁 找到的放大文件: {upscaled_files}")
                         if upscaled_files:
+                            # 按修改时间排序，获取最新的文件
+                            upscaled_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                            latest_file = upscaled_files[0]
+                            
+                            # 将最新的放大文件复制到任务目录，使用任务ID作为文件名前缀
+                            task_upscaled_filename = f"task_{task_id}_{latest_file.name}"
+                            task_upscaled_file = task_output_dir / task_upscaled_filename
+                            shutil.copy2(latest_file, task_upscaled_file)
+                            
                             self.tasks[task_id]["status"] = "completed"
                             return {
                                 "task_id": task_id,
                                 "status": "completed",
                                 "original_image": str(task_output_dir / "input_image.png"),
-                                "upscaled_images": [f"/api/image/{task_id}?filename={f.name}" for f in upscaled_files],
+                                "upscaled_images": [f"/api/upscale/image/{task_id}/{task_upscaled_filename}"],
                                 "output_dir": str(task_output_dir)
                             }
                         else:

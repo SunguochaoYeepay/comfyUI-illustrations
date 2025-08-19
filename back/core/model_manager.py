@@ -90,7 +90,7 @@ class ModelManager:
         flux_config = ModelConfig(
             model_type=ModelType.FLUX,
             name="flux1-dev",
-            display_name="Flux Kontext (开发版)",
+            display_name="Flux Kontext",
             unet_file="flux1-dev-kontext_fp8_scaled.safetensors",
             clip_file="clip_l.safetensors",  # 双CLIP架构
             vae_file="ae.safetensors",
@@ -102,7 +102,7 @@ class ModelManager:
         qwen_config = ModelConfig(
             model_type=ModelType.QWEN,
             name="qwen-image",
-            display_name="Qwen Image (千问图像)",
+            display_name="Qwen",
             unet_file="qwen_image_edit_fp8_e4m3fn.safetensors",  # 在diffusion_models目录
             clip_file="qwen_2.5_vl_7b_fp8_scaled.safetensors",  # 在text_encoders目录
             vae_file="qwen_image_vae.safetensors",  # 在vae目录

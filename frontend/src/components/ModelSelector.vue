@@ -1,22 +1,18 @@
 <template>
   <div class="model-selector">
     <!-- 模型选择下拉菜单 -->
-    <a-dropdown 
-      :trigger="['click']" 
-      placement="bottomLeft"
-      @visibleChange="handleDropdownVisibleChange"
-    >
+          <a-dropdown 
+        :trigger="['click']" 
+        placement="bottomLeft"
+        @openChange="handleDropdownVisibleChange"
+      >
       <div class="model-dropdown-trigger">
         <div class="model-trigger-content">
           <div class="model-trigger-icon">🤖</div>
           <div class="model-trigger-info">
             <div class="model-trigger-name">{{ currentModel.display_name || 'Flux Kontext' }}</div>
           </div>
-          <div class="model-trigger-status">
-            <a-tag :color="currentModel.available ? 'green' : 'red'" size="small">
-              {{ currentModel.available ? '可用' : '不可用' }}
-            </a-tag>
-          </div>
+          <!-- 移除状态显示 -->
         </div>
         <div class="model-trigger-arrow">
           <DownOutlined />
@@ -54,11 +50,9 @@
               </div>
               <div class="model-dropdown-item-info">
                 <div class="model-dropdown-item-name">{{ model.display_name }}</div>
+                <div class="model-dropdown-item-desc">{{ getModelDescription(model.name) }}</div>
               </div>
               <div class="model-dropdown-item-status">
-                <a-tag :color="model.available ? 'green' : 'red'" size="small">
-                  {{ model.available ? '可用' : '不可用' }}
-                </a-tag>
                 <div v-if="model.name === currentModel.name" class="model-dropdown-selected-icon">
                   ✅
                 </div>
@@ -103,19 +97,19 @@ const emit = defineEmits(['update:model'])
 const availableModels = ref([])
 const loading = ref(false)
 
-// 当前选择的模型
-const currentModel = computed({
-  get: () => {
-    const model = availableModels.value.find(m => m.name === props.model)
-    return model || {
-      name: 'flux1-dev',
-      display_name: 'Flux Kontext (开发版)',
-      description: 'Flux Kontext开发版本，支持高质量图像生成',
-      available: true
-    }
-  },
-  set: (value) => emit('update:model', value.name)
-})
+  // 当前选择的模型
+  const currentModel = computed({
+    get: () => {
+      const model = availableModels.value.find(m => m.name === props.model)
+      return model || {
+        name: 'flux1-dev',
+        display_name: 'Flux Kontext',
+        description: 'Flux Kontext开发版本，支持高质量图像生成',
+        available: true
+      }
+    },
+    set: (value) => emit('update:model', value.name)
+  })
 
 // 获取可用模型列表
 const fetchModels = async () => {
@@ -138,13 +132,18 @@ const fetchModels = async () => {
   }
 }
 
+// 获取模型说明
+const getModelDescription = (modelName) => {
+  if (modelName.includes('flux')) {
+    return 'Flux模型更精确控制，适合专业图像生成'
+  } else if (modelName.includes('qwen')) {
+    return 'Qwen支持中文较好，适合中文描述生成'
+  }
+  return 'AI图像生成模型'
+}
+
 // 选择模型
 const selectModel = (model) => {
-  if (!model.available) {
-    message.warning('该模型当前不可用')
-    return
-  }
-  
   emit('update:model', model.name)
   console.log('✅ 选择模型:', model.display_name)
   message.success(`已选择模型: ${model.display_name}`)
@@ -174,7 +173,7 @@ onMounted(() => {
   align-items: center;
   padding: 6px 10px;
   background: #2a2a2a;
-  border: 1px solid #444;
+  border: 0px solid #444;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -304,22 +303,23 @@ onMounted(() => {
   min-width: 0;
 }
 
-.model-dropdown-item-name {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: inherit;
-}
+  .model-dropdown-item-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #fff;
+  }
 
-.model-dropdown-item-desc {
-  font-size: 12px;
-  color: #ccc;
-  line-height: 1.4;
-}
+  .model-dropdown-item-desc {
+    font-size: 11px;
+    color: #ccc;
+    line-height: 1.3;
+    margin-top: 2px;
+  }
 
-.model-dropdown-item.model-dropdown-selected .model-dropdown-item-desc {
-  color: rgba(255, 255, 255, 0.8);
-}
+  .model-dropdown-item.model-dropdown-selected .model-dropdown-item-desc {
+    color: rgba(255, 255, 255, 0.7);
+  }
 
 .model-dropdown-item-status {
   display: flex;

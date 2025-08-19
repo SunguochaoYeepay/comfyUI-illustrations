@@ -143,11 +143,52 @@
               </div>
             </div>
             
-            <!-- 生成参数 -->
+            <!-- 使用的模型 -->
+            <div class="info-item" v-if="imageData.parameters?.model">
+              <label>使用模型:</label>
+              <div class="info-value model-info">
+                <span class="model-name">{{ getModelDisplayName(imageData.parameters.model) }}</span>
+                <span class="model-type">{{ getModelType(imageData.parameters.model) }}</span>
+              </div>
+            </div>
+            
+            <!-- 使用的LoRA -->
+            <div class="info-item" v-if="imageData.parameters?.loras && imageData.parameters.loras.length > 0">
+              <label>使用LoRA:</label>
+              <div class="info-value lora-list">
+                <div 
+                  v-for="(lora, index) in imageData.parameters.loras" 
+                  :key="index"
+                  class="lora-item"
+                >
+                  <span class="lora-name">{{ lora.name.replace('.safetensors', '') }}</span>
+                  <span class="lora-strength" v-if="lora.strength_model !== undefined">
+                    (强度: {{ lora.strength_model }})
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 其他生成参数 -->
             <div class="info-item" v-if="imageData.parameters">
-              <label>生成参数:</label>
+              <label>其他参数:</label>
               <div class="info-value parameters">
-                <pre>{{ JSON.stringify(imageData.parameters, null, 2) }}</pre>
+                <div class="param-item" v-if="imageData.parameters.steps">
+                  <span class="param-label">步数:</span>
+                  <span class="param-value">{{ imageData.parameters.steps }}</span>
+                </div>
+                <div class="param-item" v-if="imageData.parameters.seed">
+                  <span class="param-label">种子:</span>
+                  <span class="param-value">{{ imageData.parameters.seed }}</span>
+                </div>
+                <div class="param-item" v-if="imageData.parameters.size">
+                  <span class="param-label">尺寸:</span>
+                  <span class="param-value">{{ imageData.parameters.size }}</span>
+                </div>
+                <div class="param-item" v-if="imageData.parameters.count">
+                  <span class="param-label">数量:</span>
+                  <span class="param-value">{{ imageData.parameters.count }}</span>
+                </div>
               </div>
             </div>
                      </div>
@@ -262,6 +303,25 @@ const formatFileSize = (bytes) => {
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+// 获取模型显示名称
+const getModelDisplayName = (modelName) => {
+  const modelMap = {
+    'flux1-dev': 'Flux Kontext',
+    'qwen-image': 'Qwen Image'
+  }
+  return modelMap[modelName] || modelName
+}
+
+// 获取模型类型
+const getModelType = (modelName) => {
+  if (modelName.includes('flux')) {
+    return 'Flux模型 - 更精确控制'
+  } else if (modelName.includes('qwen')) {
+    return 'Qwen模型 - 支持中文较好'
+  }
+  return '未知模型'
 }
 
 // 查看参考图
@@ -588,6 +648,87 @@ onUnmounted(() => {
 .parameters pre {
   margin: 0;
   color: #fff;
+}
+
+/* 模型信息样式 */
+.model-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.model-name {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 16px;
+}
+
+.model-type {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}
+
+/* LoRA信息样式 */
+.lora-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lora-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.lora-item:hover {
+  border-color: #667eea;
+  background: #333;
+}
+
+.lora-name {
+  font-weight: 500;
+  color: #fff;
+  flex: 1;
+}
+
+.lora-strength {
+  font-size: 12px;
+  color: #999;
+  background: #444;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* 参数项样式 */
+.param-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid #444;
+}
+
+.param-item:last-child {
+  border-bottom: none;
+}
+
+.param-label {
+  color: #999;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.param-value {
+  color: #fff;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
 }
 
 .reference-image {

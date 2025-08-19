@@ -503,6 +503,31 @@ const editImage = async (image) => {
   // 使用原图像的提示词
   prompt.value = image.prompt
   
+  // 回显模型信息
+  if (image.parameters?.model) {
+    selectedModel.value = image.parameters.model
+    console.log('🎯 回填模型:', image.parameters.model)
+  }
+  
+  // 回显LoRA信息
+  if (image.parameters?.loras && image.parameters.loras.length > 0) {
+    const lorasToSet = image.parameters.loras.map(lora => ({
+      name: lora.name,
+      enabled: lora.enabled !== false, // 默认为true
+      strength_model: lora.strength_model || 1.0,
+      strength_clip: lora.strength_clip || 1.0,
+      trigger_word: lora.trigger_word || ''
+    }))
+    
+    // 使用nextTick确保DOM更新完成
+    await nextTick()
+    selectedLoras.value = lorasToSet
+    console.log('🎨 回填LoRA:', selectedLoras.value)
+  } else {
+    await nextTick()
+    selectedLoras.value = []
+  }
+  
   // 回显参考图
   if (image.referenceImage) {
     try {
@@ -546,10 +571,13 @@ const editImage = async (image) => {
     referenceImages.value = []
   }
   
+  // 等待DOM更新完成后再滚动
+  await nextTick()
+  
   // 滚动到输入区域
   document.querySelector('.control-section')?.scrollIntoView({ behavior: 'smooth' })
   
-  message.success('已将提示词和参考图回填到输入框，您可以进行编辑')
+  message.success('已将提示词、模型、LoRA和参考图回填到输入框，您可以进行编辑')
 }
 
 // 重新生成图像
@@ -561,6 +589,31 @@ const regenerateImage = async (image) => {
   
   // 使用原图像的提示词
   prompt.value = image.prompt
+  
+  // 回显模型信息
+  if (image.parameters?.model) {
+    selectedModel.value = image.parameters.model
+    console.log('🎯 回填模型:', image.parameters.model)
+  }
+  
+  // 回显LoRA信息
+  if (image.parameters?.loras && image.parameters.loras.length > 0) {
+    const lorasToSet = image.parameters.loras.map(lora => ({
+      name: lora.name,
+      enabled: lora.enabled !== false, // 默认为true
+      strength_model: lora.strength_model || 1.0,
+      strength_clip: lora.strength_clip || 1.0,
+      trigger_word: lora.trigger_word || ''
+    }))
+    
+    // 使用nextTick确保DOM更新完成
+    await nextTick()
+    selectedLoras.value = lorasToSet
+    console.log('🎨 回填LoRA:', selectedLoras.value)
+  } else {
+    await nextTick()
+    selectedLoras.value = []
+  }
   
   // 回显参考图
   if (image.referenceImage) {
@@ -604,6 +657,9 @@ const regenerateImage = async (image) => {
   } else {
     referenceImages.value = []
   }
+  
+  // 等待DOM更新完成后再开始生成
+  await nextTick()
   
   // 开始生成
   await generateImage()
@@ -935,7 +991,8 @@ const processTaskImages = (task) => {
                     referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: 'failed',
-        error: task.error || '生成失败'
+        error: task.error || '生成失败',
+        parameters: task.parameters || {}  // 添加任务参数信息
       }]
     }
     
@@ -951,7 +1008,8 @@ const processTaskImages = (task) => {
                     referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: task.status,
-        error: task.error || `状态: ${task.status}`
+        error: task.error || `状态: ${task.status}`,
+        parameters: task.parameters || {}  // 添加任务参数信息
       }]
     }
     
@@ -1000,7 +1058,8 @@ const processTaskImages = (task) => {
           prompt: task.description || '',
           createdAt: new Date(task.created_at || Date.now()),
           referenceImage: referenceImageUrl,
-          isFavorited: isFavorited  // 使用后端提供的收藏状态
+          isFavorited: isFavorited,  // 使用后端提供的收藏状态
+          parameters: task.parameters || {}  // 添加任务参数信息
         }
       } catch (imageError) {
         console.error('处理单个图片数据失败:', imageError, { imageUrl, index, task })
@@ -1366,9 +1425,10 @@ onMounted(async () => {
 .image-generator .ant-input-affix-wrapper,
 .image-generator .ant-select-selector,
 .image-generator .ant-slider {
-  background: #2a2a2a !important;
+  background: #1a1a1a !important;
   border-color: #444 !important;
   color: #fff !important;
+  border: none !important;
 }
 
 .image-generator .ant-input::placeholder {

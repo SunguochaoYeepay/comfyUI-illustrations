@@ -12,7 +12,7 @@
   >
     <div v-if="localFileList.length < 1">
       <PlusOutlined />
-      <div style="margin-top: 8px">参考图</div>
+     
     </div>
   </a-upload>
 </template>
@@ -95,7 +95,6 @@ const handleRemove = (file) => {
   border-radius: 8px;
   text-align: center;
   transition: border-color 0.3s;
-  width: 104px;
 }
 
 .reference-upload:hover {

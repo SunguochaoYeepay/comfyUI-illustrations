@@ -101,9 +101,16 @@ class QwenWorkflow(BaseWorkflow):
             "_meta": {"title": "缩放参考图像"}
         }
         
-        # 更新VAEEncode节点的pixels输入为参考图
-        workflow["103"]["inputs"]["pixels"] = ["101", 0]
-        print("✅ 更新VAEEncode节点，使用参考图作为输入")
+        # 创建VAEEncode节点用于参考图处理
+        workflow["103"] = {
+            "inputs": {
+                "pixels": ["101", 0],  # 连接到ImageScale节点
+                "vae": ["22", 0]
+            },
+            "class_type": "VAEEncode",
+            "_meta": {"title": "VAE编码"}
+        }
+        print("✅ 创建VAEEncode节点用于参考图处理")
         
         # 更新KSampler的latent_image输入
         if "20" in workflow:
@@ -248,23 +255,10 @@ class QwenWorkflow(BaseWorkflow):
             workflow["20"]["inputs"]["denoise"] = 1.0
             print("🎨 默认文生图模式：设置降噪为1.0")
         
-        # 确保VAEEncode节点存在并连接到KSampler（无参考图模式）
+        # 文生图模式：KSampler直接连接到CR SDXL Aspect Ratio的输出端口4
         if "20" in workflow:
-            # 添加VAEEncode节点（如果不存在）
-            if "103" not in workflow:
-                workflow["103"] = {
-                    "inputs": {
-                        "pixels": ["27", 0],  # 连接到CR SDXL Aspect Ratio
-                        "vae": ["22", 0]
-                    },
-                    "class_type": "VAEEncode",
-                    "_meta": {"title": "VAE编码"}
-                }
-                print("✅ 添加基础VAEEncode节点(103)")
-            
-            # 确保KSampler连接到VAEEncode节点
-            workflow["20"]["inputs"]["latent_image"] = ["103", 0]
-            print("✅ 设置KSampler连接到VAEEncode节点（无参考图模式）")
+            workflow["20"]["inputs"]["latent_image"] = ["27", 4]
+            print("✅ 文生图模式：KSampler直接连接到CR SDXL Aspect Ratio")
         
         return workflow
     

@@ -41,9 +41,21 @@ class ModelConfig:
         try:
             # 检查模型文件是否存在
             model_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models")
-            unet_path = model_dir / "checkpoints" / self.unet_file
-            clip_path = model_dir / "clip" / self.clip_file
-            vae_path = model_dir / "vae" / self.vae_file
+            
+            # 根据模型类型确定文件路径
+            if self.model_type == ModelType.FLUX:
+                unet_path = model_dir / "checkpoints" / self.unet_file
+                clip_path = model_dir / "clip" / self.clip_file
+                vae_path = model_dir / "vae" / self.vae_file
+            elif self.model_type == ModelType.QWEN:
+                unet_path = model_dir / "diffusion_models" / self.unet_file
+                clip_path = model_dir / "text_encoders" / self.clip_file
+                vae_path = model_dir / "vae" / self.vae_file
+            else:
+                # 默认使用checkpoints目录
+                unet_path = model_dir / "checkpoints" / self.unet_file
+                clip_path = model_dir / "clip" / self.clip_file
+                vae_path = model_dir / "vae" / self.vae_file
             
             return (unet_path.exists() and 
                    clip_path.exists() and 
@@ -86,14 +98,14 @@ class ModelManager:
             description="Flux Kontext开发版本，支持高质量图像生成"
         )
         
-        # Qwen模型配置（预留）
+        # Qwen模型配置
         qwen_config = ModelConfig(
             model_type=ModelType.QWEN,
             name="qwen-image",
             display_name="Qwen Image (千问图像)",
-            unet_file="Qwen-Image_1.0",  # 需要下载
-            clip_file="qwen_2.5_vl_7b_fp8_scaled.safetensors",  # 需要下载
-            vae_file="qwen_image_vae.safetensors",  # 需要下载
+            unet_file="qwen_image_edit_fp8_e4m3fn.safetensors",  # 在diffusion_models目录
+            clip_file="qwen_2.5_vl_7b_fp8_scaled.safetensors",  # 在text_encoders目录
+            vae_file="qwen_image_vae.safetensors",  # 在vae目录
             template_path="qwen_workflow_template.json",
             description="千问图像模型，支持高质量图像生成"
         )

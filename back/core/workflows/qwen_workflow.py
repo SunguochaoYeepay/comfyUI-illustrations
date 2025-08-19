@@ -30,6 +30,9 @@ class QwenWorkflow(BaseWorkflow):
         # 验证参数
         validated_params = self._validate_parameters(parameters)
         
+        # 处理参考图像
+        processed_image_path = self._process_reference_image(reference_image_path)
+        
         # 加载工作流模板
         workflow = self._load_workflow_template()
         
@@ -45,12 +48,73 @@ class QwenWorkflow(BaseWorkflow):
         # 更新保存路径
         workflow = self._update_save_path(workflow)
         
+        # 处理参考图像
+        if processed_image_path:
+            workflow = self._add_reference_image_nodes(workflow, processed_image_path)
+            print(f"📸 已添加参考图支持: {processed_image_path}")
+        else:
+            print("📸 无参考图，使用无参考图模式")
+        
         # 处理LoRA配置
         loras = validated_params.get("loras", [])
         if loras:
             workflow = self._update_lora_config(workflow, loras)
         
         print(f"✅ Qwen工作流创建完成，使用标准ComfyUI格式")
+        return workflow
+    
+    def _add_reference_image_nodes(self, workflow: Dict[str, Any], image_path: str) -> Dict[str, Any]:
+        """添加参考图像节点到Qwen工作流
+        
+        Args:
+            workflow: 工作流字典
+            image_path: 处理后的图像路径
+            
+        Returns:
+            更新后的工作流字典
+        """
+        from config.settings import TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
+        
+        print("📸 为Qwen工作流添加参考图支持")
+        
+        # 添加LoadImage节点
+        workflow["100"] = {
+            "inputs": {
+                "image": image_path,
+                "choose file to upload": "image"
+            },
+            "class_type": "LoadImage",
+            "_meta": {"title": "加载参考图像"}
+        }
+        
+        # 添加ImageScale节点
+        workflow["101"] = {
+            "inputs": {
+                "image": ["100", 0],
+                "width": TARGET_IMAGE_WIDTH,
+                "height": TARGET_IMAGE_HEIGHT,
+                "crop": "disabled",
+                "upscale_method": "lanczos",
+                "downscale_method": "area"
+            },
+            "class_type": "ImageScale",
+            "_meta": {"title": "缩放参考图像"}
+        }
+        
+        # 更新VAEEncode节点的pixels输入为参考图
+        workflow["103"]["inputs"]["pixels"] = ["101", 0]
+        print("✅ 更新VAEEncode节点，使用参考图作为输入")
+        
+        # 更新KSampler的latent_image输入
+        if "20" in workflow:
+            workflow["20"]["inputs"]["latent_image"] = ["103", 0]
+            print(f"✅ 更新KSampler节点，使用参考图VAEEncode作为latent_image")
+            
+            # 设置图生图模式的降噪值
+            workflow["20"]["inputs"]["denoise"] = 0.6
+            print("🎨 图生图模式：设置降噪为0.6")
+        
+        print(f"✅ Qwen参考图节点配置完成")
         return workflow
     
     def _load_workflow_template(self) -> Dict[str, Any]:
@@ -178,6 +242,29 @@ class QwenWorkflow(BaseWorkflow):
         
         # 动态更新图像尺寸配置
         workflow = self._update_image_dimensions(workflow)
+        
+        # 默认设置为文生图模式（完全降噪）
+        if "20" in workflow:
+            workflow["20"]["inputs"]["denoise"] = 1.0
+            print("🎨 默认文生图模式：设置降噪为1.0")
+        
+        # 确保VAEEncode节点存在并连接到KSampler（无参考图模式）
+        if "20" in workflow:
+            # 添加VAEEncode节点（如果不存在）
+            if "103" not in workflow:
+                workflow["103"] = {
+                    "inputs": {
+                        "pixels": ["27", 0],  # 连接到CR SDXL Aspect Ratio
+                        "vae": ["22", 0]
+                    },
+                    "class_type": "VAEEncode",
+                    "_meta": {"title": "VAE编码"}
+                }
+                print("✅ 添加基础VAEEncode节点(103)")
+            
+            # 确保KSampler连接到VAEEncode节点
+            workflow["20"]["inputs"]["latent_image"] = ["103", 0]
+            print("✅ 设置KSampler连接到VAEEncode节点（无参考图模式）")
         
         return workflow
     

@@ -75,26 +75,34 @@ class TaskManager:
             # 更新状态为处理中
             self.db.update_task_status(task_id, "processing")
             
-            # 翻译中文描述为英文
+            # 获取模型名称
+            model_name = parameters.get("model", "flux1-dev")
+            
+            # 根据模型类型决定是否翻译
             translated_description = description
-            if self._is_chinese_text(description):
-                print(f"🌐 检测到中文描述，开始翻译...")
-                translation_client = get_translation_client()
-                
-                # 检查Ollama服务是否可用
-                if await translation_client.check_ollama_health():
-                    if await translation_client.check_model_available():
-                        translated_description = await translation_client.translate_to_english(description)
-                        if translated_description:
-                            print(f"✅ 翻译成功: {description} -> {translated_description}")
+            if model_name.startswith("flux"):
+                # Flux模型需要翻译中文为英文
+                if self._is_chinese_text(description):
+                    print(f"🌐 Flux模型检测到中文描述，开始翻译...")
+                    translation_client = get_translation_client()
+                    
+                    # 检查Ollama服务是否可用
+                    if await translation_client.check_ollama_health():
+                        if await translation_client.check_model_available():
+                            translated_description = await translation_client.translate_to_english(description)
+                            if translated_description:
+                                print(f"✅ 翻译成功: {description} -> {translated_description}")
+                            else:
+                                print(f"⚠️ 翻译失败，使用原描述: {description}")
                         else:
-                            print(f"⚠️ 翻译失败，使用原描述: {description}")
+                            print(f"⚠️ qianwen模型不可用，使用原描述: {description}")
                     else:
-                        print(f"⚠️ qianwen模型不可用，使用原描述: {description}")
+                        print(f"⚠️ Ollama服务不可用，使用原描述: {description}")
                 else:
-                    print(f"⚠️ Ollama服务不可用，使用原描述: {description}")
+                    print(f"✅ Flux模型描述已经是英文，无需翻译: {description}")
             else:
-                print(f"✅ 描述已经是英文，无需翻译: {description}")
+                # Qwen模型支持中文，无需翻译
+                print(f"✅ Qwen模型支持中文，直接使用原描述: {description}")
             
             # 获取生成数量
             count = int(parameters.get("count", 1))
@@ -118,7 +126,6 @@ class TaskManager:
                     
                     # 准备工作流
                     print(f"🔧 准备工作流...")
-                    model_name = current_params.get("model", "flux1-dev")
                     workflow = self.workflow_template.customize_workflow(
                         reference_image_path, translated_description, current_params, model_name
                     )

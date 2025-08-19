@@ -31,6 +31,8 @@
       <ImageControlPanel
         v-model:prompt="prompt"
         v-model:reference-images="referenceImages"
+        v-model:loras="selectedLoras"
+        v-model:model="selectedModel"
         :is-generating="isGenerating"
         @generate="generateImage"
         @preview="handlePreview"
@@ -47,9 +49,9 @@ import ImageControlPanel from './ImageControlPanel.vue'
 
 // API基础URL - 自动检测环境
 const API_BASE = (() => {
-  // 开发环境：使用代理
+  // 开发环境：指向后端9000端口
   if (import.meta.env.DEV) {
-    return ''
+    return 'http://localhost:9000'
   }
   // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
   return import.meta.env.VITE_API_BASE_URL || ''
@@ -76,6 +78,8 @@ const totalCount = ref(0)
 const hasMore = ref(false)
 const isLoadingHistory = ref(false)
 const referenceImages = ref([])
+const selectedLoras = ref([]) // 新增：选择的LoRA配置
+const selectedModel = ref('flux1-dev') // 新增：选择的模型
 const previewVisible = ref(false)
 const previewImage = ref('')
 
@@ -232,6 +236,13 @@ const generateImage = async () => {
     formData.append('count', imageCount.value)
     formData.append('size', imageSize.value)
     formData.append('steps', 20)
+    formData.append('model', selectedModel.value)  // 添加模型参数
+    
+    // 添加LoRA配置
+    if (selectedLoras.value.length > 0) {
+      formData.append('loras', JSON.stringify(selectedLoras.value))
+      console.log('🎨 添加LoRA配置:', selectedLoras.value)
+    }
     
     // 添加参考图片（如果有的话）
     if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {

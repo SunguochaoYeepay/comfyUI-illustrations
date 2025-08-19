@@ -118,8 +118,9 @@ class TaskManager:
                     
                     # 准备工作流
                     print(f"🔧 准备工作流...")
+                    model_name = current_params.get("model", "flux1-dev")
                     workflow = self.workflow_template.customize_workflow(
-                        reference_image_path, translated_description, current_params
+                        reference_image_path, translated_description, current_params, model_name
                     )
                     print(f"✅ 工作流准备完成")
                     

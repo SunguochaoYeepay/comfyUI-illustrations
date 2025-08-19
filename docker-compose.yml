@@ -33,6 +33,7 @@ services:
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input:/app/comfyui/input
+      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras:/app/comfyui/models/loras
 
     restart: unless-stopped
     healthcheck:

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import aiofiles
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -99,6 +99,161 @@ async def get_upload_image(file_path: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
+# 添加LoRA管理API
+@app.get("/api/models")
+async def get_available_models():
+    """获取可用的基础模型列表"""
+    try:
+        from core.model_manager import get_available_models
+        
+        models = get_available_models()
+        return {"models": models}
+    except Exception as e:
+        print(f"❌ 获取模型列表失败: {e}")
+        return {"models": []}
+
+
+@app.get("/api/loras")
+async def get_available_loras(model: str = Query("flux1-dev", description="基础模型名称")):
+    """获取可用的LoRA列表（根据模型过滤）"""
+    try:
+        from pathlib import Path
+        from config.settings import COMFYUI_MAIN_OUTPUT_DIR
+        from core.model_manager import get_model_config, ModelType
+
+        # 获取模型配置
+        model_config = get_model_config(model)
+        if not model_config:
+            print(f"⚠️ 模型 {model} 不存在，使用默认Flux模型")
+            model_config = get_model_config("flux1-dev")
+
+        # LoRA文件通常存放在ComfyUI的models/loras目录
+        lora_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras")
+        
+        if not lora_dir.exists():
+            print(f"📁 LoRA目录不存在: {lora_dir}")
+            return {"loras": [], "message": "LoRA目录不存在"}
+        
+        # 查找所有.safetensors文件
+        lora_files = []
+        for file_path in lora_dir.glob("*.safetensors"):
+            lora_name = file_path.name
+            
+            # 根据模型类型过滤LoRA
+            is_compatible = True
+            if model_config.model_type == ModelType.FLUX:
+                # Flux模型：排除Qwen相关的LoRA
+                if any(keyword in lora_name.lower() for keyword in ['qwen', '千问', 'qwen2']):
+                    is_compatible = False
+            elif model_config.model_type == ModelType.QWEN:
+                # Qwen模型：优先选择Qwen相关的LoRA，但也兼容通用LoRA
+                # 这里可以根据需要调整过滤逻辑
+                pass
+            
+            if is_compatible:
+                lora_files.append({
+                    "name": lora_name,
+                    "size": file_path.stat().st_size,
+                    "modified": file_path.stat().st_mtime,
+                    "compatible": True
+                })
+        
+        # 按修改时间排序，最新的在前
+        lora_files.sort(key=lambda x: x["modified"], reverse=True)
+        
+        print(f"🎨 找到 {len(lora_files)} 个兼容的LoRA文件 (模型: {model_config.display_name})")
+        return {
+            "loras": lora_files,
+            "total": len(lora_files),
+            "directory": str(lora_dir),
+            "model": model,
+            "model_type": model_config.model_type.value
+        }
+        
+    except Exception as e:
+        print(f"❌ 获取LoRA列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取LoRA列表失败: {str(e)}")
+
+
+@app.post("/api/loras/upload")
+async def upload_lora(file: UploadFile = File(...)):
+    """上传LoRA文件"""
+    try:
+        from pathlib import Path
+        from config.settings import COMFYUI_MAIN_OUTPUT_DIR
+        
+        # 验证文件类型
+        if not file.filename.endswith('.safetensors'):
+            raise HTTPException(status_code=400, detail="只支持.safetensors格式的LoRA文件")
+        
+        # 验证文件大小（最大100MB）
+        content = await file.read()
+        if len(content) > 100 * 1024 * 1024:  # 100MB
+            raise HTTPException(status_code=400, detail="LoRA文件大小不能超过100MB")
+        
+        # 保存到LoRA目录
+        lora_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras")
+        lora_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = lora_dir / file.filename
+        
+        # 检查文件是否已存在
+        if file_path.exists():
+            raise HTTPException(status_code=400, detail="LoRA文件已存在")
+        
+        # 保存文件
+        async with aiofiles.open(file_path, 'wb') as f:
+            await f.write(content)
+        
+        print(f"✅ LoRA文件上传成功: {file_path}")
+        
+        return {
+            "message": "LoRA文件上传成功",
+            "filename": file.filename,
+            "size": len(content)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ LoRA文件上传失败: {e}")
+        raise HTTPException(status_code=500, detail=f"LoRA文件上传失败: {str(e)}")
+
+
+@app.delete("/api/loras/{filename}")
+async def delete_lora(filename: str):
+    """删除LoRA文件"""
+    try:
+        from pathlib import Path
+        from config.settings import COMFYUI_MAIN_OUTPUT_DIR
+        
+        # 安全检查：确保文件名不包含路径遍历
+        if ".." in filename or "/" in filename or "\\" in filename:
+            raise HTTPException(status_code=400, detail="无效的文件名")
+        
+        lora_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras")
+        file_path = lora_dir / filename
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="LoRA文件不存在")
+        
+        # 删除文件
+        file_path.unlink()
+        
+        print(f"✅ LoRA文件删除成功: {file_path}")
+        
+        return {
+            "message": "LoRA文件删除成功",
+            "filename": filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ LoRA文件删除失败: {e}")
+        raise HTTPException(status_code=500, detail=f"LoRA文件删除失败: {str(e)}")
+
+
 # 注册放大服务路由
 app.include_router(upscale_router)
 
@@ -176,7 +331,9 @@ async def generate_image(
     count: int = Form(DEFAULT_COUNT),
     size: str = Form(DEFAULT_IMAGE_SIZE),
     steps: int = Form(DEFAULT_STEPS),
-    seed: Optional[int] = Form(None)
+    seed: Optional[int] = Form(None),
+    model: str = Form("flux1-dev"),  # 新增模型选择参数
+    loras: Optional[str] = Form(None)  # JSON字符串格式的LoRA配置
 ):
     """生成图像API"""
     try:
@@ -225,16 +382,39 @@ async def generate_image(
         else:
             print("📸 无参考图像，使用无参考图模式")
         
+        # 处理LoRA配置
+        lora_configs = []
+        if loras:
+            try:
+                import json
+                lora_data = json.loads(loras)
+                if isinstance(lora_data, list):
+                    # 验证LoRA配置
+                    for lora in lora_data:
+                        if isinstance(lora, dict) and "name" in lora:
+                            lora_configs.append(lora)
+                    print(f"🎨 解析到 {len(lora_configs)} 个LoRA配置")
+                else:
+                    print("⚠️ LoRA配置格式错误，应为数组格式")
+            except json.JSONDecodeError as e:
+                print(f"❌ LoRA配置JSON解析失败: {e}")
+            except Exception as e:
+                print(f"❌ LoRA配置处理失败: {e}")
+        
         # 准备参数
         parameters = {
             "count": count,
             "size": size,
             "steps": steps,
-            "seed": seed
+            "seed": seed,
+            "model": model,  # 添加模型参数
+            "loras": lora_configs
         }
         
         print(f"🔍 接收到生成请求: description='{description[:50]}...', count={count}, size={size}, steps={steps}")
         print(f"📊 参数详情: {parameters}")
+        if lora_configs:
+            print(f"🎨 LoRA配置: {lora_configs}")
         
         # 创建任务
         task_id = await task_manager.create_task(

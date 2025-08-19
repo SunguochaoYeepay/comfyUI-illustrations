@@ -106,7 +106,7 @@ class ModelManager:
             unet_file="qwen_image_edit_fp8_e4m3fn.safetensors",  # 在diffusion_models目录
             clip_file="qwen_2.5_vl_7b_fp8_scaled.safetensors",  # 在text_encoders目录
             vae_file="qwen_image_vae.safetensors",  # 在vae目录
-            template_path="qwen_workflow_template.json",
+            template_path="workflows/qwen_image_generation_workflow.json",  # 使用workflows目录下的标准工作流
             description="千问图像模型，支持高质量图像生成"
         )
         

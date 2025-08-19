@@ -326,6 +326,12 @@
      return
    }
    
+   // 检查LoRA兼容性
+   if (!isLoraCompatible(lora.name)) {
+     message.warning(`LoRA "${lora.name}" 与当前模型不兼容，已跳过`)
+     return
+   }
+   
    const newLora = {
      name: lora.name,
      strength_model: 1.0,
@@ -337,6 +343,21 @@
    selectedLoras.value = [...selectedLoras.value, newLora]
    console.log('✅ 添加LoRA:', newLora)
    console.log('📋 当前已选择的LoRA数量:', selectedLoras.value.length)
+ }
+
+ // 检查LoRA兼容性
+ const isLoraCompatible = (loraName) => {
+   const loraNameLower = loraName.toLowerCase()
+   
+   if (localModel.value.includes('flux')) {
+     // Flux模型：排除Qwen相关的LoRA
+     return !['qwen', '千问', 'qwen2'].some(keyword => loraNameLower.includes(keyword))
+   } else if (localModel.value.includes('qwen')) {
+     // Qwen模型：排除明确为Flux的LoRA
+     return !['flux', 'kontext', 'sdxl'].some(keyword => loraNameLower.includes(keyword))
+   }
+   
+   return true
  }
 
  const removeLora = (index) => {
@@ -378,7 +399,7 @@
      // 清空已选择的LoRA，因为可能不兼容
      if (selectedLoras.value.length > 0) {
        selectedLoras.value = []
-       message.info('模型已切换，已清空之前选择的LoRA')
+       message.info('模型已切换，已清空之前选择的LoRA（LoRA类型不兼容）')
      }
      // 刷新LoRA列表
      fetchLoras()

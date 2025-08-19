@@ -68,7 +68,8 @@ class ServiceManager:
         """获取工作流模板（懒加载）"""
         if self._workflow_template is None:
             print("📋 初始化工作流模板...")
-            self._workflow_template = WorkflowTemplate("./flux_kontext_dev_basic.json")
+            # 不指定具体模板，让WorkflowTemplate根据模型动态选择
+            self._workflow_template = WorkflowTemplate()
             print("✅ 工作流模板初始化完成")
         return self._workflow_template
     

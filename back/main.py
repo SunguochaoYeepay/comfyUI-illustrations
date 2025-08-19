@@ -146,9 +146,9 @@ async def get_available_loras(model: str = Query("flux1-dev", description="基�
                 if any(keyword in lora_name.lower() for keyword in ['qwen', '千问', 'qwen2']):
                     is_compatible = False
             elif model_config.model_type == ModelType.QWEN:
-                # Qwen模型：优先选择Qwen相关的LoRA，但也兼容通用LoRA
-                # 这里可以根据需要调整过滤逻辑
-                pass
+                # Qwen模型：优先选择Qwen相关的LoRA，排除明确为Flux的LoRA
+                if any(keyword in lora_name.lower() for keyword in ['flux', 'kontext', 'sdxl']):
+                    is_compatible = False
             
             if is_compatible:
                 lora_files.append({

@@ -4,18 +4,19 @@ services:
   # 后端API服务（开发环境）
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./back
+      dockerfile: Dockerfile.dev
     container_name: yeepay-backend-dev
     ports:
-      - "9000:9000"
-
+      - "9001:9000"
     environment:
       - ENVIRONMENT=development
       - HOST=0.0.0.0
       - PORT=9000
       - COMFYUI_URL=http://host.docker.internal:8188
       - COMFYUI_OUTPUT_DIR=/app/comfyui/output/yeepay
+      - COMFYUI_MAIN_OUTPUT_DIR=/app/comfyui/output
+      - COMFYUI_INPUT_DIR=/app/comfyui/input
       - COMFYUI_TIMEOUT=300
       - MAX_CONCURRENT_TASKS=3
       - CORS_ORIGINS=*
@@ -23,28 +24,42 @@ services:
       - LOG_LEVEL=DEBUG
       - OLLAMA_URL=http://host.docker.internal:11434
     networks:
-      - yeepay-dev-network
+      - yeepay-network
     volumes:
-      - yeepay-dev-uploads:/app/uploads
-      - yeepay-dev-outputs:/app/outputs
-      - yeepay-dev-database:/app/tasks.db
+      - ./back:/app
+      - yeepay-uploads-dev:/app/uploads
+      - yeepay-outputs-dev:/app/outputs
+      - yeepay-database-dev:/app/data
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input:/app/comfyui/input
-
+      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras:/app/comfyui/models/loras
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000", "--reload"]
+
+  # 前端服务（开发环境）
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: yeepay-frontend-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - yeepay-network
+    restart: unless-stopped
+    command: ["npm", "run", "dev"]
 
 networks:
-  yeepay-dev-network:
+  yeepay-network:
     driver: bridge
 
 volumes:
-  yeepay-dev-uploads:
-  yeepay-dev-outputs:
-  yeepay-dev-database:
+  yeepay-uploads-dev:
+  yeepay-outputs-dev:
+  yeepay-database-dev:

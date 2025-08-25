@@ -4,12 +4,11 @@ services:
   # 后端API服务
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./back
+      dockerfile: Dockerfile
     container_name: yeepay-backend
     ports:
       - "9001:9000"
-
     environment:
       - ENVIRONMENT=production
       - HOST=0.0.0.0
@@ -34,7 +33,6 @@ services:
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input:/app/comfyui/input
       - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras:/app/comfyui/models/loras
-
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
@@ -43,22 +41,26 @@ services:
       retries: 3
       start_period: 40s
 
-
-
-  # 统一Web服务（前端+nginx）
-  web:
-    image: nginx:alpine
-    container_name: yeepay-web
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: yeepay-frontend
     ports:
       - "3000:80"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./frontend/dist:/usr/share/nginx/html
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - yeepay-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   yeepay-network:

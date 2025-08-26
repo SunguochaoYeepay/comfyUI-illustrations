@@ -5,6 +5,8 @@
 负责创建和自定义多种模型的工作流
 """
 
+import json
+from pathlib import Path
 from typing import Any, Dict
 
 from core.model_manager import get_model_config, ModelType
@@ -21,6 +23,22 @@ class WorkflowTemplate:
             template_path: 模板文件路径（可选，保留兼容性）
         """
         self.template_path = template_path
+        self.template = self._load_template() if template_path else {}
+    
+    def _load_template(self) -> Dict[str, Any]:
+        """加载工作流模板文件"""
+        try:
+            if self.template_path:
+                template_file = Path(self.template_path)
+                if template_file.exists():
+                    with open(template_file, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                else:
+                    print(f"⚠️ 模板文件不存在: {self.template_path}")
+            return {}
+        except Exception as e:
+            print(f"❌ 加载模板文件失败: {e}")
+            return {}
     
     def customize_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any], model_name: str = "flux1-dev"):
         """自定义工作流参数 - 支持多种模型

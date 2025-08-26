@@ -47,50 +47,22 @@ services:
           memory: 512M
           cpus: '0.5'
 
-  # 前端服务
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: yeepay-frontend-prod
-    expose:
-      - "80"  # 只暴露给内部网络，不直接对外
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - yeepay-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.25'
+  # 前端服务已删除，静态文件由 Nginx 直接处理
 
-  # Nginx 反向代理 - 统一入口
+  # Nginx 反向代理 - 统一入口（包含前端静态文件）
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: yeepay-nginx-prod
     ports:
       - "80:80"      # HTTP
       - "443:443"    # HTTPS
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - yeepay-logs:/var/log/nginx
     depends_on:
       - backend
-      - frontend
     networks:
       - yeepay-network
     restart: unless-stopped

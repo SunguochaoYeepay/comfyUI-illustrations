@@ -39,8 +39,12 @@ class ModelConfig:
     def _check_availability(self) -> bool:
         """检查模型文件是否可用"""
         try:
-            # 检查模型文件是否存在
-            model_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models")
+            # 根据环境确定模型目录路径
+            env = os.getenv("ENVIRONMENT", "local")
+            if env == "production":
+                model_dir = Path("/app/comfyui/models")
+            else:
+                model_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models")
             
             # 根据模型类型确定文件路径
             if self.model_type == ModelType.FLUX:
@@ -140,6 +144,34 @@ class ModelManager:
         if model and model.available:
             return model.template_path
         return None
+    
+    def get_available_loras(self) -> List[Dict[str, Any]]:
+        """获取可用的 LoRA 文件列表"""
+        try:
+            # 根据环境确定 LoRA 目录路径
+            env = os.getenv("ENVIRONMENT", "local")
+            if env == "production":
+                lora_dir = Path("/app/comfyui/models/loras")
+            else:
+                lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
+            
+            if not lora_dir.exists():
+                return []
+            
+            loras = []
+            for file_path in lora_dir.iterdir():
+                if file_path.is_file() and file_path.suffix.lower() in ['.safetensors', '.ckpt', '.pt']:
+                    loras.append({
+                        "name": file_path.name,
+                        "path": str(file_path),
+                        "size": file_path.stat().st_size,
+                        "type": file_path.suffix.lower()
+                    })
+            
+            return loras
+        except Exception as e:
+            print(f"Error getting LoRAs: {e}")
+            return []
 
 
 # 全局模型管理器实例
@@ -164,3 +196,8 @@ def get_default_model() -> ModelConfig:
 def is_model_available(model_name: str) -> bool:
     """检查模型是否可用"""
     return model_manager.is_model_available(model_name)
+
+
+def get_available_loras() -> List[Dict[str, Any]]:
+    """获取可用的 LoRA 文件列表"""
+    return model_manager.get_available_loras()

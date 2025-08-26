@@ -6,6 +6,7 @@ YeePay AI图像生成服务 - 后端主程序
 """
 
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -127,8 +128,9 @@ async def get_available_loras(model: str = Query("flux1-dev", description="基�
             print(f"⚠️ 模型 {model} 不存在，使用默认Flux模型")
             model_config = get_model_config("flux1-dev")
 
-        # LoRA文件通常存放在ComfyUI的models/loras目录
-        lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
+        # 使用统一配置的LoRA目录
+        from config.settings import COMFYUI_LORAS_DIR
+        lora_dir = COMFYUI_LORAS_DIR
         
         if not lora_dir.exists():
             print(f"📁 LoRA目录不存在: {lora_dir}")
@@ -191,8 +193,9 @@ async def upload_lora(file: UploadFile = File(...)):
         if len(content) > 100 * 1024 * 1024:  # 100MB
             raise HTTPException(status_code=400, detail="LoRA文件大小不能超过100MB")
         
-        # 保存到LoRA目录
-        lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
+        # 使用统一配置的LoRA目录
+        from config.settings import COMFYUI_LORAS_DIR
+        lora_dir = COMFYUI_LORAS_DIR
         lora_dir.mkdir(parents=True, exist_ok=True)
         
         file_path = lora_dir / file.filename

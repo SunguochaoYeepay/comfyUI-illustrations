@@ -28,11 +28,15 @@ if ENVIRONMENT == "local":
     COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "E:/AI-Image/ComfyUI-aki-v1.4/output/yeepay"))
     COMFYUI_MAIN_OUTPUT_DIR = Path(os.getenv("COMFYUI_MAIN_OUTPUT_DIR", "E:/AI-Image/ComfyUI-aki-v1.4/output"))
     COMFYUI_INPUT_DIR = Path(os.getenv("COMFYUI_INPUT_DIR", "E:/AI-Image/ComfyUI-aki-v1.4/input"))
+    COMFYUI_MODELS_DIR = Path(os.getenv("COMFYUI_MODELS_DIR", "E:/AI-Image/ComfyUI-aki-v1.4/models"))
+    COMFYUI_LORAS_DIR = Path(os.getenv("COMFYUI_LORAS_DIR", "E:/AI-Image/ComfyUI-aki-v1.4/models/loras"))
 else:
     # Docker环境
     COMFYUI_OUTPUT_DIR = Path(os.getenv("COMFYUI_OUTPUT_DIR", "/app/comfyui/output/yeepay"))
     COMFYUI_MAIN_OUTPUT_DIR = Path(os.getenv("COMFYUI_MAIN_OUTPUT_DIR", "/app/comfyui/output"))
     COMFYUI_INPUT_DIR = Path(os.getenv("COMFYUI_INPUT_DIR", "/app/comfyui/input"))
+    COMFYUI_MODELS_DIR = Path(os.getenv("COMFYUI_MODELS_DIR", "/app/comfyui/models"))
+    COMFYUI_LORAS_DIR = Path(os.getenv("COMFYUI_LORAS_DIR", "/app/comfyui/models/loras"))
 
 # =============================================================================
 # 应用目录配置

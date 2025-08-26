@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from enum import Enum
 
-from config.settings import COMFYUI_MAIN_OUTPUT_DIR
+from config.settings import COMFYUI_MAIN_OUTPUT_DIR, COMFYUI_MODELS_DIR
 
 
 class ModelType(Enum):
@@ -39,12 +39,8 @@ class ModelConfig:
     def _check_availability(self) -> bool:
         """检查模型文件是否可用"""
         try:
-            # 根据环境确定模型目录路径
-            env = os.getenv("ENVIRONMENT", "local")
-            if env == "production":
-                model_dir = Path("/app/comfyui/models")
-            else:
-                model_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models")
+            # 使用统一配置的模型目录路径
+            model_dir = COMFYUI_MODELS_DIR
             
             # 根据模型类型确定文件路径
             if self.model_type == ModelType.FLUX:
@@ -148,12 +144,9 @@ class ModelManager:
     def get_available_loras(self) -> List[Dict[str, Any]]:
         """获取可用的 LoRA 文件列表"""
         try:
-            # 根据环境确定 LoRA 目录路径
-            env = os.getenv("ENVIRONMENT", "local")
-            if env == "production":
-                lora_dir = Path("/app/comfyui/models/loras")
-            else:
-                lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
+            # 使用统一配置的 LoRA 目录路径
+            from config.settings import COMFYUI_LORAS_DIR
+            lora_dir = COMFYUI_LORAS_DIR
             
             if not lora_dir.exists():
                 return []

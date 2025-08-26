@@ -128,7 +128,7 @@ async def get_available_loras(model: str = Query("flux1-dev", description="基�
             model_config = get_model_config("flux1-dev")
 
         # LoRA文件通常存放在ComfyUI的models/loras目录
-        lora_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras")
+        lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
         
         if not lora_dir.exists():
             print(f"📁 LoRA目录不存在: {lora_dir}")
@@ -192,7 +192,7 @@ async def upload_lora(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="LoRA文件大小不能超过100MB")
         
         # 保存到LoRA目录
-        lora_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras")
+        lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
         lora_dir.mkdir(parents=True, exist_ok=True)
         
         file_path = lora_dir / file.filename
@@ -231,7 +231,7 @@ async def delete_lora(filename: str):
         if ".." in filename or "/" in filename or "\\" in filename:
             raise HTTPException(status_code=400, detail="无效的文件名")
         
-        lora_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras")
+        lora_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models/loras")
         file_path = lora_dir / filename
         
         if not file_path.exists():

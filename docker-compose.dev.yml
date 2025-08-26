@@ -30,10 +30,10 @@ services:
       - yeepay-uploads-dev:/app/uploads
       - yeepay-outputs-dev:/app/outputs
       - yeepay-database-dev:/app/data
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input:/app/comfyui/input
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras:/app/comfyui/models/loras
+      - E:/AI-Image/ComfyUI-aki-v1.4/output:/app/comfyui/output
+      - E:/AI-Image/ComfyUI-aki-v1.4/output/yeepay:/app/comfyui/output/yeepay
+      - E:/AI-Image/ComfyUI-aki-v1.4/input:/app/comfyui/input
+      - E:/AI-Image/ComfyUI-aki-v1.4/ComfyUI/models/loras:/app/comfyui/models/loras
     restart: unless-stopped
     command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000", "--reload"]
 

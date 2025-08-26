@@ -34,7 +34,7 @@ class TranslationClient:
             ollama_url: Ollama服务地址，默认为 http://localhost:11434
         """
         self.ollama_url = ollama_url or OLLAMA_URL or "http://localhost:11434"
-        self.model_name = "qwen2.5:7b"  # 使用已安装的qwen2.5:7b模型
+        self.model_name = "qwen2.5:3b-instruct"  # 使用已安装的qwen2.5:3b-instruct模型
         self.timeout = 30  # 30秒超时
         
         logger.info(f"🔧 翻译客户端初始化完成")

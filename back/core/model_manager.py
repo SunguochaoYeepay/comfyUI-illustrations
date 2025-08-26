@@ -40,7 +40,7 @@ class ModelConfig:
         """检查模型文件是否可用"""
         try:
             # 检查模型文件是否存在
-            model_dir = Path("D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models")
+            model_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/models")
             
             # 根据模型类型确定文件路径
             if self.model_type == ModelType.FLUX:

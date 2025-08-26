@@ -29,10 +29,10 @@ services:
       - yeepay-uploads:/app/uploads
       - yeepay-outputs:/app/outputs
       - yeepay-database:/app/data
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output:/app/comfyui/output
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/output/yeepay:/app/comfyui/output/yeepay
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/input:/app/comfyui/input
-      - D:/AI-Image/ComfyUI-aki-v1.6/ComfyUI/models/loras:/app/comfyui/models/loras
+      - E:/AI-Image/ComfyUI-aki-v1.4/output:/app/comfyui/output
+      - E:/AI-Image/ComfyUI-aki-v1.4/output/yeepay:/app/comfyui/output/yeepay
+      - E:/AI-Image/ComfyUI-aki-v1.4/input:/app/comfyui/input
+      - E:/AI-Image/ComfyUI-aki-v1.4/models/loras:/app/comfyui/models/loras
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]

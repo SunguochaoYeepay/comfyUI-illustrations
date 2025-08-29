@@ -657,8 +657,8 @@ onUnmounted(() => {
 
 .image-actions {
   display: flex;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: 8px;
+  padding: 12px 20px;
   border-bottom: 1px solid #444;
 }
 
@@ -670,7 +670,7 @@ onUnmounted(() => {
 }
 
 .info-header {
-  padding: 20px;
+  padding: 16px 20px;
 }
 
 .info-header h3 {
@@ -682,12 +682,12 @@ onUnmounted(() => {
 
 .info-content {
   flex: 1;
-  padding: 20px;
+  padding: 16px 20px;
   overflow-y: auto;
 }
 
 .info-item {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .info-item label {

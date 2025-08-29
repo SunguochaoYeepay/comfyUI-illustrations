@@ -249,12 +249,12 @@ const emit = defineEmits(['task-created'])
 .video-control-card {
   border-radius: 16px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  background: #1a1a1a;
-  border: 0px solid #333;
+  background: #2a2a2a;
+  border: 1px solid #444;
 }
 
 .video-control-card :deep(.ant-card-body) {
-  background: #1a1a1a;
+  background: #2a2a2a;
   color: #fff;
   padding: 16px;
 }
@@ -310,8 +310,8 @@ const emit = defineEmits(['task-created'])
 }
 
 .video-prompt-input {
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: #333;
+  border: 1px solid #555;
   color: #fff;
   border-radius: 8px;
   resize: vertical;
@@ -360,8 +360,8 @@ const emit = defineEmits(['task-created'])
 .video-fps-select {
   width: 80px;
   height: 32px;
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: #333;
+  border: 1px solid #555;
   border-radius: 6px;
   color: #fff;
   font-size: 12px;

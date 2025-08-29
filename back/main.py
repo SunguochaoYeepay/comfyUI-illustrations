@@ -608,6 +608,63 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
     
     return FileResponse(image_path)
 
+@app.get("/api/video/{task_id}")
+async def get_generated_video(task_id: str, filename: str = None):
+    """获取生成的视频"""
+    task = task_manager.get_task_status(task_id)
+    
+    if not task or task["status"] != "completed" or not task["result_path"]:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    
+    try:
+        # 尝试解析JSON格式的结果路径
+        import json
+        result_paths = json.loads(task["result_path"])
+        
+        # 如果指定了文件名，尝试查找匹配的文件
+        if filename:
+            if isinstance(result_paths, list):
+                # 在结果列表中查找匹配的视频文件名
+                found = False
+                for path in result_paths:
+                    if Path(path).name == filename or Path(path).name.endswith(f"/{filename}"):
+                        video_path = Path(path)
+                        found = True
+                        break
+                if not found:
+                    raise HTTPException(status_code=404, detail=f"指定的文件名 {filename} 不存在")
+            else:
+                # 单个结果，检查是否匹配
+                if Path(result_paths).name != filename and not Path(result_paths).name.endswith(f"/{filename}"):
+                    raise HTTPException(status_code=404, detail=f"指定的文件名 {filename} 不存在")
+                video_path = Path(result_paths)
+        else:
+            # 获取第一个视频文件
+            if isinstance(result_paths, list):
+                # 多个文件，查找第一个视频文件
+                video_path = None
+                for path in result_paths:
+                    if Path(path).suffix.lower() in ['.mp4', '.avi', '.mov', '.webm']:
+                        video_path = Path(path)
+                        break
+                if not video_path:
+                    raise HTTPException(status_code=404, detail="未找到视频文件")
+            else:
+                # 单个文件
+                video_path = Path(result_paths)
+    except (json.JSONDecodeError, TypeError):
+        # 如果不是JSON格式，按单个文件处理
+        video_path = Path(task["result_path"])
+    
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="视频文件不存在")
+    
+    # 检查文件扩展名是否为视频格式
+    if video_path.suffix.lower() not in ['.mp4', '.avi', '.mov', '.webm']:
+        raise HTTPException(status_code=400, detail="文件不是视频格式")
+    
+    return FileResponse(video_path, media_type="video/mp4")
+
 @app.get("/api/history")
 async def get_history(limit: int = 20, offset: int = 0, order: str = "asc", favorite_filter: str = None, time_filter: str = None):
     """获取历史记录"""

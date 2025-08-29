@@ -82,6 +82,16 @@ import { ref, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, VideoCameraOutlined, CloseOutlined } from '@ant-design/icons-vue'
 
+// API基础URL - 自动检测环境
+const API_BASE = (() => {
+  // 开发环境：指向后端9000端口
+  if (import.meta.env.DEV) {
+    return 'http://localhost:9000'
+  }
+  // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
+  return import.meta.env.VITE_API_BASE_URL || ''
+})()
+
 // Props
 const props = defineProps({
   referenceImage: {
@@ -160,7 +170,7 @@ const generateVideo = async () => {
     }
     
     // 发送请求
-    const response = await fetch('/api/generate-video', {
+    const response = await fetch(`${API_BASE}/api/generate-video`, {
       method: 'POST',
       body: formData
     })
@@ -173,7 +183,7 @@ const generateVideo = async () => {
     
     if (result.status === 'created') {
       message.success('视频生成任务已创建，请等待处理完成')
-      // 这里可以触发父组件的事件来更新任务列表
+      // 触发父组件的事件来更新任务列表
       emit('task-created', result.task_id)
     } else {
       throw new Error(result.message || '创建任务失败')
@@ -186,6 +196,8 @@ const generateVideo = async () => {
     generating.value = false
   }
 }
+
+
 
 // 定义事件
 const emit = defineEmits(['task-created'])

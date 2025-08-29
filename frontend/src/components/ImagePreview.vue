@@ -258,7 +258,7 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['close', 'navigate', 'upscale', 'refreshHistory'])
+const emit = defineEmits(['close', 'navigate', 'upscale', 'refreshHistory', 'video-task-created'])
 
 // 计算属性：判断是否为视频任务
 const isVideoTask = computed(() => {
@@ -354,7 +354,10 @@ const handleVideoTaskCreated = (taskId) => {
   message.success('视频生成任务已创建，请在任务列表中查看进度')
   videoGeneratorVisible.value = false
   
-  // 通知父组件刷新历史记录
+  // 通知父组件开始轮询视频任务状态
+  emit('video-task-created', taskId)
+  
+  // 同时刷新历史记录
   emit('refreshHistory')
 }
 

@@ -26,6 +26,7 @@
         @filter-change="handleFilterChange"
         @upscale="handleUpscale"
         @refreshHistory="loadHistory(1, false)"
+        @video-task-created="handleVideoTaskCreated"
       />
 
       <!-- 控制面板 -->
@@ -91,6 +92,11 @@ const currentScaleFactor = ref(2)
 const upscalingPrompt = ref('')
 const currentUpscaleTaskId = ref(null) // 当前放大任务ID
 // 移除了图片索引存储变量
+
+// 视频生成状态管理
+const isVideoGenerating = ref(false)
+const videoGeneratingProgress = ref(0)
+const currentVideoTaskId = ref(null) // 当前视频生成任务ID
 
 // 计算属性：只从历史记录获取图像用于展示
 const allImages = computed(() => {
@@ -852,6 +858,24 @@ const handleUpscale = async (imageData, scaleFactor) => {
   // 移除finally块，让pollUpscaleStatus函数来控制状态重置
 }
 
+// 处理视频任务创建
+const handleVideoTaskCreated = async (taskId) => {
+  console.log('🎬 ImageGenerator 接收到视频任务创建事件:', taskId)
+  try {
+    console.log('🎬 视频任务已创建，开始轮询状态:', taskId)
+    isVideoGenerating.value = true
+    currentVideoTaskId.value = taskId
+    
+    // 开始轮询视频任务状态
+    await pollVideoStatus(taskId)
+  } catch (error) {
+    console.error('❌ 视频任务处理失败:', error)
+    message.error('视频任务处理失败')
+    isVideoGenerating.value = false
+    currentVideoTaskId.value = null
+  }
+}
+
 // 轮询放大任务状态 - 强化版
 const pollUpscaleStatus = async (taskId) => {
   const maxAttempts = 180  // 增加到180次（6分钟）
@@ -965,6 +989,112 @@ const pollUpscaleStatus = async (taskId) => {
         isUpscaling.value = false
         currentUpscaleTaskId.value = null
         saveUpscaleState() // 清除localStorage中的状态
+      }
+    }
+  }
+  
+  await checkStatus()
+}
+
+// 轮询视频生成任务状态
+const pollVideoStatus = async (taskId) => {
+  const maxAttempts = 300  // 5分钟轮询
+  let attempts = 0
+  let consecutiveErrors = 0
+  
+  console.log(`🎬 开始轮询视频任务状态: ${taskId}`)
+  
+  const checkStatus = async () => {
+    try {
+      console.log(`🔍 检查视频任务状态 (${attempts + 1}/${maxAttempts}): ${taskId}`)
+      
+      const response = await fetch(`${API_BASE}/api/task/${taskId}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const status = await response.json()
+      consecutiveErrors = 0
+      
+      console.log(`📊 视频任务状态: ${JSON.stringify(status)}`)
+      
+      if (status.status === 'completed') {
+        console.log('✅ 视频生成完成！')
+        message.success('视频生成完成！')
+        
+        // 等待数据库更新
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 重新加载历史记录以显示最新的视频结果
+        console.log('🔄 视频生成完成，刷新历史记录...')
+        await loadHistory(1, false)
+        
+        // 强制刷新一次，确保显示最新状态
+        setTimeout(async () => {
+          console.log('🔄 二次刷新确保显示最新结果...')
+          await loadHistory(1, false)
+        }, 1000)
+        
+        // 第三次刷新确保万无一失
+        setTimeout(async () => {
+          console.log('🔄 三次刷新最终确认...')
+          await loadHistory(1, false)
+        }, 3000)
+        
+        // 重置视频生成状态
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+        return
+      } else if (status.status === 'failed') {
+        console.log('❌ 视频生成失败')
+        message.error('视频生成失败')
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+        return
+      }
+      
+      // 任务仍在处理中
+      attempts++
+      if (attempts < maxAttempts) {
+        setTimeout(checkStatus, 2000) // 2秒轮询
+      } else {
+        console.log('⏰ 视频轮询超时')
+        message.warning('视频生成任务超时，请稍后查看结果')
+        // 超时时也尝试刷新一次历史记录
+        await loadHistory(1, false)
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+      }
+    } catch (error) {
+      consecutiveErrors++
+      console.error(`❌ 检查视频状态失败 (连续错误: ${consecutiveErrors}):`, error)
+      
+      // 如果连续错误太多，可能是严重问题
+      if (consecutiveErrors >= 5) {
+        console.log('❌ 连续错误过多，终止视频轮询')
+        message.error('网络连接异常，请检查网络后手动刷新页面')
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+        return
+      }
+      
+      // 网络错误或临时问题，继续重试
+      attempts++
+      if (attempts < maxAttempts) {
+        console.log(`🔄 网络错误重试 (${attempts}/${maxAttempts})，${consecutiveErrors} 连续错误`)
+        setTimeout(checkStatus, 2000) // 网络错误时等待2秒再重试
+      } else {
+        console.log('❌ 重试次数用尽')
+        message.error('视频任务检查超时，请手动刷新页面查看结果')
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
       }
     }
   }

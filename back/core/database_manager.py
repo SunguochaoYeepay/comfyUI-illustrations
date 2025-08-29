@@ -298,29 +298,63 @@ class DatabaseManager:
                         # 生成任务的结果路径是JSON数组
                         result_paths = json.loads(task['result_path'])
                         if isinstance(result_paths, list):
-                            task['image_count'] = len(result_paths)
-                            task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
-                            # 为每个图片添加收藏状态
-                            task['images'] = []
-                            for i in range(len(result_paths)):
-                                is_favorited = self.get_image_favorite_status(task['id'], i)
-                                task['images'].append({
+                            # 检查是否为视频任务
+                            is_video_task = any(Path(path).suffix.lower() in ['.mp4', '.avi', '.mov', '.webm'] for path in result_paths)
+                            
+                            if is_video_task:
+                                # 视频任务
+                                task['image_count'] = 1
+                                task['image_urls'] = [f"/api/video/{task['id']}"]
+                                # 为视频添加收藏状态
+                                is_favorited = self.get_image_favorite_status(task['id'], 0)
+                                task['images'] = [{
                                     'task_id': task['id'],
-                                    'image_index': i,
-                                    'url': f"/api/image/{task['id']}?index={i}",
+                                    'image_index': 0,
+                                    'url': f"/api/video/{task['id']}",
                                     'isFavorited': is_favorited
-                                })
+                                }]
+                            else:
+                                # 图片任务
+                                task['image_count'] = len(result_paths)
+                                task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
+                                # 为每个图片添加收藏状态
+                                task['images'] = []
+                                for i in range(len(result_paths)):
+                                    is_favorited = self.get_image_favorite_status(task['id'], i)
+                                    task['images'].append({
+                                        'task_id': task['id'],
+                                        'image_index': i,
+                                        'url': f"/api/image/{task['id']}?index={i}",
+                                        'isFavorited': is_favorited
+                                    })
                         else:
-                            task['image_count'] = 1
-                            task['image_urls'] = [f"/api/image/{task['id']}"]
-                            # 为单个图片添加收藏状态
-                            is_favorited = self.get_image_favorite_status(task['id'], 0)
-                            task['images'] = [{
-                                'task_id': task['id'],
-                                'image_index': 0,
-                                'url': f"/api/image/{task['id']}",
-                                'isFavorited': is_favorited
-                            }]
+                            # 单个文件
+                            is_video_file = Path(result_paths).suffix.lower() in ['.mp4', '.avi', '.mov', '.webm']
+                            
+                            if is_video_file:
+                                # 单个视频文件
+                                task['image_count'] = 1
+                                task['image_urls'] = [f"/api/video/{task['id']}"]
+                                # 为视频添加收藏状态
+                                is_favorited = self.get_image_favorite_status(task['id'], 0)
+                                task['images'] = [{
+                                    'task_id': task['id'],
+                                    'image_index': 0,
+                                    'url': f"/api/video/{task['id']}",
+                                    'isFavorited': is_favorited
+                                }]
+                            else:
+                                # 单个图片文件
+                                task['image_count'] = 1
+                                task['image_urls'] = [f"/api/image/{task['id']}"]
+                                # 为单个图片添加收藏状态
+                                is_favorited = self.get_image_favorite_status(task['id'], 0)
+                                task['images'] = [{
+                                    'task_id': task['id'],
+                                    'image_index': 0,
+                                    'url': f"/api/image/{task['id']}",
+                                    'isFavorited': is_favorited
+                                }]
                 except:
                     task['image_count'] = 1
                     task['image_urls'] = [f"/api/image/{task['id']}"]

@@ -103,11 +103,22 @@
     
     <!-- 非完成状态的任务显示 -->
     <div v-else class="status-display">
-      <div v-if="group[0]?.status === 'processing'" class="status-card processing">
+      <!-- 视频生成任务使用专门的动画组件 -->
+      <VideoGeneratingState 
+        v-if="group[0]?.status === 'processing' && isVideoTask"
+        :progress="0"
+      />
+      <!-- 图片放大任务使用专门的动画组件 -->
+      <UpscalingState 
+        v-else-if="group[0]?.status === 'processing' && isUpscaleTask"
+        :scale-factor="2"
+        :progress="0"
+      />
+      <!-- 其他处理中任务使用简单状态 -->
+      <div v-else-if="group[0]?.status === 'processing'" class="status-card processing">
         <div class="status-icon">⏳</div>
         <div class="status-text">
-          <span v-if="isVideoTask">视频生成中，请稍候...</span>
-          <span v-else>图像生成中，请稍候...</span>
+          <span>图像生成中，请稍候...</span>
         </div>
       </div>
       <div v-else-if="group[0]?.status === 'failed'" class="status-card failed">
@@ -124,6 +135,8 @@
 <script setup>
 import { computed } from 'vue'
 import { DownloadOutlined, EyeOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons-vue'
+import VideoGeneratingState from './VideoGeneratingState.vue'
+import UpscalingState from './UpscalingState.vue'
 
 // Props
 const props = defineProps({
@@ -398,7 +411,7 @@ defineEmits([
 .status-display {
   padding: 20px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start; /* 改为左对齐 */
   align-items: center;
 }
 

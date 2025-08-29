@@ -1,51 +1,41 @@
 <template>
-  <div class="upscaling-state">
-    <div class="task-card">
-      <!-- 任务信息头部 -->
-      <div class="task-header">
-        <div class="task-info">
-          <p class="task-prompt">{{ `正在${scaleFactor}倍放大图片...` }}</p>
-          <p class="task-meta">使用UltimateSDUpscale算法</p>
+  <div class="video-generating-state">
+    <!-- 动画容器 -->
+    <div class="animation-container">
+      <div class="loading-placeholder">
+        <!-- 背景脉冲动画 -->
+        <div class="pulse-bg"></div>
+        
+        <!-- 粒子效果 -->
+        <div class="particles">
+          <div class="particle" v-for="i in 8" :key="i"></div>
         </div>
-      </div>
-      
-      <!-- 图片占位符 -->
-      <div class="image-container">
-        <div class="loading-placeholder">
-          <!-- 背景脉冲动画 -->
-          <div class="pulse-bg"></div>
-          
-          <!-- 粒子效果 -->
-          <div class="particles">
-            <div class="particle" v-for="i in 8" :key="i"></div>
+        
+        <!-- 中心旋转加载器 -->
+        <div class="center-loader">
+          <div class="loader-ring ring-1"></div>
+          <div class="loader-ring ring-2"></div>
+          <div class="loader-ring ring-3"></div>
+          <div class="loader-core">
+            <div class="core-icon">🎬</div>
           </div>
-          
-          <!-- 中心旋转加载器 -->
-          <div class="center-loader">
-            <div class="loader-ring ring-1"></div>
-            <div class="loader-ring ring-2"></div>
-            <div class="loader-ring ring-3"></div>
-            <div class="loader-core">
-              <div class="core-icon">🔍</div>
-            </div>
+        </div>
+        
+        <!-- 状态文字 -->
+        <div class="loading-text">
+          <div class="text-line">AI视频生成中</div>
+          <div class="dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
           </div>
-          
-          <!-- 状态文字 -->
-          <div class="loading-text">
-            <div class="text-line">AI放大中</div>
-            <div class="dots">
-              <span class="dot"></span>
-              <span class="dot"></span>
-              <span class="dot"></span>
-            </div>
-          </div>
-          
-          <!-- 进度信息 -->
-          <div class="progress-info">
-            <div class="progress-text">预计时间: {{ estimatedTime }}</div>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: progress + '%' }"></div>
-            </div>
+        </div>
+        
+        <!-- 进度信息 -->
+        <div class="progress-info">
+          <div class="progress-text">预计时间: {{ estimatedTime }}</div>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: progress + '%' }"></div>
           </div>
         </div>
       </div>
@@ -58,10 +48,6 @@ import { computed } from 'vue'
 
 // Props
 const props = defineProps({
-  scaleFactor: {
-    type: Number,
-    default: 2
-  },
   progress: {
     type: Number,
     default: 0
@@ -70,56 +56,27 @@ const props = defineProps({
 
 // 计算预计时间
 const estimatedTime = computed(() => {
-  const baseTime = props.scaleFactor * 30 // 基础时间：2倍=60秒，3倍=90秒，4倍=120秒
+  const baseTime = 120 // 基础时间：2分钟
   const remaining = Math.max(0, baseTime - (props.progress / 100) * baseTime)
   return `${Math.ceil(remaining)}秒`
 })
 </script>
 
 <style scoped>
-.upscaling-state {
-  margin-top: 20px;
+.video-generating-state {
+  width: 100%;
+  height: 200px; /* 与UpscalingState保持一致 */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* 左对齐 */
 }
 
-.task-card {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 20px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.task-header {
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.task-info {
-  flex: 1;
-}
-
-.task-prompt {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0 0 4px 0;
-  line-height: 1.4;
-}
-
-.task-meta {
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
-}
-
-.image-container {
+.animation-container {
   position: relative;
   width: 100%;
-  max-width: 200px;
+  max-width: 200px; /* 与UpscalingState保持一致 */
   margin: 0;
-  margin-left: 0; /* 确保左对齐 */
-  aspect-ratio: 1;
+  aspect-ratio: 1; /* 保持正方形比例 */
   border-radius: 12px;
   overflow: hidden;
 }
@@ -187,37 +144,37 @@ const estimatedTime = computed(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
 }
 
 .loader-ring {
   position: absolute;
   border-radius: 50%;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
 }
 
 .ring-1 {
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
   border-top-color: #667eea;
   animation: spin 2s linear infinite;
 }
 
 .ring-2 {
-  width: 45px;
-  height: 45px;
-  top: 7.5px;
-  left: 7.5px;
+  width: 60px;
+  height: 60px;
+  top: 10px;
+  left: 10px;
   border-right-color: #764ba2;
   animation: spin 1.5s linear infinite reverse;
 }
 
 .ring-3 {
-  width: 30px;
-  height: 30px;
-  top: 15px;
-  left: 15px;
+  width: 40px;
+  height: 40px;
+  top: 20px;
+  left: 20px;
   border-bottom-color: #f093fb;
   animation: spin 1s linear infinite;
 }
@@ -227,15 +184,15 @@ const estimatedTime = computed(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 15px;
-  height: 15px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .core-icon {
-  font-size: 12px;
+  font-size: 16px;
   animation: glow 2s ease-in-out infinite alternate;
 }
 
@@ -252,25 +209,29 @@ const estimatedTime = computed(() => {
 /* 状态文字 */
 .loading-text {
   position: absolute;
-  bottom: 45px;
-  left: 10px;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 10;
   color: rgba(255, 255, 255, 0.8);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .text-line {
-  margin-bottom: 3px;
-  font-weight: 500;
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 
 .dots {
   display: flex;
-  gap: 2px;
+  justify-content: center;
+  gap: 3px;
 }
 
 .dot {
-  width: 3px;
-  height: 3px;
+  width: 4px;
+  height: 4px;
   background: rgba(255, 255, 255, 0.6);
   border-radius: 50%;
   animation: blink 1.4s ease-in-out infinite;
@@ -288,30 +249,32 @@ const estimatedTime = computed(() => {
 /* 进度信息 */
 .progress-info {
   position: absolute;
-  bottom: 10px;
-  left: 10px;
-  right: 10px;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  z-index: 10;
   color: rgba(255, 255, 255, 0.8);
 }
 
 .progress-text {
-  font-size: 9px;
-  margin-bottom: 6px;
+  font-size: 12px;
+  margin-bottom: 8px;
   text-align: center;
 }
 
 .progress-bar {
   width: 100%;
-  height: 3px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
-  border-radius: 2px;
+  border-radius: 3px;
   transition: width 0.3s ease;
   animation: shimmer 2s ease-in-out infinite;
 }

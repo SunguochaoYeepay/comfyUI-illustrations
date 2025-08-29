@@ -150,6 +150,7 @@
       @navigate="handleImageNavigate"
       @upscale="handleUpscaleFromPreview"
       @refreshHistory="handleRefreshHistory"
+      @video-task-created="handleVideoTaskCreated"
     />
     </div>
   </div>
@@ -220,14 +221,15 @@ const props = defineProps({
 // Emits
 const emit = defineEmits([
   'editImage',
-  'regenerateImage', 
+  'regenerateImage',
   'deleteImage',
   'downloadImage',
   'loadMore',
   'toggleFavorite',
   'filterChange',
   'upscale',
-  'refreshHistory'
+  'refreshHistory',
+  'video-task-created'
 ])
 
 // 筛选器相关
@@ -408,6 +410,12 @@ const closePreview = () => {
 // 处理从预览组件触发的放大请求
 const handleUpscaleFromPreview = (imageData, scaleFactor) => {
   emit('upscale', imageData, scaleFactor)
+}
+
+// 处理视频任务创建
+const handleVideoTaskCreated = (taskId) => {
+  console.log('🎬 ImageGallery 接收到视频任务创建事件:', taskId)
+  emit('video-task-created', taskId)
 }
 
 // 处理刷新历史记录

@@ -149,6 +149,7 @@
       @close="closePreview"
       @navigate="handleImageNavigate"
       @upscale="handleUpscaleFromPreview"
+      @refreshHistory="handleRefreshHistory"
     />
     </div>
   </div>
@@ -225,7 +226,8 @@ const emit = defineEmits([
   'loadMore',
   'toggleFavorite',
   'filterChange',
-  'upscale'
+  'upscale',
+  'refreshHistory'
 ])
 
 // 筛选器相关
@@ -406,6 +408,11 @@ const closePreview = () => {
 // 处理从预览组件触发的放大请求
 const handleUpscaleFromPreview = (imageData, scaleFactor) => {
   emit('upscale', imageData, scaleFactor)
+}
+
+// 处理刷新历史记录
+const handleRefreshHistory = () => {
+  emit('refreshHistory')
 }
 
 // 处理收藏切换

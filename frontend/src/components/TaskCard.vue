@@ -3,11 +3,23 @@
     <!-- 任务信息头部 -->
     <div class="task-header">
       <div class="task-info">
-        <p class="task-prompt">{{ group[0]?.prompt || '无提示词' }} 
+        <p class="task-prompt">
+          <span v-if="isVideoTask" class="video-icon">🎬</span>
+          <span v-else-if="isUpscaleTask" class="upscale-icon">🔍</span>
+          {{ group[0]?.prompt || '无提示词' }} 
           <span class="task-meta">
-            <span v-if="group[0]?.status === 'completed'">{{ group.length }}张图片</span>
-            <span v-else-if="group[0]?.status === 'processing'" class="status-processing">生成中...</span>
-            <span v-else-if="group[0]?.status === 'failed'" class="status-failed">生成失败</span>
+            <span v-if="group[0]?.status === 'completed'">
+              <span v-if="isVideoTask">1个视频</span>
+              <span v-else>{{ group.length }}张图片</span>
+            </span>
+            <span v-else-if="group[0]?.status === 'processing'" class="status-processing">
+              <span v-if="isVideoTask">视频生成中...</span>
+              <span v-else>生成中...</span>
+            </span>
+            <span v-else-if="group[0]?.status === 'failed'" class="status-failed">
+              <span v-if="isVideoTask">视频生成失败</span>
+              <span v-else>生成失败</span>
+            </span>
             · {{ new Date(group[0]?.createdAt).toLocaleString() }}
           </span>
         </p>
@@ -15,8 +27,8 @@
       <div class="task-actions">
         <!-- 操作按钮 -->
         <div class="action-buttons">
-          <!-- 只有非放大任务才显示重新编辑和再次生成按钮 -->
-          <template v-if="!isUpscaleTask">
+          <!-- 只有非放大任务和非视频任务才显示重新编辑和再次生成按钮 -->
+          <template v-if="!isUpscaleTask && !isVideoTask">
             <a-button type="text" size="small" @click.stop="$emit('editImage', group[0])" class="action-btn">
               重新编辑
             </a-button>
@@ -33,52 +45,77 @@
     
     <!-- 图片网格或状态显示 -->
     <div v-if="group.length > 0 && group[0]?.status === 'completed'" class="images-grid" :data-count="group.length">
-      <!-- 显示所有图片 -->
-      <div
-        v-for="(image, index) in group"
-        :key="index"
-        class="image-item"
-      >
-        <!-- 图像容器 -->
-        <div class="image-container" @click="$emit('previewImage', image)">
-          <img :src="image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
-          
-          <!-- 图片操作悬浮层 -->
-          <div class="image-overlay">
-            <a-tooltip title="预览图片">
-              <a-button 
-                type="text" 
-                shape="circle" 
-                class="overlay-btn preview-btn" 
-                @click.stop="$emit('previewImage', image)"
-              >
-                <template #icon><EyeOutlined /></template>
-              </a-button>
-            </a-tooltip>
-            <a-tooltip :title="image.isFavorited ? '取消收藏' : '收藏图片'">
-              <a-button 
-                type="text" 
-                shape="circle" 
-                :class="['overlay-btn', 'favorite-btn', { 'favorited': image.isFavorited }]" 
-                @click.stop="$emit('toggleFavorite', image)"
-              >
-                <template #icon><HeartOutlined v-if="!image.isFavorited" /><HeartFilled v-else /></template>
-              </a-button>
-            </a-tooltip>
+      <!-- 视频任务特殊显示 -->
+      <div v-if="isVideoTask" class="video-display">
+        <div class="video-container" @click="$emit('previewImage', group[0])">
+          <img 
+            :src="group[0].referenceImage || group[0].thumbnail || group[0].url" 
+            class="video-preview" 
+            alt="视频预览"
+          />
+          <div class="video-overlay">
+            <div class="video-info">
+              <span class="video-title">🎬 点击查看视频</span>
+            </div>
           </div>
         </div>
       </div>
+      
+      <!-- 图片任务正常显示 -->
+      <template v-else>
+        <!-- 显示所有图片 -->
+        <div
+          v-for="(image, index) in group"
+          :key="index"
+          class="image-item"
+        >
+          <!-- 图像容器 -->
+          <div class="image-container" @click="$emit('previewImage', image)">
+            <img :src="image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
+            
+            <!-- 图片操作悬浮层 -->
+            <div class="image-overlay">
+              <a-tooltip title="预览图片">
+                <a-button 
+                  type="text" 
+                  shape="circle" 
+                  class="overlay-btn preview-btn" 
+                  @click.stop="$emit('previewImage', image)"
+                >
+                  <template #icon><EyeOutlined /></template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip :title="image.isFavorited ? '取消收藏' : '收藏图片'">
+                <a-button 
+                  type="text" 
+                  shape="circle" 
+                  :class="['overlay-btn', 'favorite-btn', { 'favorited': image.isFavorited }]" 
+                  @click.stop="$emit('toggleFavorite', image)"
+                >
+                  <template #icon><HeartOutlined v-if="!image.isFavorited" /><HeartFilled v-else /></template>
+                </a-button>
+              </a-tooltip>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
     
     <!-- 非完成状态的任务显示 -->
     <div v-else class="status-display">
       <div v-if="group[0]?.status === 'processing'" class="status-card processing">
         <div class="status-icon">⏳</div>
-        <div class="status-text">图像生成中，请稍候...</div>
+        <div class="status-text">
+          <span v-if="isVideoTask">视频生成中，请稍候...</span>
+          <span v-else>图像生成中，请稍候...</span>
+        </div>
       </div>
       <div v-else-if="group[0]?.status === 'failed'" class="status-card failed">
         <div class="status-icon">❌</div>
-        <div class="status-text">生成失败，请重试</div>
+        <div class="status-text">
+          <span v-if="isVideoTask">视频生成失败，请重试</span>
+          <span v-else>生成失败，请重试</span>
+        </div>
       </div>
     </div>
   </div>
@@ -108,6 +145,60 @@ const isUpscaleTask = computed(() => {
     if (firstImage.url && firstImage.url.includes('/api/upscale/')) {
       return true
     }
+  }
+  return false
+})
+
+// 计算属性：判断是否为视频生成任务
+const isVideoTask = computed(() => {
+  if (props.group && props.group.length > 0) {
+    const firstImage = props.group[0]
+    
+    // 调试信息
+    console.log('🔍 检查任务类型:', {
+      prompt: firstImage.prompt,
+      url: firstImage.url,
+      result_path: firstImage.result_path,
+      model: firstImage.model
+    })
+    
+    // 通过描述来判断是否为视频生成任务
+    if (firstImage.prompt && firstImage.prompt.includes('视频生成')) {
+      console.log('✅ 通过描述识别为视频任务')
+      return true
+    }
+    
+    // 通过URL路径判断
+    if (firstImage.url && firstImage.url.includes('/api/generate-video')) {
+      console.log('✅ 通过URL路径识别为视频任务')
+      return true
+    }
+    
+    // 通过文件扩展名判断
+    if (firstImage.url && (firstImage.url.endsWith('.mp4') || firstImage.url.endsWith('.avi') || firstImage.url.endsWith('.mov'))) {
+      console.log('✅ 通过URL扩展名识别为视频任务')
+      return true
+    }
+    
+    // 通过文件名判断（包含video关键词）
+    if (firstImage.url && firstImage.url.toLowerCase().includes('video')) {
+      console.log('✅ 通过URL关键词识别为视频任务')
+      return true
+    }
+    
+    // 通过result_path判断（后端返回的路径）
+    if (firstImage.result_path && (firstImage.result_path.endsWith('.mp4') || firstImage.result_path.endsWith('.avi') || firstImage.result_path.endsWith('.mov'))) {
+      console.log('✅ 通过result_path扩展名识别为视频任务')
+      return true
+    }
+    
+    // 通过result_path判断（包含video关键词）
+    if (firstImage.result_path && firstImage.result_path.toLowerCase().includes('video')) {
+      console.log('✅ 通过result_path关键词识别为视频任务')
+      return true
+    }
+    
+    console.log('❌ 未识别为视频任务')
   }
   return false
 })
@@ -352,5 +443,67 @@ defineEmits([
 .status-failed {
   color: #f44336;
   font-weight: 500;
+}
+
+/* 视频任务特殊样式 */
+.video-display {
+  aspect-ratio: 1; /* 改为1:1，与图片任务保持一致 */
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.video-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 12px;
+}
+
+.video-container:hover .video-overlay {
+  opacity: 1;
+}
+
+.video-info {
+  text-align: center;
+}
+
+.video-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+/* 任务类型图标样式 */
+.video-icon, .upscale-icon {
+  margin-right: 8px;
+  font-size: 16px;
 }
 </style>

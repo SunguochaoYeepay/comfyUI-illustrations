@@ -106,6 +106,12 @@ class TaskManager:
             
             # 获取生成数量
             count = int(parameters.get("count", 1))
+            
+            # 对于Wan视频模型，count应该始终为1
+            if model_name.startswith("wan"):
+                count = 1
+                print(f"🎬 Wan视频模型，设置count为1")
+            
             result_paths = []
             
             print(f"🎯 开始生成 {count} 张图片...")
@@ -163,15 +169,32 @@ class TaskManager:
             if result_paths:
                 print(f"🔍 最终结果: count={count}, result_paths数量={len(result_paths)}, paths={result_paths}")
                 
-                if len(result_paths) == 1:
-                    # 单张图片，直接存储路径
-                    print(f"💾 保存单张图片: {result_paths[0]}")
-                    self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
+                # 对于Wan视频模型，查找视频文件
+                if model_name.startswith("wan"):
+                    print(f"🎬 处理视频生成结果...")
+                    # 查找视频文件
+                    video_paths = []
+                    for path in result_paths:
+                        if path.endswith(('.mp4', '.avi', '.mov', '.webm')):
+                            video_paths.append(path)
+                    
+                    if video_paths:
+                        print(f"🎬 找到视频文件: {video_paths}")
+                        self.db.update_task_status(task_id, "completed", result_path=video_paths[0])
+                    else:
+                        print(f"❌ 未找到视频文件")
+                        self.db.update_task_status(task_id, "failed", error="No video generated")
                 else:
-                    # 多张图片，将路径合并为JSON字符串存储
-                    result_data = json.dumps(result_paths)
-                    print(f"💾 保存多张图片JSON: {result_data}")
-                    self.db.update_task_status(task_id, "completed", result_path=result_data)
+                    # 图片生成的处理逻辑
+                    if len(result_paths) == 1:
+                        # 单张图片，直接存储路径
+                        print(f"💾 保存单张图片: {result_paths[0]}")
+                        self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
+                    else:
+                        # 多张图片，将路径合并为JSON字符串存储
+                        result_data = json.dumps(result_paths)
+                        print(f"💾 保存多张图片JSON: {result_data}")
+                        self.db.update_task_status(task_id, "completed", result_path=result_data)
             else:
                 error_msg = "No output generated"
                 print(f"❌ {error_msg}")
@@ -217,37 +240,109 @@ class TaskManager:
                         print(f"📁 ComfyUI输出目录: {COMFYUI_MAIN_OUTPUT_DIR}")
                         print(f"📁 本地输出目录: {OUTPUT_DIR}")
                         
-                        # 首先尝试从节点输出获取图片
+                        # 首先尝试从节点输出获取图片和视频
                         for node_id, output in outputs.items():
                             if "images" in output:
-                                print(f"🖼️ 找到图像输出节点 {node_id}，包含 {len(output['images'])} 张图片")
+                                print(f"🖼️ 找到图像输出节点 {node_id}，包含 {len(output['images'])} 个文件")
                                 for image_info in output["images"]:
                                     filename = image_info['filename']
-                                    # 检查图片是否在yeepay子目录中
-                                    source_path = COMFYUI_MAIN_OUTPUT_DIR / "yeepay" / filename
+                                    
+                                    # 检查是否为视频文件
+                                    is_video = filename.lower().endswith(('.mp4', '.avi', '.mov', '.webm'))
+                                    
+                                    if is_video:
+                                        print(f"🎬 检测到视频文件: {filename}")
+                                        # 检查视频是否在video子目录中
+                                        source_path = COMFYUI_MAIN_OUTPUT_DIR / "video" / filename
+                                        if not source_path.exists():
+                                            # 如果不在video子目录，尝试直接在输出目录中查找
+                                            source_path = COMFYUI_MAIN_OUTPUT_DIR / filename
+                                        
+                                        dest_path = OUTPUT_DIR / filename
+                                        
+                                        print(f"🎬 处理视频: {filename}")
+                                        print(f"   源路径: {source_path}")
+                                        print(f"   目标路径: {dest_path}")
+                                        
+                                        if source_path.exists():
+                                            shutil.copy2(source_path, dest_path)
+                                            result_paths.append(f"outputs/{filename}")
+                                            print(f"✅ 复制视频成功: {filename}")
+                                        else:
+                                            print(f"❌ 源文件不存在: {source_path}")
+                                    else:
+                                        # 处理图片文件
+                                        # 检查图片是否在yeepay子目录中
+                                        source_path = COMFYUI_MAIN_OUTPUT_DIR / "yeepay" / filename
+                                        if not source_path.exists():
+                                            # 如果不在yeepay子目录，尝试直接在输出目录中查找
+                                            source_path = COMFYUI_MAIN_OUTPUT_DIR / filename
+                                        
+                                        dest_path = OUTPUT_DIR / filename
+                                        
+                                        print(f"📄 处理图片: {filename}")
+                                        print(f"   源路径: {source_path}")
+                                        print(f"   目标路径: {dest_path}")
+                                        
+                                        if source_path.exists():
+                                            shutil.copy2(source_path, dest_path)
+                                            result_paths.append(f"outputs/{filename}")
+                                            print(f"✅ 复制图片成功: {filename}")
+                                        else:
+                                            print(f"❌ 源文件不存在: {source_path}")
+                            
+                            # 处理视频文件（兼容旧的videos字段）
+                            if "videos" in output:
+                                print(f"🎬 找到视频输出节点 {node_id}，包含 {len(output['videos'])} 个视频")
+                                for video_info in output["videos"]:
+                                    filename = video_info['filename']
+                                    # 检查视频是否在video子目录中
+                                    source_path = COMFYUI_MAIN_OUTPUT_DIR / "video" / filename
                                     if not source_path.exists():
-                                        # 如果不在yeepay子目录，尝试直接在输出目录中查找
+                                        # 如果不在video子目录，尝试直接在输出目录中查找
                                         source_path = COMFYUI_MAIN_OUTPUT_DIR / filename
                                     
                                     dest_path = OUTPUT_DIR / filename
                                     
-                                    print(f"📄 处理图片: {filename}")
+                                    print(f"🎬 处理视频: {filename}")
                                     print(f"   源路径: {source_path}")
                                     print(f"   目标路径: {dest_path}")
                                     
                                     if source_path.exists():
                                         shutil.copy2(source_path, dest_path)
                                         result_paths.append(f"outputs/{filename}")
-                                        print(f"✅ 复制图片成功: {filename}")
+                                        print(f"✅ 复制视频成功: {filename}")
                                     else:
                                         print(f"❌ 源文件不存在: {source_path}")
                         
-                        print(f"📊 总共处理了 {len(result_paths)} 张图片: {result_paths}")
+                        print(f"📊 总共处理了 {len(result_paths)} 个文件: {result_paths}")
                         
-                        # 如果没有从ComfyUI输出中找到图片，尝试从文件系统中查找最新的图片
+                        # 如果没有从ComfyUI输出中找到文件，尝试从文件系统中查找最新的文件
                         if not result_paths:
-                            print("🔍 尝试从文件系统中查找最新生成的图片...")
+                            print("🔍 尝试从文件系统中查找最新生成的文件...")
                             try:
+                                # 优先查找video目录中最新的视频文件
+                                video_dir = COMFYUI_MAIN_OUTPUT_DIR / "video"
+                                if video_dir.exists():
+                                    # 获取所有视频文件并按修改时间排序
+                                    video_files = list(video_dir.glob("*.mp4")) + list(video_dir.glob("*.avi")) + list(video_dir.glob("*.mov"))
+                                    if video_files:
+                                        # 按修改时间排序，获取最新的文件
+                                        latest_file = max(video_files, key=lambda f: f.stat().st_mtime)
+                                        print(f"🎬 找到最新视频文件: {latest_file.name}")
+                                        
+                                        # 复制到输出目录
+                                        dest_path = OUTPUT_DIR / latest_file.name
+                                        shutil.copy2(latest_file, dest_path)
+                                        result_paths.append(f"outputs/{latest_file.name}")
+                                        print(f"✅ 复制视频成功: {latest_file.name}")
+                                        
+                                        return result_paths
+                                    else:
+                                        print("❌ video目录中没有找到视频文件")
+                                else:
+                                    print("❌ video目录不存在")
+                                
                                 # 查找yeepay目录中最新的图片文件
                                 yeepay_dir = COMFYUI_MAIN_OUTPUT_DIR / "yeepay"
                                 if yeepay_dir.exists():
@@ -269,13 +364,14 @@ class TaskManager:
                                         print("❌ yeepay目录中没有找到png文件")
                                 else:
                                     print("❌ yeepay目录不存在")
+                                    
                             except Exception as e:
-                                print(f"❌ 从文件系统查找图片时出错: {e}")
+                                print(f"❌ 从文件系统查找文件时出错: {e}")
                         
                         if result_paths:
                             return result_paths
                         else:
-                            print(f"❌ 没有找到任何输出图片")
+                            print(f"❌ 没有找到任何输出文件")
                             return None
                     else:
                         print(f"⏳ 任务还在处理中，等待...")

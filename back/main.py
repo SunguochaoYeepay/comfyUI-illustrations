@@ -273,6 +273,111 @@ async def root():
     """根路径重定向到前端页面"""
     return FileResponse("frontend.html")
 
+@app.post("/api/generate-video", response_model=TaskResponse)
+async def generate_video(
+    description: str = Form(...),
+    reference_image: UploadFile = File(...),  # 视频生成必须要有参考图
+    fps: int = Form(16),
+    duration: int = Form(5),  # 秒
+    model: str = Form("wan2.2-video"),
+    loras: Optional[str] = Form(None)  # JSON字符串格式的LoRA配置
+):
+    """生成视频API"""
+    try:
+        # 处理参考图像
+        image_path = None
+        try:
+            # 保存上传的参考图像
+            image_filename = f"{uuid.uuid4()}_{reference_image.filename}"
+            image_path = UPLOAD_DIR / image_filename
+            
+            # 读取文件内容
+            content = await reference_image.read()
+            
+            # 验证文件内容
+            if len(content) == 0:
+                print("❌ 参考图像文件为空")
+                raise HTTPException(status_code=400, detail="参考图像文件为空")
+            
+            if len(content) < MIN_FILE_SIZE:
+                print(f"❌ 参考图像文件过小: {len(content)} 字节")
+                raise HTTPException(status_code=400, detail="参考图像文件过小或损坏")
+            
+            # 保存文件
+            async with aiofiles.open(image_path, 'wb') as f:
+                await f.write(content)
+            
+            # 验证保存的文件
+            if not image_path.exists() or image_path.stat().st_size == 0:
+                print("❌ 参考图像保存失败")
+                raise HTTPException(status_code=500, detail="参考图像保存失败")
+            
+            print(f"✅ 保存参考图像成功: {image_path} ({image_path.stat().st_size} 字节)")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ 保存参考图像时出错: {e}")
+            if image_path and image_path.exists():
+                try:
+                    image_path.unlink()
+                except:
+                    pass
+            raise HTTPException(status_code=500, detail=f"保存参考图像失败: {str(e)}")
+        
+        # 处理LoRA配置
+        lora_configs = []
+        if loras:
+            try:
+                import json
+                lora_data = json.loads(loras)
+                if isinstance(lora_data, list):
+                    for lora in lora_data:
+                        if isinstance(lora, dict) and "name" in lora:
+                            lora_configs.append(lora)
+                    print(f"🎨 解析到 {len(lora_configs)} 个LoRA配置")
+                else:
+                    print("⚠️ LoRA配置格式错误，应为数组格式")
+            except json.JSONDecodeError as e:
+                print(f"❌ LoRA配置JSON解析失败: {e}")
+            except Exception as e:
+                print(f"❌ LoRA配置处理失败: {e}")
+        
+        # 准备参数
+        parameters = {
+            "fps": fps,
+            "duration": duration,
+            "model": model,
+            "loras": lora_configs
+        }
+        
+        print(f"🎬 接收到视频生成请求: description='{description[:50]}...', fps={fps}, duration={duration}")
+        print(f"📊 参数详情: {parameters}")
+        if lora_configs:
+            print(f"🎨 LoRA配置: {lora_configs}")
+        
+        # 创建任务
+        task_id = await task_manager.create_task(
+            reference_image_path=str(image_path),
+            description=f"视频生成: {description}",  # 添加视频生成标识
+            parameters=parameters
+        )
+        
+        print(f"✅ 视频生成任务创建成功: {task_id}")
+        
+        return TaskResponse(
+            task_id=task_id,
+            status="created",
+            message="视频生成任务已创建"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 创建视频生成任务失败: {e}")
+        raise HTTPException(status_code=500, detail=f"创建视频生成任务失败: {str(e)}")
+
+
 @app.post("/api/generate-image", response_model=TaskResponse)
 async def generate_image(
     description: str = Form(...),

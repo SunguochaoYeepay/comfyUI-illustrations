@@ -8,5 +8,6 @@
 from .base_workflow import BaseWorkflow
 from .flux_workflow import FluxWorkflow
 from .qwen_workflow import QwenWorkflow
+from .wan_workflow import WanWorkflow
 
-__all__ = ['BaseWorkflow', 'FluxWorkflow', 'QwenWorkflow']
+__all__ = ['BaseWorkflow', 'FluxWorkflow', 'QwenWorkflow', 'WanWorkflow']

@@ -18,6 +18,7 @@ class ModelType(Enum):
     """模型类型枚举"""
     FLUX = "flux"
     QWEN = "qwen"
+    WAN = "wan" # Added WAN model type
 
 
 class ModelConfig:
@@ -48,6 +49,10 @@ class ModelConfig:
                 clip_path = model_dir / "clip" / self.clip_file
                 vae_path = model_dir / "vae" / self.vae_file
             elif self.model_type == ModelType.QWEN:
+                unet_path = model_dir / "diffusion_models" / self.unet_file
+                clip_path = model_dir / "text_encoders" / self.clip_file
+                vae_path = model_dir / "vae" / self.vae_file
+            elif self.model_type == ModelType.WAN: # Added WAN model type
                 unet_path = model_dir / "diffusion_models" / self.unet_file
                 clip_path = model_dir / "text_encoders" / self.clip_file
                 vae_path = model_dir / "vae" / self.vae_file
@@ -110,8 +115,21 @@ class ModelManager:
             description="千问图像模型，支持高质量图像生成"
         )
         
+        # Wan2.2视频模型配置
+        wan_config = ModelConfig(
+            model_type=ModelType.WAN,
+            name="wan2.2-video",
+            display_name="Wan2.2 视频",
+            unet_file="wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",  # 在diffusion_models目录
+            clip_file="umt5_xxl_fp8_e4m3fn_scaled.safetensors",  # 在text_encoders目录
+            vae_file="wan_2.1_vae.safetensors",  # 在vae目录
+            template_path="workflows/wan2.2_video_generation_workflow.json",  # 使用workflows目录下的标准工作流
+            description="Wan2.2图像到视频模型，支持高质量视频生成"
+        )
+        
         self.models[flux_config.name] = flux_config
         self.models[qwen_config.name] = qwen_config
+        self.models[wan_config.name] = wan_config
     
     def get_available_models(self) -> List[Dict[str, Any]]:
         """获取可用的模型列表"""

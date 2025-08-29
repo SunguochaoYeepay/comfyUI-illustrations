@@ -25,6 +25,7 @@
         @toggle-favorite="toggleFavorite"
         @filter-change="handleFilterChange"
         @upscale="handleUpscale"
+        @refreshHistory="loadHistory(1, false)"
       />
 
       <!-- 控制面板 -->
@@ -988,11 +989,12 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-                    referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
+        referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: 'failed',
         error: task.error || '生成失败',
-        parameters: task.parameters || {}  // 添加任务参数信息
+        parameters: task.parameters || {},  // 添加任务参数信息
+        result_path: task.result_path  // 保留result_path字段
       }]
     }
     
@@ -1005,11 +1007,12 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-                    referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
+        referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: task.status,
         error: task.error || `状态: ${task.status}`,
-        parameters: task.parameters || {}  // 添加任务参数信息
+        parameters: task.parameters || {},  // 添加任务参数信息
+        result_path: task.result_path  // 保留result_path字段
       }]
     }
     
@@ -1059,7 +1062,8 @@ const processTaskImages = (task) => {
           createdAt: new Date(task.created_at || Date.now()),
           referenceImage: referenceImageUrl,
           isFavorited: isFavorited,  // 使用后端提供的收藏状态
-          parameters: task.parameters || {}  // 添加任务参数信息
+          parameters: task.parameters || {},  // 添加任务参数信息
+          result_path: task.result_path  // 保留result_path字段
         }
       } catch (imageError) {
         console.error('处理单个图片数据失败:', imageError, { imageUrl, index, task })
@@ -1145,7 +1149,10 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
                 prompt: task.description,
                 timestamp: task.created_at,
                 status: task.status,
-                images: processedImages
+                images: processedImages,
+                result_path: task.result_path,  // 保留result_path字段
+                model: task.parameters?.model,  // 保留model字段
+                parameters: task.parameters  // 保留完整参数
               }
             } catch (taskError) {
               console.error('处理单个任务数据失败:', taskError, task)

@@ -23,7 +23,18 @@
           </button>
           
           <div class="image-container">
+            <!-- 视频播放器 -->
+            <video 
+              v-if="isVideoTask"
+              :src="imageData.url" 
+              class="preview-video"
+              controls
+              preload="metadata"
+              @click.stop
+            />
+            <!-- 图片显示 -->
             <img 
+              v-else
               :src="imageData.url" 
               :alt="imageData.prompt || '生成的图片'"
               class="preview-image"
@@ -58,27 +69,33 @@
                      <!-- 图片操作按钮 -->
            <div class="image-actions">
              <a-button type="primary" @click="downloadImage">
-               <DownloadOutlined /> 下载
+               <DownloadOutlined /> {{ isVideoTask ? '下载视频' : '下载' }}
              </a-button>
-             <a-dropdown :disabled="isUpscaling">
-               <a-button type="primary" ghost :loading="isUpscaling">
-                 <ZoomInOutlined /> 高清放大
-                 <DownOutlined />
+             <!-- 图片任务才显示放大和生成视频按钮 -->
+             <template v-if="!isVideoTask">
+               <a-dropdown :disabled="isUpscaling">
+                 <a-button type="primary" ghost :loading="isUpscaling">
+                   <ZoomInOutlined /> 高清放大
+                   <DownOutlined />
+                 </a-button>
+                 <template #overlay>
+                   <a-menu @click="handleUpscaleSelect">
+                     <a-menu-item key="2" :disabled="isUpscaling">
+                       <ZoomInOutlined /> 2倍放大 (1024×1024)
+                     </a-menu-item>
+                     <a-menu-item key="3" :disabled="isUpscaling">
+                       <ZoomInOutlined /> 3倍放大 (1536×1536)
+                     </a-menu-item>
+                     <a-menu-item key="4" :disabled="isUpscaling">
+                       <ZoomInOutlined /> 4倍放大 (2048×2048)
+                     </a-menu-item>
+                   </a-menu>
+                 </template>
+               </a-dropdown>
+               <a-button type="primary" ghost @click="showVideoGenerator">
+                 <VideoCameraOutlined /> 生成视频
                </a-button>
-               <template #overlay>
-                 <a-menu @click="handleUpscaleSelect">
-                   <a-menu-item key="2" :disabled="isUpscaling">
-                     <ZoomInOutlined /> 2倍放大 (1024×1024)
-                   </a-menu-item>
-                   <a-menu-item key="3" :disabled="isUpscaling">
-                     <ZoomInOutlined /> 3倍放大 (1536×1536)
-                   </a-menu-item>
-                   <a-menu-item key="4" :disabled="isUpscaling">
-                     <ZoomInOutlined /> 4倍放大 (2048×2048)
-                   </a-menu-item>
-                 </a-menu>
-               </template>
-             </a-dropdown>
+             </template>
            </div>
           
           
@@ -198,12 +215,23 @@
      
      
    </div>
+   
+   
+   <!-- 视频生成器底部面板 -->
+   <VideoGenerator 
+     v-if="videoGeneratorVisible"
+     :reference-image="props.imageData.url"
+     :is-in-modal="true"
+     @task-created="handleVideoTaskCreated"
+     @close="closeVideoGenerator"
+   />
  </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined } from '@ant-design/icons-vue'
+import VideoGenerator from './VideoGenerator.vue'
 
 // Props
 const props = defineProps({
@@ -230,12 +258,35 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['close', 'navigate', 'upscale'])
+const emit = defineEmits(['close', 'navigate', 'upscale', 'refreshHistory'])
 
-// 参考图错误状态
+// 计算属性：判断是否为视频任务
+const isVideoTask = computed(() => {
+  const { prompt, url, result_path, model } = props.imageData
+  return (
+    (prompt && prompt.includes('视频生成')) ||
+    (url && (url.includes('/api/generate-video') || /\.(mp4|avi|mov|webm)$/i.test(url))) ||
+    (result_path && (result_path.includes('video') || /\.(mp4|avi|mov|webm)$/i.test(result_path))) ||
+    (model && model.includes('wan'))
+  )
+})
+
+// 响应式数据
 const referenceImageError = ref(false)
+const videoGeneratorVisible = ref(false)
 
 // 移除本地的isUpscaling状态，使用props中的isUpscaling
+
+// 显示视频生成器
+const showVideoGenerator = () => {
+  console.log('显示视频生成器')
+  videoGeneratorVisible.value = true
+}
+
+// 关闭视频生成器
+const closeVideoGenerator = () => {
+  videoGeneratorVisible.value = false
+}
 
 // 处理参考图加载错误
 const handleReferenceImageError = () => {
@@ -250,6 +301,8 @@ watch(() => props.imageData, () => {
 
 // 关闭预览
 const closePreview = () => {
+  // 同时关闭视频生成器
+  videoGeneratorVisible.value = false
   emit('close')
 }
 
@@ -260,7 +313,7 @@ const handleOverlayClick = (e) => {
   }
 }
 
-// 下载图片
+// 下载图片或视频
 const downloadImage = async () => {
   try {
     const response = await fetch(props.imageData.url)
@@ -268,15 +321,22 @@ const downloadImage = async () => {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `generated-image-${Date.now()}.png`
+    
+    // 根据任务类型设置文件名
+    if (isVideoTask.value) {
+      link.download = `generated-video-${Date.now()}.mp4`
+    } else {
+      link.download = `generated-image-${Date.now()}.png`
+    }
+    
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    message.success('图片下载成功')
+    message.success(isVideoTask.value ? '视频下载成功' : '图片下载成功')
   } catch (error) {
     console.error('下载失败:', error)
-    message.error('图片下载失败')
+    message.error(isVideoTask.value ? '视频下载失败' : '图片下载失败')
   }
 }
 
@@ -288,7 +348,15 @@ const handleUpscaleSelect = async (e) => {
   emit('upscale', props.imageData, scaleFactor)
 }
 
-
+// 处理视频任务创建
+const handleVideoTaskCreated = (taskId) => {
+  console.log('视频生成任务已创建，任务ID:', taskId)
+  message.success('视频生成任务已创建，请在任务列表中查看进度')
+  videoGeneratorVisible.value = false
+  
+  // 通知父组件刷新历史记录
+  emit('refreshHistory')
+}
 
 // 格式化日期
 const formatDate = (dateString) => {
@@ -577,6 +645,13 @@ onUnmounted(() => {
   border-radius: 8px;
 }
 
+.preview-video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .image-actions {
   display: flex;
   gap: 12px;
@@ -820,6 +895,9 @@ onUnmounted(() => {
 .parameters::-webkit-scrollbar-thumb:hover {
   background: #888;
 }
+
+
+
 
 
 </style>

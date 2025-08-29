@@ -11,6 +11,7 @@ from typing import Any, Dict
 
 from core.model_manager import get_model_config, ModelType
 from core.workflows import FluxWorkflow, QwenWorkflow
+from core.workflows import WanWorkflow
 
 
 class WorkflowTemplate:
@@ -62,6 +63,8 @@ class WorkflowTemplate:
             workflow_creator = FluxWorkflow(model_config)
         elif model_config.model_type == ModelType.QWEN:
             workflow_creator = QwenWorkflow(model_config)
+        elif model_config.model_type == ModelType.WAN:
+            workflow_creator = WanWorkflow(model_config)
         else:
             print(f"❌ 不支持的模型类型: {model_config.model_type}")
             workflow_creator = FluxWorkflow(model_config)

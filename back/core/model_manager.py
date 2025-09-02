@@ -19,6 +19,7 @@ class ModelType(Enum):
     FLUX = "flux"
     QWEN = "qwen"
     WAN = "wan" # Added WAN model type
+    FLUX1 = "flux1" # Added FLUX1 model type
 
 
 class ModelConfig:
@@ -55,6 +56,10 @@ class ModelConfig:
             elif self.model_type == ModelType.WAN: # Added WAN model type
                 unet_path = model_dir / "diffusion_models" / self.unet_file
                 clip_path = model_dir / "text_encoders" / self.clip_file
+                vae_path = model_dir / "vae" / self.vae_file
+            elif self.model_type == ModelType.FLUX1: # Added FLUX1 model type
+                unet_path = model_dir / "unet" / self.unet_file # 使用unet目录
+                clip_path = model_dir / "clip" / self.clip_file
                 vae_path = model_dir / "vae" / self.vae_file
             else:
                 # 默认使用checkpoints目录
@@ -127,9 +132,22 @@ class ModelManager:
             description="Wan2.2图像到视频模型，支持高质量视频生成"
         )
         
+        # Flux1基础模型配置
+        flux1_config = ModelConfig(
+            model_type=ModelType.FLUX1,  # Flux1基础模型类型
+            name="flux1",
+            display_name="Flux1基础模型",
+            unet_file="FLUX.1-FP16-dev.sft",  # 基础模型文件
+            clip_file="clip_l.safetensors",
+            vae_file="ae.safetensors",
+            template_path="workflows/flux1_vector_workflow.json",
+            description="Flux1基础模型，支持多种工作流，可配置不同LoRA，输出高质量图像"
+        )
+        
         self.models[flux_config.name] = flux_config
         self.models[qwen_config.name] = qwen_config
         self.models[wan_config.name] = wan_config
+        self.models[flux1_config.name] = flux1_config
     
     def get_available_models(self) -> List[Dict[str, Any]]:
         """获取可用的模型列表"""

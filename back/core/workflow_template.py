@@ -60,14 +60,21 @@ class WorkflowTemplate:
         
         # 根据模型类型选择对应的工作流创建器
         if model_config.model_type == ModelType.FLUX:
-            workflow_creator = FluxWorkflow(model_config)
+            # 根据模型名称选择不同的工作流
+            if model_config.name == "flux1-standard":
+                from core.workflows import Flux1Workflow
+                workflow_creator = Flux1Workflow(model_config)
+            else:
+                workflow_creator = FluxWorkflow(model_config)
         elif model_config.model_type == ModelType.QWEN:
             workflow_creator = QwenWorkflow(model_config)
         elif model_config.model_type == ModelType.WAN:
             workflow_creator = WanWorkflow(model_config)
+        elif model_config.model_type == ModelType.FLUX1:  # 新增
+            from core.workflows import Flux1VectorWorkflow
+            workflow_creator = Flux1VectorWorkflow(model_config)
         else:
-            print(f"❌ 不支持的模型类型: {model_config.model_type}")
-            workflow_creator = FluxWorkflow(model_config)
+            raise ValueError(f"不支持的模型类型: {model_config.model_type}")
         
         # 创建工作流
         return workflow_creator.create_workflow(reference_image_path, description, parameters)

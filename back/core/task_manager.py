@@ -57,6 +57,31 @@ class TaskManager:
         
         return task_id
     
+    async def create_fusion_task(self, reference_image_paths: list, description: str, parameters: Dict[str, Any]) -> str:
+        """创建多图融合任务
+        
+        Args:
+            reference_image_paths: 参考图像路径列表
+            description: 任务描述
+            parameters: 任务参数
+            
+        Returns:
+            任务ID
+        """
+        import uuid
+        task_id = str(uuid.uuid4())
+        
+        # 将多图路径转换为JSON字符串存储
+        image_paths_json = json.dumps(reference_image_paths)
+        
+        # 保存任务到数据库（使用特殊的任务类型标识）
+        self.db.create_task(task_id, description, image_paths_json, parameters)
+        
+        # 异步执行多图融合任务
+        asyncio.create_task(self.execute_fusion_task(task_id, reference_image_paths, description, parameters))
+        
+        return task_id
+    
     async def execute_task(self, task_id: str, reference_image_path: str, description: str, parameters: Dict[str, Any]):
         """执行任务
         
@@ -202,6 +227,76 @@ class TaskManager:
                 
         except Exception as e:
             error_msg = f"任务执行失败: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            print(f"详细错误信息:")
+            print(traceback.format_exc())
+            self.db.update_task_status(task_id, "failed", error=error_msg)
+    
+    async def execute_fusion_task(self, task_id: str, reference_image_paths: list, description: str, parameters: Dict[str, Any]):
+        """执行多图融合任务
+        
+        Args:
+            task_id: 任务ID
+            reference_image_paths: 参考图像路径列表
+            description: 任务描述
+            parameters: 任务参数
+        """
+        try:
+            print(f"🚀 开始执行多图融合任务: {task_id}")
+            print(f"   描述: {description}")
+            print(f"   参数: {parameters}")
+            print(f"   参考图像数量: {len(reference_image_paths)}")
+            for i, path in enumerate(reference_image_paths):
+                print(f"   图像{i+1}: {path}")
+            
+            # 更新状态为处理中
+            self.db.update_task_status(task_id, "processing")
+            
+            # 获取模型名称
+            model_name = parameters.get("model", "qwen-fusion")
+            
+            # 多图融合不需要翻译，直接使用中文描述
+            translated_description = description
+            print(f"📝 使用描述: {translated_description}")
+            
+            # 准备工作流
+            print(f"🔧 准备多图融合工作流...")
+            # 将图像路径列表添加到参数中
+            fusion_parameters = parameters.copy()
+            fusion_parameters["reference_image_paths"] = reference_image_paths
+            
+            workflow = self.workflow_template.customize_workflow(
+                reference_image_paths[0], translated_description, fusion_parameters, model_name
+            )
+            print(f"✅ 多图融合工作流准备完成")
+            
+            # 提交到ComfyUI
+            print(f"📤 提交多图融合工作流到ComfyUI...")
+            prompt_id = await self.comfyui.submit_workflow(workflow)
+            print(f"✅ 已提交多图融合工作流，prompt_id: {prompt_id}")
+            
+            # 等待完成
+            print(f"⏳ 等待多图融合任务完成...")
+            result_paths = await self.wait_for_completion(task_id, prompt_id)
+            
+            if result_paths:
+                # 多图融合通常只生成一张结果图像
+                if len(result_paths) == 1:
+                    print(f"💾 保存多图融合结果: {result_paths[0]}")
+                    self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
+                else:
+                    # 如果有多张结果，保存为JSON
+                    result_data = json.dumps(result_paths)
+                    print(f"💾 保存多图融合结果JSON: {result_data}")
+                    self.db.update_task_status(task_id, "completed", result_path=result_data)
+            else:
+                error_msg = "多图融合任务失败，没有生成结果"
+                print(f"❌ {error_msg}")
+                self.db.update_task_status(task_id, "failed", error=error_msg)
+                
+        except Exception as e:
+            error_msg = f"多图融合任务执行失败: {str(e)}"
             print(f"❌ {error_msg}")
             import traceback
             print(f"详细错误信息:")

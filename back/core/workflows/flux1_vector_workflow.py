@@ -85,10 +85,22 @@ class Flux1VectorWorkflow(BaseWorkflow):
         if not loras:
             # 如果没有LoRA，移除LoRA节点，直接连接
             if "31" in workflow and "12" in workflow and "11" in workflow:
-                # 将节点13的model和clip直接连接到节点12和11
+                # 更新所有引用节点31的节点，让它们直接连接到基础模型
+                # 节点6 (CLIPTextEncode) 的clip连接到节点11
+                if "6" in workflow:
+                    workflow["6"]["inputs"]["clip"] = ["11", 0]
+                
+                # 节点13 (KSampler) 的model连接到节点12
                 if "13" in workflow:
                     workflow["13"]["inputs"]["model"] = ["12", 0]
-                    workflow["13"]["inputs"]["clip"] = ["11", 0]
+                
+                # 节点17 (BasicScheduler) 的model连接到节点12
+                if "17" in workflow:
+                    workflow["17"]["inputs"]["model"] = ["12", 0]
+                
+                # 节点22 (BasicGuider) 的model连接到节点12
+                if "22" in workflow:
+                    workflow["22"]["inputs"]["model"] = ["12", 0]
                 
                 # 移除节点31 (LoRA节点)
                 if "31" in workflow:

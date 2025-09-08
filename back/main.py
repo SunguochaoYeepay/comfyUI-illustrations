@@ -10,7 +10,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import aiofiles
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query
@@ -25,7 +25,7 @@ from config.settings import (
 )
 from models.schemas import (
     TaskResponse, TaskStatusResponse, HistoryResponse, 
-    FavoriteResponse, DeleteResponse, HealthResponse
+    FavoriteResponse, DeleteResponse, HealthResponse, GenerateFusionRequest
 )
 
 # 导入统一服务管理器
@@ -387,7 +387,9 @@ async def generate_image(
     steps: int = Form(DEFAULT_STEPS),
     seed: Optional[int] = Form(None),
     model: str = Form("flux1-dev"),  # 新增模型选择参数
-    loras: Optional[str] = Form(None)  # JSON字符串格式的LoRA配置
+    loras: Optional[str] = Form(None),  # JSON字符串格式的LoRA配置
+    duration: Optional[int] = Form(None),  # 视频时长（秒）
+    fps: Optional[int] = Form(None)  # 视频帧率
 ):
     """生成图像API"""
     try:
@@ -419,6 +421,14 @@ async def generate_image(
                 if not image_path.exists() or image_path.stat().st_size == 0:
                     print("❌ 参考图像保存失败")
                     raise HTTPException(status_code=500, detail="参考图像保存失败")
+                
+                # 复制文件到ComfyUI输入目录
+                from config.settings import COMFYUI_INPUT_DIR
+                import shutil
+                
+                comfyui_input_path = COMFYUI_INPUT_DIR / image_filename
+                shutil.copy2(image_path, comfyui_input_path)
+                print(f"✅ 复制参考图像到ComfyUI输入目录: {comfyui_input_path}")
                 
                 print(f"✅ 保存参考图像成功: {image_path} ({image_path.stat().st_size} 字节)")
                 
@@ -465,6 +475,12 @@ async def generate_image(
             "loras": lora_configs
         }
         
+        # 如果是视频模型，添加视频参数
+        if model == "wan2.2-video" and duration is not None and fps is not None:
+            parameters["duration"] = duration
+            parameters["fps"] = fps
+            print(f"🎬 视频生成参数: duration={duration}秒, fps={fps}")
+        
         print(f"🔍 接收到生成请求: description='{description[:50]}...', count={count}, size={size}, steps={steps}")
         print(f"📊 参数详情: {parameters}")
         if lora_configs:
@@ -483,6 +499,119 @@ async def generate_image(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
+
+
+@app.post("/api/generate-image-fusion", response_model=TaskResponse)
+async def generate_image_fusion(
+    description: str = Form(...),
+    reference_images: List[UploadFile] = File(...),
+    fusion_mode: str = Form("concat"),
+    steps: int = Form(20),
+    cfg: float = Form(2.5),
+    seed: Optional[int] = Form(None),
+    model: str = Form("qwen-image"),
+    loras: Optional[str] = Form(None)
+):
+    """多图融合生成API"""
+    try:
+        # 验证模型类型
+        if model != 'qwen-image':
+            raise HTTPException(status_code=400, detail="多图融合只支持Qwen模型")
+        
+        # 验证图像数量
+        if len(reference_images) < 2:
+            raise HTTPException(status_code=400, detail="多图融合至少需要2张图像")
+        if len(reference_images) > 5:
+            raise HTTPException(status_code=400, detail="多图融合最多支持5张图像")
+        
+        # 处理多张参考图像
+        image_paths = []
+        for i, reference_image in enumerate(reference_images):
+            try:
+                # 保存上传的参考图像
+                image_filename = f"{uuid.uuid4()}_{reference_image.filename}"
+                image_path = UPLOAD_DIR / image_filename
+                
+                # 读取文件内容
+                content = await reference_image.read()
+                
+                # 验证文件内容
+                if len(content) == 0:
+                    print(f"❌ 参考图像{i+1}文件为空")
+                    raise HTTPException(status_code=400, detail=f"参考图像{i+1}文件为空")
+                
+                if len(content) < MIN_FILE_SIZE:
+                    print(f"❌ 参考图像{i+1}文件过小: {len(content)} 字节")
+                    raise HTTPException(status_code=400, detail=f"参考图像{i+1}文件过小或损坏")
+                
+                # 保存文件
+                async with aiofiles.open(image_path, 'wb') as f:
+                    await f.write(content)
+                
+                # 验证保存的文件
+                if not image_path.exists() or image_path.stat().st_size == 0:
+                    print(f"❌ 参考图像{i+1}保存失败")
+                    raise HTTPException(status_code=500, detail=f"参考图像{i+1}保存失败")
+                
+                # 复制文件到ComfyUI输入目录
+                from config.settings import COMFYUI_INPUT_DIR
+                import shutil
+                
+                comfyui_input_path = COMFYUI_INPUT_DIR / image_filename
+                shutil.copy2(image_path, comfyui_input_path)
+                print(f"✅ 复制参考图像{i+1}到ComfyUI输入目录: {comfyui_input_path}")
+                
+                image_paths.append(str(image_path))
+                print(f"✅ 保存参考图像{i+1}成功: {image_path} ({image_path.stat().st_size} 字节)")
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"❌ 保存参考图像{i+1}时出错: {e}")
+                # 清理已保存的文件
+                for path in image_paths:
+                    try:
+                        Path(path).unlink()
+                    except:
+                        pass
+                raise HTTPException(status_code=500, detail=f"保存参考图像{i+1}失败: {str(e)}")
+        
+        # 处理LoRA配置（多图融合暂不支持）
+        lora_configs = []
+        if loras:
+            print("⚠️ 多图融合功能暂不支持LoRA配置")
+        
+        # 准备参数
+        parameters = {
+            "steps": steps,
+            "cfg": cfg,
+            "seed": seed,
+            "model": model,
+            "fusion_mode": fusion_mode,
+            "loras": lora_configs
+        }
+        
+        print(f"🔍 接收到多图融合请求: description='{description[:50]}...', 图像数量={len(image_paths)}, 融合模式={fusion_mode}")
+        print(f"📊 参数详情: {parameters}")
+        
+        # 创建多图融合任务
+        task_id = await task_manager.create_fusion_task(
+            reference_image_paths=image_paths,
+            description=description,
+            parameters=parameters
+        )
+        
+        return TaskResponse(
+            task_id=task_id,
+            status="pending",
+            message="多图融合任务已提交，正在处理中"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建多图融合任务失败: {str(e)}")
+
 
 @app.get("/api/task/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str):

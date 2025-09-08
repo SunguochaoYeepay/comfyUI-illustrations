@@ -2,12 +2,15 @@
   <div class="control-section">
     <a-card class="control-card">
       <div class="control-layout">
-                 <!-- 主要输入区域 -->
+
+         <!-- 主要输入区域 -->
          <div class="main-input-row">
            <!-- 参考图片区域 -->
            <div class="reference-section">
-             <ReferenceUpload
+             <!-- 统一使用多图上传组件，支持1-5张图片 -->
+             <MultiImageUpload
                v-model:file-list="localReferenceImages"
+               :show-upload-button="shouldShowUploadButton"
                @preview="$emit('preview', $event)"
              />
            </div>
@@ -17,7 +20,7 @@
              <div class="prompt-input-group">
                <a-textarea
                  v-model:value="localPrompt"
-                 placeholder="请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）"
+                 :placeholder="getPromptPlaceholder()"
                  :rows="2"
                  class="prompt-input"
                />
@@ -34,6 +37,33 @@
                v-model:model="localModel"
                class="model-selector-section"
              />
+             
+             <!-- 视频生成配置 - 仅在WAN2.2视频模型时显示 -->
+             <div v-if="isVideoModel" class="video-config-section">
+               <div class="video-config-item">
+                 <label>时长(秒):</label>
+                 <a-input-number 
+                   v-model:value="videoDuration" 
+                   :min="1" 
+                   :max="10" 
+                   :step="1"
+                   size="small"
+                   class="video-config-input"
+                 />
+               </div>
+               <div class="video-config-item">
+                 <label>帧率:</label>
+                 <a-select 
+                   v-model:value="videoFps" 
+                   size="small"
+                   class="video-config-select"
+                 >
+                   <a-select-option value="8">8 FPS</a-select-option>
+                   <a-select-option value="16">16 FPS</a-select-option>
+                   <a-select-option value="24">24 FPS</a-select-option>
+                 </a-select>
+               </div>
+             </div>
              
                            <!-- LoRA选择器 - 下拉菜单样式 -->
               <div class="lora-dropdown-section">
@@ -155,6 +185,7 @@
  import { message } from 'ant-design-vue'
    import { ReloadOutlined, DownOutlined } from '@ant-design/icons-vue'
  import ReferenceUpload from './ReferenceUpload.vue'
+ import MultiImageUpload from './MultiImageUpload.vue'
  import ModelSelector from './ModelSelector.vue'
 
  // API基础URL - 自动检测环境
@@ -199,10 +230,39 @@
    'preview'
  ])
 
- // LoRA相关状态
- const availableLoras = ref([])
- const loading = ref(false)
- const loraPanelExpanded = ref(false) // 控制LoRA面板的展开/收起
+// 计算属性：根据图片数量和模型类型判断是否为融合模式
+const isFusionMode = computed(() => {
+  // 只有Qwen模型才支持多图融合
+  const isQwenModel = localModel.value === 'qwen-image'
+  return isQwenModel && localReferenceImages.value.length >= 2
+})
+
+// 计算属性：判断是否为视频模型
+const isVideoModel = computed(() => {
+  return localModel.value === 'wan2.2-video'
+})
+
+// 计算属性：判断是否应该显示上传按钮
+const shouldShowUploadButton = computed(() => {
+  const isQwenModel = localModel.value === 'qwen-image'
+  
+  // Qwen模型：支持多图，始终显示上传按钮
+  if (isQwenModel) {
+    return true
+  }
+  
+  // 其他模型：只有没有图片时才显示上传按钮
+  return localReferenceImages.value.length === 0
+})
+
+// LoRA相关状态
+const availableLoras = ref([])
+const loading = ref(false)
+const loraPanelExpanded = ref(false) // 控制LoRA面板的展开/收起
+
+// 视频生成配置状态
+const videoDuration = ref(5) // 默认5秒
+const videoFps = ref('16') // 默认16 FPS
 
  // 双向绑定的计算属性
  const localPrompt = computed({
@@ -225,10 +285,60 @@
    set: (value) => emit('update:model', value)
  })
 
- // 处理生成按钮点击
- const handleGenerate = () => {
-   emit('generate')
- }
+// 监听图片数量变化，自动调整模型
+watch(() => localReferenceImages.value.length, (newCount) => {
+  console.log('🔄 图片数量变化:', newCount)
+  
+  // 如果上传了2张或更多图片，且当前不是Qwen模型，则切换到qwen-image
+  if (newCount >= 2) {
+    const isQwenModel = localModel.value === 'qwen-image'
+    if (!isQwenModel) {
+      console.log('🔄 自动切换到Qwen模型')
+      localModel.value = 'qwen-image'
+    }
+  }
+}, { immediate: true })
+
+// 监听模型变化，处理图片数量限制
+watch(() => localModel.value, (newModel) => {
+  const isQwenModel = newModel === 'qwen-image'
+  
+  // 如果切换到非Qwen模型，且有多张图片，只保留第一张
+  if (!isQwenModel && localReferenceImages.value.length > 1) {
+    console.log('🔄 切换到非Qwen模型，只保留第一张图片')
+    localReferenceImages.value = [localReferenceImages.value[0]]
+  }
+}, { immediate: true })
+
+// 获取提示词占位符
+const getPromptPlaceholder = () => {
+  if (isVideoModel.value) {
+    return '请描述您想要的视频效果（如：镜头缓慢推进，人物微笑，背景模糊）'
+  } else if (isFusionMode.value) {
+    return '请描述多图融合的效果，支持中文输入（如：将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上）'
+  } else if (localModel.value === 'qwen-image') {
+    return '请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）'
+  } else {
+    return '请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）'
+  }
+}
+
+// 处理生成按钮点击
+const handleGenerate = () => {
+  const options = { 
+    mode: isFusionMode.value ? 'fusion' : 'single' 
+  }
+  
+  // 如果是视频模型，添加视频配置
+  if (isVideoModel.value) {
+    options.videoConfig = {
+      duration: videoDuration.value,
+      fps: videoFps.value
+    }
+  }
+  
+  emit('generate', options)
+}
 
  // LoRA相关方法
  const fetchLoras = async () => {
@@ -440,6 +550,9 @@
    margin: 0 auto;
  }
 
+ /* 模式选择区域 */
+
+
    .main-input-row {
     display: flex;
     align-items: flex-start;
@@ -476,6 +589,33 @@
   .model-selector-section {
     width: 140px;
     flex-shrink: 0;
+  }
+  
+  .video-config-section {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  
+  .video-config-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .video-config-item label {
+    color: #999;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  
+  .video-config-input {
+    width: 60px;
+  }
+  
+  .video-config-select {
+    width: 80px;
   }
 
   .lora-dropdown-section {

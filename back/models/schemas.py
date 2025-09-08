@@ -71,6 +71,39 @@ class GenerateImageRequest(BaseModel):
         }
 
 
+class GenerateFusionRequest(BaseModel):
+    """多图融合请求模型"""
+    description: str = Field(..., description="融合描述文本")
+    fusion_mode: str = Field("concat", description="融合模式：concat(拼接), blend(混合), edit(编辑)")
+    parameters: Optional[Dict[str, Any]] = Field(
+        default={
+            "steps": DEFAULT_STEPS,
+            "seed": None,
+            "cfg": 2.5
+        },
+        description="生成参数"
+    )
+    loras: Optional[List[LoRAConfig]] = Field(
+        default=[],
+        max_items=4,
+        description="LoRA配置列表（最多4个，多图融合暂不支持）"
+    )
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "description": "将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上",
+                "fusion_mode": "concat",
+                "parameters": {
+                    "steps": 20,
+                    "cfg": 2.5,
+                    "seed": 12345
+                },
+                "loras": []
+            }
+        }
+
+
 class TaskResponse(BaseModel):
     """任务响应模型"""
     task_id: str

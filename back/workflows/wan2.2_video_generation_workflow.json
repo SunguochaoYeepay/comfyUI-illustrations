@@ -131,7 +131,7 @@
   },
   "94": {
     "inputs": {
-      "fps": 16,
+      "fps": "{{fps}}",
       "images": [
         "87",
         0
@@ -175,7 +175,7 @@
     "inputs": {
       "width": 640,
       "height": 640,
-      "length": 80,
+      "length": "{{length}}",
       "batch_size": 1,
       "positive": [
         "93",

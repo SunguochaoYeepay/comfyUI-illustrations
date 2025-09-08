@@ -162,7 +162,21 @@ class DatabaseManager:
         
         if row:
             columns = [desc[0] for desc in cursor.description]
-            return dict(zip(columns, row))
+            task_data = dict(zip(columns, row))
+            
+            # 解析多图融合的reference_image_path（如果是JSON字符串）
+            if task_data.get('reference_image_path'):
+                try:
+                    import json
+                    # 尝试解析JSON字符串
+                    parsed_paths = json.loads(task_data['reference_image_path'])
+                    if isinstance(parsed_paths, list):
+                        task_data['reference_image_path'] = parsed_paths
+                except (json.JSONDecodeError, TypeError):
+                    # 如果不是JSON字符串，保持原样
+                    pass
+            
+            return task_data
         return None
     
     def get_tasks_with_filters(self, limit: int = 20, offset: int = 0, order: str = "desc", 
@@ -268,6 +282,17 @@ class DatabaseManager:
             columns = ['id', 'status', 'description', 'reference_image_path', 'parameters', 
                       'prompt_id', 'result_path', 'error', 'progress', 'created_at', 'updated_at', 'is_favorited', 'task_type']
             task = dict(zip(columns, row))
+            
+            # 解析多图融合的reference_image_path（如果是JSON字符串）
+            if task.get('reference_image_path'):
+                try:
+                    # 尝试解析JSON字符串
+                    parsed_paths = json.loads(task['reference_image_path'])
+                    if isinstance(parsed_paths, list):
+                        task['reference_image_path'] = parsed_paths
+                except (json.JSONDecodeError, TypeError):
+                    # 如果不是JSON字符串，保持原样
+                    pass
             
             # 解析参数
             try:

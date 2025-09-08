@@ -220,9 +220,27 @@ const restoreUpscaleState = async () => {
 }
 
 // 生成图像
-const generateImage = async () => {
+const generateImage = async (options = {}) => {
+  const { mode = 'single', videoConfig } = options
+  
   if (!prompt.value.trim()) {
     message.warning('请输入图像描述')
+    return
+  }
+
+  // 图片数量验证
+  if (referenceImages.value.length === 0) {
+    message.warning('请上传至少1张图片')
+    return
+  }
+  if (referenceImages.value.length > 5) {
+    message.warning('最多支持5张图片')
+    return
+  }
+  
+  // 多图融合模式验证
+  if (mode === 'fusion' && referenceImages.value.length < 2) {
+    message.warning('多图融合至少需要2张图片')
     return
   }
 
@@ -240,33 +258,62 @@ const generateImage = async () => {
     // 准备FormData
     const formData = new FormData()
     formData.append('description', prompt.value)
-    formData.append('count', imageCount.value)
-    formData.append('size', imageSize.value)
     formData.append('steps', 20)
-    formData.append('model', selectedModel.value)  // 添加模型参数
+    formData.append('model', selectedModel.value)
     
-    // 添加LoRA配置
-    if (selectedLoras.value.length > 0) {
-      formData.append('loras', JSON.stringify(selectedLoras.value))
-      console.log('🎨 添加LoRA配置:', selectedLoras.value)
+    // 如果是视频生成，添加视频配置
+    if (videoConfig) {
+      formData.append('duration', videoConfig.duration)
+      formData.append('fps', videoConfig.fps)
+      console.log(`🎬 视频生成配置: 时长=${videoConfig.duration}秒, 帧率=${videoConfig.fps}FPS`)
     }
     
-    // 添加参考图片（如果有的话）
-    if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {
-      const fileObj = referenceImages.value[0].originFileObj
-      // 验证文件对象是否有效
-      if (fileObj instanceof File) {
-        formData.append('reference_image', fileObj)
-      } else {
-        console.error('参考图片文件对象无效:', fileObj)
-        message.error('参考图片文件无效，请重新选择')
-        return
+    // 根据模式设置不同的参数
+    if (mode === 'fusion') {
+      // 多图融合模式
+      formData.append('fusion_mode', 'concat')
+      formData.append('cfg', 2.5)
+      
+      // 添加多张参考图片
+      referenceImages.value.forEach((imageFile, index) => {
+        if (imageFile.originFileObj instanceof File) {
+          formData.append('reference_images', imageFile.originFileObj)
+        } else {
+          console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
+          message.error(`参考图片${index + 1}文件无效，请重新选择`)
+          return
+        }
+      })
+      
+      console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片`)
+    } else {
+      // 单图生成模式
+      formData.append('count', imageCount.value)
+      formData.append('size', imageSize.value)
+      
+      // 添加LoRA配置
+      if (selectedLoras.value.length > 0) {
+        formData.append('loras', JSON.stringify(selectedLoras.value))
+        console.log('🎨 添加LoRA配置:', selectedLoras.value)
+      }
+      
+      // 添加参考图片（如果有的话）
+      if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {
+        const fileObj = referenceImages.value[0].originFileObj
+        // 验证文件对象是否有效
+        if (fileObj instanceof File) {
+          formData.append('reference_image', fileObj)
+        } else {
+          console.error('参考图片文件对象无效:', fileObj)
+          message.error('参考图片文件无效，请重新选择')
+          return
+        }
       }
     }
-    // 如果没有参考图片，不添加任何文件，让后端处理无参考图的情况
 
     // 调用后端API
-    const response = await fetch(`${API_BASE}/api/generate-image`, {
+    const apiEndpoint = mode === 'fusion' ? '/api/generate-image-fusion' : '/api/generate-image'
+    const response = await fetch(`${API_BASE}${apiEndpoint}`, {
       method: 'POST',
       body: formData
     })
@@ -782,7 +829,20 @@ const formatTime = (date) => {
 
 // 处理参考图预览
 const handlePreview = (file) => {
-  previewImage.value = file.url || file.preview
+  // 处理多图上传的情况
+  let imageUrl = file.url || file.preview
+  
+  // 如果是数组字符串，取第一个元素
+  if (typeof imageUrl === 'string' && imageUrl.startsWith('[') && imageUrl.endsWith(']')) {
+    try {
+      const imageArray = JSON.parse(imageUrl)
+      imageUrl = imageArray[0] || imageUrl
+    } catch (e) {
+      console.warn('解析图片URL失败:', e)
+    }
+  }
+  
+  previewImage.value = imageUrl
   previewVisible.value = true
 }
 
@@ -1119,7 +1179,7 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
+        referenceImage: task.reference_image_path ? (Array.isArray(task.reference_image_path) ? JSON.stringify(task.reference_image_path.map(path => `${API_BASE}/api/image/upload/${path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`)) : `${API_BASE}/api/image/upload/${task.reference_image_path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`) : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: 'failed',
         error: task.error || '生成失败',
@@ -1137,7 +1197,7 @@ const processTaskImages = (task) => {
         task_id: task.task_id,
         prompt: task.description || '',
         createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? `${API_BASE}/api/image/upload/${task.reference_image_path}` : null,
+        referenceImage: task.reference_image_path ? (Array.isArray(task.reference_image_path) ? JSON.stringify(task.reference_image_path.map(path => `${API_BASE}/api/image/upload/${path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`)) : `${API_BASE}/api/image/upload/${task.reference_image_path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`) : null,
         isFavorited: task.is_favorited === 1 || task.is_favorited === true,
         status: task.status,
         error: task.error || `状态: ${task.status}`,
@@ -1155,19 +1215,48 @@ const processTaskImages = (task) => {
     // 获取参考图信息
     let referenceImageUrl = null
     if (task.reference_image_path && task.reference_image_path !== 'uploads/blank.png' && task.reference_image_path !== 'uploads\\blank.png') {
-      // 统一处理参考图片路径，支持Windows和Unix路径分隔符
-      let cleanPath = task.reference_image_path
-      
-      // 处理uploads/或uploads\前缀
-      if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('uploads\\')) {
-        // 去掉uploads/或uploads\前缀
-        cleanPath = cleanPath.replace(/^uploads[\/\\]/, '')
+      // 处理多图融合的情况，reference_image_path可能是数组
+      let referencePath = task.reference_image_path
+      if (Array.isArray(referencePath)) {
+        // 多图融合时，处理所有参考图路径
+        const cleanPaths = referencePath.map(path => {
+          let cleanPath = path
+          
+          // 处理uploads/或uploads\前缀
+          if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('uploads\\')) {
+            // 去掉uploads/或uploads\前缀
+            cleanPath = cleanPath.replace(/^uploads[\/\\]/, '')
+          }
+          
+          // 将Windows路径分隔符转换为URL路径分隔符
+          cleanPath = cleanPath.replace(/\\/g, '/')
+          
+          // 处理双斜杠问题
+          cleanPath = cleanPath.replace(/\/\//g, '/')
+          
+          return `${API_BASE}/api/image/upload/${cleanPath}`
+        })
+        
+        // 多图融合时，将完整的URL数组作为JSON字符串传递
+        referenceImageUrl = JSON.stringify(cleanPaths)
+      } else {
+        // 单图情况，保持原有逻辑
+        let cleanPath = referencePath
+        
+        // 处理uploads/或uploads\前缀
+        if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('uploads\\')) {
+          // 去掉uploads/或uploads\前缀
+          cleanPath = cleanPath.replace(/^uploads[\/\\]/, '')
+        }
+        
+        // 将Windows路径分隔符转换为URL路径分隔符
+        cleanPath = cleanPath.replace(/\\/g, '/')
+        
+        // 处理双斜杠问题
+        cleanPath = cleanPath.replace(/\/\//g, '/')
+        
+        referenceImageUrl = `${API_BASE}/api/image/upload/${cleanPath}`
       }
-      
-      // 将Windows路径分隔符转换为URL路径分隔符
-      cleanPath = cleanPath.replace(/\\/g, '/')
-      
-                referenceImageUrl = `${API_BASE}/api/image/upload/${cleanPath}`
     }
     
     // 处理image_urls数组，使用后端提供的收藏状态

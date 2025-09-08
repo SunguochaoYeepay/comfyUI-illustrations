@@ -227,9 +227,10 @@ class FluxWorkflow(BaseWorkflow):
         print("检测到参考图，使用参考图模式")
         
         # 添加LoadImageOutput节点
+        comfyui_path = self._convert_path_for_comfyui(image_path)
         workflow["142"] = {
             "inputs": {
-                "image": image_path,
+                "image": comfyui_path,
                 "refresh": "refresh"
             },
             "class_type": "LoadImageOutput",
@@ -287,3 +288,25 @@ class FluxWorkflow(BaseWorkflow):
         
         print(f"工作流参数更新完成: 步数={workflow['31']['inputs']['steps']}, CFG={workflow['31']['inputs']['cfg']}, 引导={workflow['35']['inputs']['guidance']}")
         return workflow
+    
+    def _convert_path_for_comfyui(self, image_path: str) -> str:
+        """转换Windows路径为ComfyUI兼容的路径格式
+        
+        Args:
+            image_path: 原始图像路径
+            
+        Returns:
+            ComfyUI兼容的路径格式
+        """
+        import os
+        from config.settings import COMFYUI_INPUT_DIR
+        
+        # 获取文件名（不包含路径）
+        filename = os.path.basename(image_path)
+        
+        # ComfyUI期望的是相对于输入目录的文件名
+        comfyui_path = filename
+        
+        print(f"🔄 路径转换: {image_path} -> {comfyui_path}")
+        print(f"📁 ComfyUI输入目录: {COMFYUI_INPUT_DIR}")
+        return comfyui_path

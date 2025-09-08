@@ -67,7 +67,14 @@ class WorkflowTemplate:
             else:
                 workflow_creator = FluxWorkflow(model_config)
         elif model_config.model_type == ModelType.QWEN:
-            workflow_creator = QwenWorkflow(model_config)
+            # 根据图片数量选择不同的Qwen工作流
+            # 检查是否是多图融合模式
+            reference_image_paths = parameters.get("reference_image_paths", [])
+            if len(reference_image_paths) >= 2:
+                from core.workflows import QwenFusionWorkflow
+                workflow_creator = QwenFusionWorkflow(model_config)
+            else:
+                workflow_creator = QwenWorkflow(model_config)
         elif model_config.model_type == ModelType.WAN:
             workflow_creator = WanWorkflow(model_config)
         elif model_config.model_type == ModelType.FLUX1:  # 新增
@@ -77,6 +84,48 @@ class WorkflowTemplate:
             raise ValueError(f"不支持的模型类型: {model_config.model_type}")
         
         # 创建工作流
+        # 检查是否是多图融合模式
+        reference_image_paths = parameters.get("reference_image_paths", [])
+        if model_config.model_type == ModelType.QWEN and len(reference_image_paths) >= 2:
+            # 多图融合工作流需要特殊处理
+            return self.customize_fusion_workflow(reference_image_path, description, parameters, model_name)
+        else:
+            return workflow_creator.create_workflow(reference_image_path, description, parameters)
+    
+    def customize_fusion_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any], model_name: str = "qwen-fusion"):
+        """自定义多图融合工作流参数
+        
+        Args:
+            reference_image_path: 第一张参考图像路径（用于获取图像路径列表）
+            description: 图像描述
+            parameters: 生成参数
+            model_name: 模型名称
+        """
+        # 获取模型配置
+        model_config = get_model_config(model_name)
+        if not model_config or not model_config.available:
+            print(f"⚠️ 模型 {model_name} 不可用，使用默认Qwen模型")
+            model_config = get_model_config("qwen-image")
+        
+        print(f"🎯 使用多图融合模型: {model_config.display_name}")
+        
+        # 从参数中获取图像路径列表
+        image_paths = parameters.get("reference_image_paths", [])
+        if not image_paths:
+            # 如果没有提供路径列表，尝试从reference_image_path获取
+            if reference_image_path:
+                image_paths = [reference_image_path]
+            else:
+                raise ValueError("多图融合需要提供图像路径列表")
+        
+        # 创建Qwen融合工作流
+        from core.workflows import QwenFusionWorkflow
+        workflow_creator = QwenFusionWorkflow(model_config)
+        
+        # 将图像路径列表添加到参数中
+        parameters["reference_image_paths"] = image_paths
+        
+        # 创建工作流（调用标准的create_workflow方法）
         return workflow_creator.create_workflow(reference_image_path, description, parameters)
     
 

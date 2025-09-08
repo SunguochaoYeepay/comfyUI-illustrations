@@ -102,20 +102,40 @@
           
           <div class="info-content">
             <!-- 参考图 -->
-            <div class="info-item" v-if="imageData.referenceImage">
+            <div class="info-item" v-if="processedReferenceImage">
               <label>参考图:</label>
               <div class="info-value reference-image">
-                <img 
-                  :src="imageData.referenceImage" 
-                  alt="参考图"
-                  class="reference-img"
-                  @click="viewReferenceImage"
-                  @error="handleReferenceImageError"
-                  v-show="!referenceImageError"
-                />
-                <div v-if="referenceImageError" class="reference-image-error">
-                  <span class="error-icon">⚠️</span>
-                  <span class="error-text">参考图加载失败</span>
+                <!-- 多图融合时显示多张参考图 -->
+                <div v-if="Array.isArray(processedReferenceImage)" class="reference-images-grid">
+                  <div 
+                    v-for="(imageUrl, index) in processedReferenceImage" 
+                    :key="index"
+                    class="reference-image-item"
+                  >
+                    <img 
+                      :src="imageUrl" 
+                      :alt="`参考图 ${index + 1}`"
+                      class="reference-img"
+                      @click="viewReferenceImage(imageUrl)"
+                      @error="handleReferenceImageError"
+                    />
+                    <span class="reference-image-label">{{ index + 1 }}</span>
+                  </div>
+                </div>
+                <!-- 单图时显示一张参考图 -->
+                <div v-else>
+                  <img 
+                    :src="processedReferenceImage" 
+                    alt="参考图"
+                    class="reference-img"
+                    @click="viewReferenceImage(processedReferenceImage)"
+                    @error="handleReferenceImageError"
+                    v-show="!referenceImageError"
+                  />
+                  <div v-if="referenceImageError" class="reference-image-error">
+                    <span class="error-icon">⚠️</span>
+                    <span class="error-text">参考图加载失败</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -275,6 +295,54 @@ const isVideoTask = computed(() => {
 const referenceImageError = ref(false)
 const videoGeneratorVisible = ref(false)
 
+// 处理参考图URL，支持多图融合的情况
+const processedReferenceImage = computed(() => {
+  if (!props.imageData.referenceImage) return null
+  
+  let imageUrl = props.imageData.referenceImage
+  
+  // 如果是数组字符串，解析为数组
+  if (typeof imageUrl === 'string' && imageUrl.startsWith('[') && imageUrl.endsWith(']')) {
+    try {
+      const imageArray = JSON.parse(imageUrl)
+      // 多图融合时，返回所有图片的数组
+      if (Array.isArray(imageArray) && imageArray.length > 1) {
+        return imageArray.map(url => {
+          if (typeof url === 'string') {
+            // 处理双斜杠问题（但保留协议部分的://）
+            if (url.includes('://')) {
+              const [protocol, rest] = url.split('://', 2)
+              const cleanedRest = rest.replace(/\/\//g, '/')
+              return `${protocol}://${cleanedRest}`
+            } else {
+              return url.replace(/\/\//g, '/')
+            }
+          }
+          return url
+        })
+      }
+      // 单图或数组只有一个元素时，取第一个
+      imageUrl = imageArray[0] || imageUrl
+    } catch (e) {
+      console.warn('解析参考图URL失败:', e)
+    }
+  }
+  
+  // 处理双斜杠问题（但保留协议部分的://）
+  if (typeof imageUrl === 'string') {
+    // 先处理协议部分，避免影响http://
+    if (imageUrl.includes('://')) {
+      const [protocol, rest] = imageUrl.split('://', 2)
+      const cleanedRest = rest.replace(/\/\//g, '/')
+      imageUrl = `${protocol}://${cleanedRest}`
+    } else {
+      imageUrl = imageUrl.replace(/\/\//g, '/')
+    }
+  }
+  
+  return imageUrl
+})
+
 // 移除本地的isUpscaling状态，使用props中的isUpscaling
 
 // 显示视频生成器
@@ -290,7 +358,7 @@ const closeVideoGenerator = () => {
 
 // 处理参考图加载错误
 const handleReferenceImageError = () => {
-  console.warn('参考图加载失败:', props.imageData.referenceImage)
+  console.warn('参考图加载失败:', processedReferenceImage.value)
   referenceImageError.value = true
 }
 
@@ -396,9 +464,10 @@ const getModelType = (modelName) => {
 }
 
 // 查看参考图
-const viewReferenceImage = () => {
-  if (props.imageData.referenceImage) {
-    window.open(props.imageData.referenceImage, '_blank')
+const viewReferenceImage = (imageUrl = null) => {
+  const url = imageUrl || processedReferenceImage.value
+  if (url) {
+    window.open(url, '_blank')
   }
 }
 
@@ -825,6 +894,46 @@ onUnmounted(() => {
 .reference-img:hover {
   border-color: #667eea;
   transform: scale(1.05);
+}
+
+/* 多图参考图网格样式 */
+.reference-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  max-width: 300px;
+}
+
+.reference-image-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.reference-image-item .reference-img {
+  max-width: 80px;
+  max-height: 80px;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.reference-image-label {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #667eea;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  border: 2px solid #333;
 }
 
 .reference-image-error {

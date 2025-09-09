@@ -259,7 +259,7 @@ const generateImage = async (options = {}) => {
     // 准备FormData
     const formData = new FormData()
     formData.append('description', prompt.value)
-    formData.append('steps', 20)
+    formData.append('steps', 8)
     formData.append('model', selectedModel.value)
     
     // 如果是视频生成，添加视频配置

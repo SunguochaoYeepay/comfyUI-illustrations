@@ -1,7 +1,7 @@
 {
   "11": {
     "inputs": {
-      "shift": 3,
+      "shift": 3.1,
       "model": [
         "23",
         0
@@ -31,10 +31,10 @@
   "20": {
     "inputs": {
       "seed": 974703068457786,
-      "steps": 20,
-      "cfg": 3,
+      "steps": 8,
+      "cfg": 2.5,
       "sampler_name": "euler",
-      "scheduler": "normal",
+      "scheduler": "simple",
       "denoise": 1,
       "model": [
         "33",
@@ -81,8 +81,8 @@
   },
   "23": {
     "inputs": {
-      "unet_name": "qwen_image_edit_fp8_e4m3fn.safetensors",
-      "weight_dtype": "fp8_e5m2"
+      "unet_name": "qwen_image_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
     "_meta": {
@@ -142,8 +142,8 @@
   },
   "33": {
     "inputs": {
-      "lora_01": "None",
-      "strength_01": 0.8,
+      "lora_01": "Qwen-Image-Lightning-8steps-V1.0.safetensors",
+      "strength_01": 1.0,
       "lora_02": "None",
       "strength_02": 0.1,
       "lora_03": "None",

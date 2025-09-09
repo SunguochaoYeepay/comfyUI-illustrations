@@ -66,8 +66,8 @@ DEFAULT_STEPS = 20
 DEFAULT_COUNT = 1
 MAX_WAIT_TIME = 300  # 秒
 MIN_FILE_SIZE = 100  # 字节
-TARGET_IMAGE_WIDTH = 512
-TARGET_IMAGE_HEIGHT = 512
+TARGET_IMAGE_WIDTH = 1024
+TARGET_IMAGE_HEIGHT = 1024
 
 # =============================================================================
 # 初始化目录

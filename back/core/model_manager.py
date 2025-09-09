@@ -113,7 +113,7 @@ class ModelManager:
             model_type=ModelType.QWEN,
             name="qwen-image",
             display_name="Qwen",
-            unet_file="qwen_image_edit_fp8_e4m3fn.safetensors",  # 在diffusion_models目录
+            unet_file="qwen_image_fp8_e4m3fn.safetensors",  # 在diffusion_models目录
             clip_file="qwen_2.5_vl_7b_fp8_scaled.safetensors",  # 在text_encoders目录
             vae_file="qwen_image_vae.safetensors",  # 在vae目录
             template_path="workflows/qwen_image_generation_workflow.json",  # 默认单图工作流

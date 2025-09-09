@@ -149,7 +149,7 @@ class QwenWorkflow(BaseWorkflow):
                 "type": "KSampler",
                 "inputs": {
                     "seed": 287237245922212,
-                    "steps": 20,
+                    "steps": 8,
                     "cfg": 3,
                     "sampler_name": "euler",
                     "scheduler": "normal",
@@ -246,7 +246,7 @@ class QwenWorkflow(BaseWorkflow):
                 workflow["20"]["inputs"]["steps"] = parameters["steps"]
             if parameters.get("seed"):
                 workflow["20"]["inputs"]["seed"] = parameters["seed"]
-            print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 20)}, 种子={parameters.get('seed', 'random')}")
+            print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 8)}, 种子={parameters.get('seed', 'random')}")
         
         # 动态更新图像尺寸配置
         workflow = self._update_image_dimensions(workflow)
@@ -298,9 +298,8 @@ class QwenWorkflow(BaseWorkflow):
         
         print(f"🎨 检测到 {len(processed_loras)} 个LoRA配置")
         
-        # 重置所有LoRA配置
-        workflow["33"]["inputs"]["lora_01"] = "None"
-        workflow["33"]["inputs"]["strength_01"] = 0.8
+        # 保留默认的8步生图LoRA，前端LoRA从lora_02开始
+        # lora_01 保持默认的 Qwen-Image-Lightning-8steps-V1.0.safetensors
         workflow["33"]["inputs"]["lora_02"] = "None"
         workflow["33"]["inputs"]["strength_02"] = 0.1
         workflow["33"]["inputs"]["lora_03"] = "None"
@@ -308,19 +307,19 @@ class QwenWorkflow(BaseWorkflow):
         workflow["33"]["inputs"]["lora_04"] = "None"
         workflow["33"]["inputs"]["strength_04"] = 0.1
         
-        # 设置启用的LoRA
+        # 设置前端选择的LoRA（从lora_02开始）
         for i, lora in enumerate(processed_loras):
-            if i >= 4:  # 限制最多4个LoRA
+            if i >= 3:  # 限制最多3个额外LoRA（lora_02, lora_03, lora_04）
                 break
                 
-            lora_key = f"lora_{i+1:02d}"
-            strength_key = f"strength_{i+1:02d}"
+            lora_key = f"lora_{i+2:02d}"  # 从lora_02开始
+            strength_key = f"strength_{i+2:02d}"
             
             workflow["33"]["inputs"][lora_key] = lora["name"]
             workflow["33"]["inputs"][strength_key] = lora["strength_model"]
-            print(f"✅ 设置LoRA {i+1}: {lora['name']} (强度: {lora['strength_model']})")
+            print(f"✅ 设置LoRA {i+2}: {lora['name']} (强度: {lora['strength_model']})")
         
-        print(f"✅ LoRA配置完成: {len(processed_loras)} 个LoRA")
+        print(f"✅ LoRA配置完成: 1个默认LoRA + {len(processed_loras)} 个用户LoRA")
         return workflow
     
     def _convert_path_for_comfyui(self, image_path: str) -> str:

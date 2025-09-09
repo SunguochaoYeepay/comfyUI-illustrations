@@ -32,3 +32,122 @@ a,
     padding: 0;
   }
 }
+
+/* 强制覆盖Ant Design模态框的白色背景 */
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
+  background-color: #000000 !important;
+}
+
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-header {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+/* 使用属性选择器覆盖所有可能的Ant Design样式 */
+[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
+  background-color: #000000 !important;
+}
+
+[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-header {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+/* 最高优先级覆盖 */
+html body [class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
+  background-color: #000000 !important;
+}
+
+html body [class*="css-dev-only-do-not-override"].ant-modal .ant-modal-header {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+/* 自定义模态框位置和样式 */
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal {
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0;
+  color: rgba(0, 0, 0, 0.88);
+  font-size: 14px;
+  line-height: 1.5714285714285714;
+  list-style: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  pointer-events: none;
+  position: relative;
+  top: 0px !important;  /* 顶部距离设为0 */
+  width: auto;
+  max-width: calc(100vw - 32px);
+  max-height: 100vh !important;  /* 设置最大高度为100vh */
+  padding-bottom: 0px !important;
+}
+
+/* 使用属性选择器覆盖所有可能的Ant Design模态框样式 */
+[class*="css-dev-only-do-not-override"].ant-modal {
+  top: 0px !important; /* 顶部距离设为0 */
+  max-height: 100vh !important; /* 设置最大高度为100vh */
+}
+
+/* 强制覆盖关闭按钮样式 */
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-close {
+  color: #fff !important;
+  background: transparent !important;
+  border: none !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 4px !important;
+  transition: all 0.3s !important;
+}
+
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-close {
+  color: #fff !important;
+  background: transparent !important;
+  border: none !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 4px !important;
+  transition: all 0.3s !important;
+}
+
+[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+/* 强制设置模态框高度 */
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal {
+  height: 98vh !important;
+}
+
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
+  height: 98vh !important;
+}
+
+:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-body {
+  height: calc(100vh - 60px) !important;
+  overflow-y: auto;
+}
+
+[class*="css-dev-only-do-not-override"].ant-modal {
+  height: 100vh !important;
+}
+
+[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
+  height: 100vh !important;
+}
+
+[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-body {
+  height: calc(100vh - 60px) !important;
+  overflow-y: auto;
+}

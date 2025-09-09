@@ -9,7 +9,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class DatabaseManager:
@@ -505,6 +505,77 @@ class DatabaseManager:
         conn.close()
         return bool(result[0]) if result else False
     
+    def get_favorite_images(self) -> List[Dict[str, Any]]:
+        """获取所有收藏的图片
+        
+        Returns:
+            收藏图片列表
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 查询所有收藏的图片
+        cursor.execute("""
+            SELECT 
+                t.id as task_id,
+                t.description,
+                t.created_at,
+                t.parameters,
+                t.result_path,
+                t.reference_image_path,
+                if.image_index,
+                if.filename,
+                if.is_favorited
+            FROM tasks t
+            INNER JOIN image_favorites if ON t.id = if.task_id
+            WHERE if.is_favorited = 1
+            ORDER BY if.created_at DESC
+        """)
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        favorites = []
+        for row in results:
+            task_id, description, created_at, parameters, result_path, reference_image_path, image_index, filename, is_favorited = row
+            
+            # 解析参数
+            try:
+                params = json.loads(parameters) if parameters else {}
+            except:
+                params = {}
+            
+            # 构建图片URL
+            image_url = None
+            if result_path:
+                try:
+                    # 尝试解析result_path为JSON数组
+                    result_paths = json.loads(result_path)
+                    if isinstance(result_paths, list) and image_index < len(result_paths):
+                        image_url = f"/api/image/{task_id}?index={image_index}"
+                    else:
+                        # 单个文件
+                        image_url = f"/api/image/{task_id}"
+                except:
+                    # 如果不是JSON，当作单个文件处理
+                    image_url = f"/api/image/{task_id}"
+            
+            favorite_item = {
+                "id": f"{task_id}_{image_index}",
+                "task_id": task_id,
+                "image_index": image_index,
+                "title": description[:50] + "..." if description and len(description) > 50 else description or "未命名作品",
+                "description": description or "暂无描述",
+                "imageUrl": image_url,
+                "prompt": description,
+                "parameters": params,
+                "createdAt": created_at,
+                "filename": filename
+            }
+            
+            favorites.append(favorite_item)
+        
+        return favorites
 
     
     def delete_task(self, task_id: str) -> Optional[str]:

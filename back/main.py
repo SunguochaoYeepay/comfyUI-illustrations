@@ -855,6 +855,19 @@ async def toggle_image_favorite(task_id: str, image_index: int, filename: str = 
         raise HTTPException(status_code=500, detail=f"切换图片收藏状态失败: {str(e)}")
 
 
+@app.get("/api/favorites")
+async def get_favorites():
+    """获取收藏的图片列表"""
+    try:
+        favorites = db_manager.get_favorite_images()
+        return {
+            "favorites": favorites,
+            "total": len(favorites)
+        }
+    except Exception as e:
+        print(f"获取收藏列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取收藏列表失败: {str(e)}")
+
 
 @app.delete("/api/task/{task_id}")
 async def delete_task(task_id: str):

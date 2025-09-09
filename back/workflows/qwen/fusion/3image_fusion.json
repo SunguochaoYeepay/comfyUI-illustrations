@@ -3,7 +3,7 @@
     "inputs": {
       "inputcount": 3,
       "direction": "right",
-      "match_image_size": false,
+      "match_image_size": true,
       "Update inputs": null,
       "image_1": [
         "152",
@@ -120,7 +120,7 @@
   "158": {
     "inputs": {
       "seed": 802361824566230,
-      "steps": 20,
+      "steps": 8,
       "cfg": 2.5,
       "sampler_name": "euler",
       "scheduler": "simple",
@@ -151,7 +151,7 @@
     "inputs": {
       "shift": 3.1000000000000005,
       "model": [
-        "167",
+        "170",
         0
       ]
     },
@@ -195,8 +195,8 @@
   "164": {
     "inputs": {
       "upscale_method": "nearest-exact",
-      "width": 768,
-      "height": 1280,
+      "width": 1024,
+      "height": 768,
       "crop": "center",
       "samples": [
         "162",
@@ -262,6 +262,30 @@
     "class_type": "TextEncodeQwenImageEdit",
     "_meta": {
       "title": "TextEncodeQwenImageEdit"
+    }
+  },
+  "170": {
+    "inputs": {
+      "lora_01": "Qwen-Image-Lightning-8steps-V1.0.safetensors",
+      "strength_01": 1,
+      "lora_02": "None",
+      "strength_02": 1,
+      "lora_03": "None",
+      "strength_03": 1,
+      "lora_04": "None",
+      "strength_04": 1,
+      "model": [
+        "167",
+        0
+      ],
+      "clip": [
+        "165",
+        0
+      ]
+    },
+    "class_type": "Lora Loader Stack (rgthree)",
+    "_meta": {
+      "title": "LoRA堆加载器"
     }
   }
 }

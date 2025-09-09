@@ -644,7 +644,7 @@ async def get_task_status(task_id: str):
                 # 提取文件名，以便前端可以直接请求特定文件
                 filenames = [Path(path).name for path in result_paths]
                 result = {
-                    "image_urls": [f"/api/image/{task_id}?index={i}" for i in range(len(result_paths))],
+                    "image_urls": [f"/api/image/{task_id}/{i}" for i in range(len(result_paths))],
                     "count": len(result_paths),
                     "filenames": filenames,  # 添加文件名列表
                     "direct_urls": [f"/api/image/{task_id}?filename={filename}" for filename in filenames]  # 直接访问URL
@@ -683,6 +683,17 @@ async def get_task_status(task_id: str):
         result=result,
         error=task.get("error")
     )
+
+@app.get("/api/image/{task_id}/{image_index}")
+async def get_generated_image_by_index(task_id: str, image_index: int):
+    """根据索引获取生成的图像"""
+    return await get_generated_image(task_id, index=image_index)
+
+# 添加兼容路由，支持前端使用的 {index} 参数名
+@app.get("/api/image/{task_id}/{index}")
+async def get_generated_image_by_index_compat(task_id: str, index: int):
+    """根据索引获取生成的图像（兼容前端请求）"""
+    return await get_generated_image(task_id, index=index)
 
 @app.get("/api/image/{task_id}")
 async def get_generated_image(task_id: str, index: int = 0, filename: str = None):
@@ -855,18 +866,64 @@ async def toggle_image_favorite(task_id: str, image_index: int, filename: str = 
         raise HTTPException(status_code=500, detail=f"切换图片收藏状态失败: {str(e)}")
 
 
+@app.post("/api/video/{task_id}/favorite")
+async def toggle_video_favorite(task_id: str, filename: str = None):
+    """切换视频收藏状态"""
+    try:
+        # 验证任务是否存在
+        task = db_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        new_favorite = db_manager.toggle_video_favorite(task_id, filename)
+        
+        return {
+            "task_id": task_id,
+            "is_favorited": new_favorite,
+            "message": "视频收藏状态已更新"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"切换视频收藏状态失败: {e}")
+        raise HTTPException(status_code=500, detail=f"切换视频收藏状态失败: {str(e)}")
+
 @app.get("/api/favorites")
 async def get_favorites():
-    """获取收藏的图片列表"""
+    """获取收藏的图片和视频列表"""
     try:
-        favorites = db_manager.get_favorite_images()
+        image_favorites = db_manager.get_favorite_images()
+        video_favorites = db_manager.get_favorite_videos()
+        
+        # 合并图片和视频收藏
+        all_favorites = image_favorites + video_favorites
+        
+        # 按创建时间排序
+        all_favorites.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
+        
+        return {
+            "favorites": all_favorites,
+            "total": len(all_favorites),
+            "images": len(image_favorites),
+            "videos": len(video_favorites)
+        }
+    except Exception as e:
+        print(f"获取收藏列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取收藏列表失败: {str(e)}")
+
+@app.get("/api/favorites/videos")
+async def get_favorite_videos():
+    """获取收藏的视频列表"""
+    try:
+        favorites = db_manager.get_favorite_videos()
         return {
             "favorites": favorites,
             "total": len(favorites)
         }
     except Exception as e:
-        print(f"获取收藏列表失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取收藏列表失败: {str(e)}")
+        print(f"获取收藏视频列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取收藏视频列表失败: {str(e)}")
 
 
 @app.delete("/api/task/{task_id}")

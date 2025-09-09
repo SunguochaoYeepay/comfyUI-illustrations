@@ -331,17 +331,18 @@ class DatabaseManager:
                                 task['image_count'] = 1
                                 task['image_urls'] = [f"/api/video/{task['id']}"]
                                 # 为视频添加收藏状态
-                                is_favorited = self.get_image_favorite_status(task['id'], 0)
+                                is_favorited = self.get_video_favorite_status(task['id'])
                                 task['images'] = [{
                                     'task_id': task['id'],
-                                    'image_index': 0,
+                                    'image_index': -1,  # 使用-1表示视频
                                     'url': f"/api/video/{task['id']}",
-                                    'isFavorited': is_favorited
+                                    'isFavorited': is_favorited,
+                                    'type': 'video'
                                 }]
                             else:
                                 # 图片任务
                                 task['image_count'] = len(result_paths)
-                                task['image_urls'] = [f"/api/image/{task['id']}?index={i}" for i in range(len(result_paths))]
+                                task['image_urls'] = [f"/api/image/{task['id']}/{i}" for i in range(len(result_paths))]
                                 # 为每个图片添加收藏状态
                                 task['images'] = []
                                 for i in range(len(result_paths)):
@@ -349,7 +350,7 @@ class DatabaseManager:
                                     task['images'].append({
                                         'task_id': task['id'],
                                         'image_index': i,
-                                        'url': f"/api/image/{task['id']}?index={i}",
+                                        'url': f"/api/image/{task['id']}/{i}",
                                         'isFavorited': is_favorited
                                     })
                         else:
@@ -361,34 +362,35 @@ class DatabaseManager:
                                 task['image_count'] = 1
                                 task['image_urls'] = [f"/api/video/{task['id']}"]
                                 # 为视频添加收藏状态
-                                is_favorited = self.get_image_favorite_status(task['id'], 0)
+                                is_favorited = self.get_video_favorite_status(task['id'])
                                 task['images'] = [{
                                     'task_id': task['id'],
-                                    'image_index': 0,
+                                    'image_index': -1,  # 使用-1表示视频
                                     'url': f"/api/video/{task['id']}",
-                                    'isFavorited': is_favorited
+                                    'isFavorited': is_favorited,
+                                    'type': 'video'
                                 }]
                             else:
                                 # 单个图片文件
                                 task['image_count'] = 1
-                                task['image_urls'] = [f"/api/image/{task['id']}"]
+                                task['image_urls'] = [f"/api/image/{task['id']}/0"]
                                 # 为单个图片添加收藏状态
                                 is_favorited = self.get_image_favorite_status(task['id'], 0)
                                 task['images'] = [{
                                     'task_id': task['id'],
                                     'image_index': 0,
-                                    'url': f"/api/image/{task['id']}",
+                                    'url': f"/api/image/{task['id']}/0",
                                     'isFavorited': is_favorited
                                 }]
                 except:
                     task['image_count'] = 1
-                    task['image_urls'] = [f"/api/image/{task['id']}"]
+                    task['image_urls'] = [f"/api/image/{task['id']}/0"]
                     # 为单个图片添加收藏状态
                     is_favorited = self.get_image_favorite_status(task['id'], 0)
                     task['images'] = [{
                         'task_id': task['id'],
                         'image_index': 0,
-                        'url': f"/api/image/{task['id']}",
+                        'url': f"/api/image/{task['id']}/0",
                         'isFavorited': is_favorited
                     }]
             else:
@@ -552,13 +554,13 @@ class DatabaseManager:
                     # 尝试解析result_path为JSON数组
                     result_paths = json.loads(result_path)
                     if isinstance(result_paths, list) and image_index < len(result_paths):
-                        image_url = f"/api/image/{task_id}?index={image_index}"
+                        image_url = f"/api/image/{task_id}/{image_index}"
                     else:
                         # 单个文件
-                        image_url = f"/api/image/{task_id}"
+                        image_url = f"/api/image/{task_id}/0"
                 except:
                     # 如果不是JSON，当作单个文件处理
-                    image_url = f"/api/image/{task_id}"
+                    image_url = f"/api/image/{task_id}/0"
             
             favorite_item = {
                 "id": f"{task_id}_{image_index}",
@@ -571,6 +573,128 @@ class DatabaseManager:
                 "parameters": params,
                 "createdAt": created_at,
                 "filename": filename
+            }
+            
+            favorites.append(favorite_item)
+        
+        return favorites
+    
+    def toggle_video_favorite(self, task_id: str, filename: str = None) -> bool:
+        """切换视频收藏状态
+        
+        Args:
+            task_id: 任务ID
+            filename: 文件名（可选）
+            
+        Returns:
+            新的收藏状态
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # 检查是否已存在收藏记录
+            cursor.execute("SELECT is_favorited FROM image_favorites WHERE task_id = ? AND image_index = -1", 
+                          (task_id,))
+            result = cursor.fetchone()
+            
+            if result:
+                # 更新现有记录
+                current_favorite = result[0]
+                new_favorite = 0 if current_favorite else 1
+                cursor.execute("UPDATE image_favorites SET is_favorited = ?, updated_at = ? WHERE task_id = ? AND image_index = -1", 
+                              (new_favorite, datetime.now(), task_id))
+            else:
+                # 创建新记录（使用image_index = -1 表示视频）
+                new_favorite = 1
+                cursor.execute("INSERT INTO image_favorites (task_id, image_index, filename, is_favorited, created_at) VALUES (?, ?, ?, ?, ?)", 
+                              (task_id, -1, filename, new_favorite, datetime.now()))
+            
+            conn.commit()
+            return bool(new_favorite)
+        except Exception as e:
+            print(f"切换视频收藏状态失败: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def get_video_favorite_status(self, task_id: str) -> bool:
+        """获取视频的收藏状态
+        
+        Args:
+            task_id: 任务ID
+            
+        Returns:
+            是否已收藏
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT is_favorited FROM image_favorites WHERE task_id = ? AND image_index = -1", 
+                          (task_id,))
+            result = cursor.fetchone()
+            return bool(result[0]) if result else False
+        except Exception as e:
+            print(f"获取视频收藏状态失败: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def get_favorite_videos(self) -> List[Dict[str, Any]]:
+        """获取所有收藏的视频
+        
+        Returns:
+            收藏的视频列表
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # 查询收藏的视频（image_index = -1 表示视频）
+            cursor.execute("""
+                SELECT t.id, t.description, t.created_at, t.parameters, t.result_path, t.reference_image_path,
+                       if.filename, if.is_favorited
+                FROM tasks t
+                INNER JOIN image_favorites if ON t.id = if.task_id
+                WHERE if.is_favorited = 1 AND if.image_index = -1
+                ORDER BY if.created_at DESC
+            """)
+            
+            rows = cursor.fetchall()
+            
+        except Exception as e:
+            print(f"获取收藏视频失败: {e}")
+            return []
+        finally:
+            conn.close()
+        
+        favorites = []
+        for row in rows:
+            task_id, description, created_at, parameters, result_path, reference_image_path, filename, is_favorited = row
+            
+            # 解析参数
+            try:
+                params = json.loads(parameters) if parameters else {}
+            except:
+                params = {}
+            
+            # 构建视频URL
+            video_url = f"/api/video/{task_id}"
+            
+            favorite_item = {
+                "id": f"{task_id}_video",
+                "task_id": task_id,
+                "title": description or "未命名视频",
+                "description": description or "暂无描述",
+                "videoUrl": video_url,
+                "filename": filename,
+                "prompt": params.get('description', ''),
+                "parameters": params,
+                "createdAt": created_at,
+                "isFavorited": bool(is_favorited),
+                "type": "video"
             }
             
             favorites.append(favorite_item)

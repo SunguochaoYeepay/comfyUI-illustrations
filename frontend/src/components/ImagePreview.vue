@@ -71,6 +71,14 @@
              <a-button type="primary" @click="downloadImage">
                <DownloadOutlined /> {{ isVideoTask ? '下载视频' : '下载' }}
              </a-button>
+             <!-- 收藏按钮 -->
+             <a-button 
+               type="default" 
+               :class="['action-btn', 'favorite-btn', { 'favorited': imageData.isFavorited }]" 
+               @click="toggleFavorite"
+             >
+               {{ imageData.isFavorited ? '取消收藏' : '收藏' }}
+             </a-button>
              <!-- 图片任务才显示放大和生成视频按钮 -->
              <template v-if="!isVideoTask">
                <a-dropdown :disabled="isUpscaling">
@@ -250,7 +258,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined } from '@ant-design/icons-vue'
+import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons-vue'
 import VideoGenerator from './VideoGenerator.vue'
 
 // Props
@@ -405,6 +413,46 @@ const downloadImage = async () => {
   } catch (error) {
     console.error('下载失败:', error)
     message.error(isVideoTask.value ? '视频下载失败' : '图片下载失败')
+  }
+}
+
+// 切换收藏状态
+const toggleFavorite = async () => {
+  try {
+    let response
+    if (isVideoTask.value) {
+      // 视频收藏
+      response = await fetch(`/api/video/${props.imageData.task_id}/favorite`, {
+        method: 'POST'
+      })
+    } else {
+      // 图片收藏
+      response = await fetch(`/api/image/${props.imageData.task_id}/${props.imageData.imageIndex || 0}/favorite`, {
+        method: 'POST'
+      })
+    }
+    
+    if (response.ok) {
+      const result = await response.json()
+      
+      // 更新本地状态
+      props.imageData.isFavorited = result.is_favorited
+      
+      // 显示提示信息
+      if (result.is_favorited) {
+        message.success('已添加到收藏')
+      } else {
+        message.success('已取消收藏')
+      }
+      
+      // 通知父组件刷新历史记录
+      emit('refreshHistory')
+    } else {
+      throw new Error('切换收藏状态失败')
+    }
+  } catch (error) {
+    console.error('切换收藏状态失败:', error)
+    message.error('操作失败，请重试')
   }
 }
 
@@ -732,7 +780,7 @@ onUnmounted(() => {
 }
 
 .info-panel {
-  width: 400px;
+  width: 460px;
   border-left: 1px solid #444;
   display: flex;
   flex-direction: column;
@@ -1006,6 +1054,42 @@ onUnmounted(() => {
 .info-content::-webkit-scrollbar-thumb:hover,
 .parameters::-webkit-scrollbar-thumb:hover {
   background: #888;
+}
+
+/* 图标样式 */
+.action-icon {
+  width: 16px;
+  height: 16px;
+  transition: all 0.2s ease;
+}
+
+.action-icon.favorited {
+  color: #ff4757;
+}
+
+/* 收藏按钮样式 */
+.favorite-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.favorite-btn:hover {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: rgba(255, 107, 107, 0.4);
+  color: #ff6b6b;
+}
+
+.favorite-btn.favorited {
+  background: rgba(255, 107, 107, 0.3);
+  border-color: rgba(255, 107, 107, 0.5);
+  color: #ff6b6b;
+}
+
+.favorite-btn.favorited:hover {
+  background: rgba(255, 107, 107, 0.4);
+  border-color: rgba(255, 107, 107, 0.6);
 }
 
 

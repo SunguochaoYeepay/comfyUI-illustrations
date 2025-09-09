@@ -46,7 +46,6 @@
             >
               <div class="model-dropdown-item-icon">
                 <span class="model-icon">🤖</span>
-                <span v-if="model.name === 'qwen-image'" class="model-badge">New</span>
               </div>
               <div class="model-dropdown-item-info">
                 <div class="model-dropdown-item-name">{{ model.display_name }}</div>

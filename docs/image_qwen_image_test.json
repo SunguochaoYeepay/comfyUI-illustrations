@@ -1,0 +1,155 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 602564915220695,
+      "steps": 20,
+      "cfg": 2.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "66",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "奢华美妆促销海报风格，聚焦欧莱雅双 11 活动，呈现金致臻颜面霜、复颜乳液、玻尿酸眼霜三款产品。文案分层：顶部 “L’ORÉAL PARIS 巴黎欧莱雅 | 11.11 全球好物节” 品牌与活动标识，中部 “美礼满袋 惊喜上门 爆品不止买 1 送 1 正装量 *” 促销文案 ，底部小字为活动细则。构图以圆形托盘为中心，产品错落摆放形成视觉焦点，搭配金色气球、丝带、卡片营造精致感。色彩主打奢华金棕色调，产品瓶身（琥珀金、纯净白、渐变紫）与背景金属光泽呼应，凸显高端。光影采用柔光渲染，突出产品瓶身质感，金色元素带细腻高光，制造华丽氛围。质感上，面霜罐玻璃通透、金属盖有磨砂光泽，乳液瓶身光滑，眼霜管体渐变纹理清晰。环境融入精致金色道具（气球、丝带、卡片），打造高端送礼场景。氛围是热烈、诱人的双 11 购物狂欢感，细节刻画产品标签字体精度、瓶身材质纹理、金色装饰的褶皱与光泽。要求超写实商业级渲染，色彩浓郁高级，光影自然灵动，质感细腻逼真 。",
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "37": {
+    "inputs": {
+      "unet_name": "qwen_image_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNET加载器"
+    }
+  },
+  "38": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIP加载器"
+    }
+  },
+  "39": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAE加载器"
+    }
+  },
+  "58": {
+    "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "空Latent_SD3"
+    }
+  },
+  "60": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "66": {
+    "inputs": {
+      "shift": 3.1000000000000005,
+      "model": [
+        "73",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "模型采样算法AuraFlow"
+    }
+  },
+  "73": {
+    "inputs": {
+      "lora_name": "Qwen-Image-Lightning-8steps-V1.0.safetensors",
+      "strength_model": 1,
+      "model": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器(仅模型)"
+    }
+  }
+}

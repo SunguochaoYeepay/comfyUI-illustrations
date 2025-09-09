@@ -23,6 +23,7 @@
         @download-image="downloadImage"
         @load-more="loadMoreHistory"
         @toggle-favorite="toggleFavorite"
+        @toggle-video-favorite="toggleVideoFavorite"
         @filter-change="handleFilterChange"
         @upscale="handleUpscale"
         @refreshHistory="loadHistory(1, false)"
@@ -65,7 +66,7 @@ const API_BASE = (() => {
 
 // 响应式数据
 const prompt = ref('')
-const negativePrompt = ref('blurry, low quality, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, signature')
+const negativePrompt = ref('blurry, low quality, worst quality, low resolution, pixelated, grainy, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, extra fingers, bad hands, bad face, malformed, disfigured, mutated, fused fingers, cluttered background, extra legs, overexposed, oversaturated, static, motionless, watermark, text, signature, jpeg artifacts, compression artifacts, noise, artifacts, poorly drawn, amateur, sketch, draft')
 const imageSize = ref('512x512')
 const imageCount = ref(parseInt(localStorage.getItem('imageCount')) || 4) // 默认生成4张图片，支持持久化
 const isGenerating = ref(false)
@@ -228,8 +229,8 @@ const generateImage = async (options = {}) => {
     return
   }
 
-  // 图片数量验证
-  if (referenceImages.value.length === 0) {
+  // 图片数量验证 - Qwen模型支持无图片生成
+  if (referenceImages.value.length === 0 && selectedModel.value !== 'qwen-image') {
     message.warning('请上传至少1张图片')
     return
   }
@@ -352,7 +353,6 @@ const generateImage = async (options = {}) => {
               }))
               
               // 重新加载第一页历史记录以显示最新生成的图像
-              console.log('🔄 开始刷新历史记录...')
               
               // 等待一下确保数据库更新
               await new Promise(resolve => setTimeout(resolve, 500))
@@ -505,6 +505,7 @@ const downloadImage = async (image) => {
   }
 }
 
+
 // 分享图像
 const shareImage = (image) => {
   if (navigator.share) {
@@ -560,7 +561,6 @@ const editImage = async (image) => {
   // 回显模型信息
   if (image.parameters?.model) {
     selectedModel.value = image.parameters.model
-    console.log('🎯 回填模型:', image.parameters.model)
   }
   
   // 回显LoRA信息
@@ -576,7 +576,6 @@ const editImage = async (image) => {
     // 使用nextTick确保DOM更新完成
     await nextTick()
     selectedLoras.value = lorasToSet
-    console.log('🎨 回填LoRA:', selectedLoras.value)
   } else {
     await nextTick()
     selectedLoras.value = []
@@ -585,39 +584,76 @@ const editImage = async (image) => {
   // 回显参考图
   if (image.referenceImage) {
     try {
-      // 从URL获取图片文件
-      const response = await fetch(image.referenceImage)
+      let imageUrls = []
       
-      // 检查响应状态
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // 处理多图融合的情况
+      if (typeof image.referenceImage === 'string' && image.referenceImage.startsWith('[') && image.referenceImage.endsWith(']')) {
+        // 解析JSON字符串数组
+        try {
+          imageUrls = JSON.parse(image.referenceImage)
+        } catch (parseError) {
+          console.warn('解析参考图URL数组失败:', parseError)
+          imageUrls = [image.referenceImage]
+        }
+      } else {
+        // 单图情况
+        imageUrls = [image.referenceImage]
       }
       
-      const blob = await response.blob()
+      // 处理所有参考图
+      const referenceImageFiles = []
       
-      // 检查blob是否为空或无效
-      if (blob.size === 0) {
-        throw new Error('图片文件为空')
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i]
+        
+        try {
+          // 从URL获取图片文件
+          const response = await fetch(imageUrl)
+          
+          // 检查响应状态
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          
+          const blob = await response.blob()
+          
+          // 检查blob是否为空或无效
+          if (blob.size === 0) {
+            throw new Error('图片文件为空')
+          }
+          
+          // 检查blob是否过小（可能是错误信息）
+          if (blob.size < 100) {
+            throw new Error('图片文件过小，可能损坏')
+          }
+          
+          // 创建File对象
+          const file = new File([blob], `reference_${i + 1}.png`, { type: blob.type || 'image/png' })
+          
+          referenceImageFiles.push({
+            uid: Date.now() + i,
+            name: `reference_${i + 1}.png`,
+            status: 'done',
+            url: imageUrl,
+            preview: imageUrl,
+            originFileObj: file
+          })
+        } catch (error) {
+          console.error(`获取第${i + 1}张参考图失败:`, error, 'URL:', imageUrl)
+          // 继续处理其他图片，不中断整个流程
+        }
       }
       
-      // 检查blob是否过小（可能是错误信息）
-      if (blob.size < 100) {
-        throw new Error('图片文件过小，可能损坏')
+      referenceImages.value = referenceImageFiles
+      
+      if (referenceImageFiles.length === 0) {
+        message.warning('无法获取任何参考图，将不显示参考图')
+      } else if (referenceImageFiles.length < imageUrls.length) {
+        message.warning(`成功加载${referenceImageFiles.length}张参考图，${imageUrls.length - referenceImageFiles.length}张加载失败`)
       }
       
-      // 创建File对象
-      const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
-      
-      referenceImages.value = [{
-        uid: Date.now(),
-        name: 'reference.png',
-        status: 'done',
-        url: image.referenceImage,
-        preview: image.referenceImage,
-        originFileObj: file  // 添加originFileObj属性
-      }]
     } catch (error) {
-      console.error('获取参考图失败:', error, 'URL:', image.referenceImage)
+      console.error('处理参考图失败:', error, 'referenceImage:', image.referenceImage)
       message.warning('无法获取原参考图，将不显示参考图')
       referenceImages.value = []
     }
@@ -647,7 +683,6 @@ const regenerateImage = async (image) => {
   // 回显模型信息
   if (image.parameters?.model) {
     selectedModel.value = image.parameters.model
-    console.log('🎯 回填模型:', image.parameters.model)
   }
   
   // 回显LoRA信息
@@ -663,7 +698,6 @@ const regenerateImage = async (image) => {
     // 使用nextTick确保DOM更新完成
     await nextTick()
     selectedLoras.value = lorasToSet
-    console.log('🎨 回填LoRA:', selectedLoras.value)
   } else {
     await nextTick()
     selectedLoras.value = []
@@ -672,39 +706,76 @@ const regenerateImage = async (image) => {
   // 回显参考图
   if (image.referenceImage) {
     try {
-      // 从URL获取图片文件
-      const response = await fetch(image.referenceImage)
+      let imageUrls = []
       
-      // 检查响应状态
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // 处理多图融合的情况
+      if (typeof image.referenceImage === 'string' && image.referenceImage.startsWith('[') && image.referenceImage.endsWith(']')) {
+        // 解析JSON字符串数组
+        try {
+          imageUrls = JSON.parse(image.referenceImage)
+        } catch (parseError) {
+          console.warn('解析参考图URL数组失败:', parseError)
+          imageUrls = [image.referenceImage]
+        }
+      } else {
+        // 单图情况
+        imageUrls = [image.referenceImage]
       }
       
-      const blob = await response.blob()
+      // 处理所有参考图
+      const referenceImageFiles = []
       
-      // 检查blob是否为空或无效
-      if (blob.size === 0) {
-        throw new Error('图片文件为空')
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i]
+        
+        try {
+          // 从URL获取图片文件
+          const response = await fetch(imageUrl)
+          
+          // 检查响应状态
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          
+          const blob = await response.blob()
+          
+          // 检查blob是否为空或无效
+          if (blob.size === 0) {
+            throw new Error('图片文件为空')
+          }
+          
+          // 检查blob是否过小（可能是错误信息）
+          if (blob.size < 100) {
+            throw new Error('图片文件过小，可能损坏')
+          }
+          
+          // 创建File对象
+          const file = new File([blob], `reference_${i + 1}.png`, { type: blob.type || 'image/png' })
+          
+          referenceImageFiles.push({
+            uid: Date.now() + i,
+            name: `reference_${i + 1}.png`,
+            status: 'done',
+            url: imageUrl,
+            preview: imageUrl,
+            originFileObj: file
+          })
+        } catch (error) {
+          console.error(`获取第${i + 1}张参考图失败:`, error, 'URL:', imageUrl)
+          // 继续处理其他图片，不中断整个流程
+        }
       }
       
-      // 检查blob是否过小（可能是错误信息）
-      if (blob.size < 100) {
-        throw new Error('图片文件过小，可能损坏')
+      referenceImages.value = referenceImageFiles
+      
+      if (referenceImageFiles.length === 0) {
+        message.warning('无法获取任何参考图，将不使用参考图重新生成')
+      } else if (referenceImageFiles.length < imageUrls.length) {
+        message.warning(`成功加载${referenceImageFiles.length}张参考图，${imageUrls.length - referenceImageFiles.length}张加载失败`)
       }
       
-      // 创建File对象
-      const file = new File([blob], 'reference.png', { type: blob.type || 'image/png' })
-      
-      referenceImages.value = [{
-        uid: Date.now(),
-        name: 'reference.png',
-        status: 'done',
-        url: image.referenceImage,
-        preview: image.referenceImage,
-        originFileObj: file  // 添加originFileObj属性
-      }]
     } catch (error) {
-      console.error('获取参考图失败:', error, 'URL:', image.referenceImage)
+      console.error('处理参考图失败:', error, 'referenceImage:', image.referenceImage)
       message.warning('无法获取原参考图，将不使用参考图重新生成')
       referenceImages.value = []
     }
@@ -813,6 +884,42 @@ const toggleFavorite = async (image) => {
     }
   } catch (error) {
     console.error('切换收藏状态失败:', error)
+    message.error('操作失败，请重试')
+  }
+}
+
+// 切换视频收藏状态
+const toggleVideoFavorite = async (video) => {
+  try {
+    // 调用后端API切换视频收藏状态
+    const response = await fetch(`${API_BASE}/api/video/${video.task_id}/favorite`, {
+      method: 'POST'
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      
+      // 在history中找到对应的视频并更新收藏状态
+      for (const historyItem of history.value) {
+        if (historyItem.id === video.task_id) {
+          if (historyItem.images && historyItem.images.length > 0) {
+            historyItem.images[0].isFavorited = result.is_favorited
+          }
+          break
+        }
+      }
+      
+      // 显示提示信息
+      if (result.is_favorited) {
+        message.success('已添加到收藏')
+      } else {
+        message.success('已取消收藏')
+      }
+    } else {
+      throw new Error('切换收藏状态失败')
+    }
+  } catch (error) {
+    console.error('切换视频收藏状态失败:', error)
     message.error('操作失败，请重试')
   }
 }
@@ -982,18 +1089,15 @@ const pollUpscaleStatus = async (taskId) => {
         await new Promise(resolve => setTimeout(resolve, 500))
         
         // 重新加载历史记录以显示最新的放大结果
-        console.log('🔄 放大完成，刷新历史记录...')
         await loadHistory(1, false)
         
         // 强制刷新一次，确保显示最新状态
         setTimeout(async () => {
-          console.log('🔄 二次刷新确保显示最新结果...')
           await loadHistory(1, false)
         }, 1000)
         
         // 第三次刷新确保万无一失
         setTimeout(async () => {
-          console.log('🔄 三次刷新最终确认...')
           await loadHistory(1, false)
         }, 3000)
         
@@ -1062,11 +1166,9 @@ const pollVideoStatus = async (taskId) => {
   let attempts = 0
   let consecutiveErrors = 0
   
-  console.log(`🎬 开始轮询视频任务状态: ${taskId}`)
   
   const checkStatus = async () => {
     try {
-      console.log(`🔍 检查视频任务状态 (${attempts + 1}/${maxAttempts}): ${taskId}`)
       
       const response = await fetch(`${API_BASE}/api/task/${taskId}`, {
         cache: 'no-cache',
@@ -1083,7 +1185,6 @@ const pollVideoStatus = async (taskId) => {
       const status = await response.json()
       consecutiveErrors = 0
       
-      console.log(`📊 视频任务状态: ${JSON.stringify(status)}`)
       
       if (status.status === 'completed') {
         console.log('✅ 视频生成完成！')
@@ -1093,18 +1194,15 @@ const pollVideoStatus = async (taskId) => {
         await new Promise(resolve => setTimeout(resolve, 500))
         
         // 重新加载历史记录以显示最新的视频结果
-        console.log('🔄 视频生成完成，刷新历史记录...')
         await loadHistory(1, false)
         
         // 强制刷新一次，确保显示最新状态
         setTimeout(async () => {
-          console.log('🔄 二次刷新确保显示最新结果...')
           await loadHistory(1, false)
         }, 1000)
         
         // 第三次刷新确保万无一失
         setTimeout(async () => {
-          console.log('🔄 三次刷新最终确认...')
           await loadHistory(1, false)
         }, 3000)
         
@@ -1402,19 +1500,16 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
         
         // 立即清除loading状态
         isLoadingHistory.value = false
-        console.log('数据处理完成，立即清除loading状态')
       } else {
         // 如果没有数据需要处理，直接清除loading状态
         if (!prepend) {
           history.value = []
         }
         isLoadingHistory.value = false
-        console.log('无数据需要处理，清除loading状态')
       }
     } else {
       // API响应不成功，清除loading状态
       isLoadingHistory.value = false
-      console.log('API响应失败，清除loading状态')
       throw new Error(`API响应失败: ${response.status}`)
     }
   } catch (error) {
@@ -1430,7 +1525,6 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     }
     // 在catch块中也要清除loading状态
     isLoadingHistory.value = false
-    console.log('异常情况，清除loading状态')
   }
 }
 
@@ -1557,7 +1651,6 @@ onMounted(async () => {
 
 .main-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
   padding: 10px;
   position: relative;
 }

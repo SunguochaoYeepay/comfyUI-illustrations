@@ -42,10 +42,9 @@ const setActiveTab = (tab) => {
 
 <style scoped>
 .navigation-sidebar {
-  width: 80px;
-  height: 100vh;
+  width: 60px;
+  height: 80vh;
   background: #1a1a1a;
-  border-right: 1px solid #333;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -77,8 +76,8 @@ const setActiveTab = (tab) => {
   background: #2a2a2a;
 }
 
-.nav-item.active {
-  background: #667eea;
+.nav-item.active .nav-icon,.nav-item.active .nav-label{
+  color: #667eea;
 }
 
 .nav-icon {

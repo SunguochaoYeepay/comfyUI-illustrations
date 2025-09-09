@@ -87,6 +87,7 @@
           @download-image="$emit('downloadImage', $event)"
           @preview-image="handlePreviewImage"
           @toggle-favorite="handleToggleFavorite"
+          @toggle-video-favorite="handleToggleVideoFavorite"
           @upscale="$emit('upscale', $event)"
         />
       </div>
@@ -428,6 +429,11 @@ const handleToggleFavorite = (image) => {
   emit('toggleFavorite', image)
 }
 
+// 处理视频收藏切换
+const handleToggleVideoFavorite = (video) => {
+  emit('toggleVideoFavorite', video)
+}
+
 // 处理筛选条件变化
 const handleFilterChange = () => {
   // 发出筛选条件变化事件
@@ -653,7 +659,6 @@ onMounted(() => {
     // 延迟标记初始化完成，避免页面加载时的滚动触发翻页
     setTimeout(() => {
       isInitialized = true
-      console.log('页面初始化完成，滚动监听已启用')
     }, 2000) // 2秒后启用滚动监听
   })
 })

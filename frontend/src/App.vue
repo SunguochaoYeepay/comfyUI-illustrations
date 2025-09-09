@@ -78,7 +78,7 @@ html, body {
 .main-content {
   flex: 1;
   background: #0f0f0f;
-  margin-left: 80px;
+  margin-left: 60px;
 }
 
 /* 强制重置可能的全局样式 */

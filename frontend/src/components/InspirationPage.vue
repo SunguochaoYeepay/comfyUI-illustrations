@@ -18,9 +18,23 @@
         @click="showDetail(item)"
       >
         <div class="item-image">
-          <img :src="item.imageUrl" :alt="item.title" />
+          <!-- 视频显示 -->
+          <video 
+            v-if="item.type === 'video'" 
+            :src="item.videoUrl" 
+            class="item-video"
+            preload="metadata"
+            muted
+          />
+          <!-- 图片显示 -->
+          <img 
+            v-else
+            :src="item.imageUrl" 
+            :alt="item.title" 
+          />
           <div class="item-overlay">
             <EyeOutlined class="view-icon" />
+            <span v-if="item.type === 'video'" class="video-badge">🎬</span>
           </div>
         </div>
         <div class="item-info">
@@ -58,35 +72,11 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:9000'
 const loadFavorites = async () => {
   loading.value = true
   try {
-    // 使用现有的历史记录API，筛选收藏的项目
-    const response = await fetch(`${API_BASE}/api/history?favorite_filter=collected&limit=100`)
+    // 使用专门的收藏API
+    const response = await fetch(`${API_BASE}/api/favorites`)
     if (response.ok) {
       const data = await response.json()
-      // 从历史记录中提取收藏的图片
-      const favoriteImages = []
-      
-      for (const task of data.tasks || []) {
-        if (task.images && Array.isArray(task.images)) {
-          for (const image of task.images) {
-            if (image.isFavorited) {
-              favoriteImages.push({
-                id: `${task.id}_${image.image_index || 0}`,
-                task_id: task.id,
-                image_index: image.image_index || 0,
-                title: task.description ? (task.description.length > 50 ? task.description.substring(0, 50) + '...' : task.description) : '未命名作品',
-                description: task.description || '暂无描述',
-                imageUrl: image.url || image.directUrl,
-                prompt: task.description,
-                parameters: task.parameters || {},
-                referenceImagePath: task.reference_image_path,
-                createdAt: task.created_at
-              })
-            }
-          }
-        }
-      }
-      
-      favorites.value = favoriteImages
+      favorites.value = data.favorites || []
     } else {
       console.error('获取收藏列表失败:', response.statusText)
       favorites.value = []
@@ -161,10 +151,15 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.item-image img {
+.item-image img,
+.item-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.item-video {
+  background: #000;
 }
 
 .item-overlay {
@@ -188,6 +183,17 @@ onMounted(() => {
 .view-icon {
   font-size: 24px;
   color: #fff;
+}
+
+.video-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .item-info {

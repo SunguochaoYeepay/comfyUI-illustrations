@@ -54,8 +54,37 @@
             alt="视频预览"
           />
           <div class="video-overlay">
-            <div class="video-info">
-              <span class="video-title">🎬 点击查看视频</span>
+            <!-- 中央播放图标 -->
+            <div class="video-play-center">
+              <div class="play-icon-container">
+                <div class="play-icon">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+                <div class="play-ripple"></div>
+              </div>
+            </div>
+            
+            <!-- 右上角操作按钮组 -->
+            <div class="video-actions">
+              <a-tooltip :title="group[0].isFavorited ? '取消收藏' : '收藏视频'">
+                <a-button 
+                  type="text" 
+                  shape="circle" 
+                  :class="['overlay-btn', 'favorite-btn', { 'favorited': group[0].isFavorited }]" 
+                  @click.stop="$emit('toggleVideoFavorite', group[0])"
+                >
+                  <template #icon>
+                    <svg v-if="!group[0].isFavorited" viewBox="0 0 24 24" fill="currentColor" class="action-icon">
+                      <path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zM12.1 18.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" fill="currentColor" class="action-icon favorited">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                  </template>
+                </a-button>
+              </a-tooltip>
             </div>
           </div>
         </div>
@@ -75,26 +104,26 @@
             
             <!-- 图片操作悬浮层 -->
             <div class="image-overlay">
-              <a-tooltip title="预览图片">
-                <a-button 
-                  type="text" 
-                  shape="circle" 
-                  class="overlay-btn preview-btn" 
-                  @click.stop="$emit('previewImage', image)"
-                >
-                  <template #icon><EyeOutlined /></template>
-                </a-button>
-              </a-tooltip>
-              <a-tooltip :title="image.isFavorited ? '取消收藏' : '收藏图片'">
-                <a-button 
-                  type="text" 
-                  shape="circle" 
-                  :class="['overlay-btn', 'favorite-btn', { 'favorited': image.isFavorited }]" 
-                  @click.stop="$emit('toggleFavorite', image)"
-                >
-                  <template #icon><HeartOutlined v-if="!image.isFavorited" /><HeartFilled v-else /></template>
-                </a-button>
-              </a-tooltip>
+              <!-- 右上角操作按钮组 -->
+              <div class="image-actions">
+                <a-tooltip :title="image.isFavorited ? '取消收藏' : '收藏图片'">
+                  <a-button 
+                    type="text" 
+                    shape="circle" 
+                    :class="['overlay-btn', 'favorite-btn', { 'favorited': image.isFavorited }]" 
+                    @click.stop="$emit('toggleFavorite', image)"
+                  >
+                    <template #icon>
+                      <svg v-if="!image.isFavorited" viewBox="0 0 24 24" fill="currentColor" class="action-icon">
+                        <path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zM12.1 18.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" fill="currentColor" class="action-icon favorited">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                      </svg>
+                    </template>
+                  </a-button>
+                </a-tooltip>
+              </div>
             </div>
           </div>
         </div>
@@ -167,51 +196,35 @@ const isVideoTask = computed(() => {
   if (props.group && props.group.length > 0) {
     const firstImage = props.group[0]
     
-    // 调试信息
-    console.log('🔍 检查任务类型:', {
-      prompt: firstImage.prompt,
-      url: firstImage.url,
-      result_path: firstImage.result_path,
-      model: firstImage.model
-    })
-    
     // 通过描述来判断是否为视频生成任务
     if (firstImage.prompt && firstImage.prompt.includes('视频生成')) {
-      console.log('✅ 通过描述识别为视频任务')
       return true
     }
     
     // 通过URL路径判断
     if (firstImage.url && firstImage.url.includes('/api/generate-video')) {
-      console.log('✅ 通过URL路径识别为视频任务')
       return true
     }
     
     // 通过文件扩展名判断
     if (firstImage.url && (firstImage.url.endsWith('.mp4') || firstImage.url.endsWith('.avi') || firstImage.url.endsWith('.mov'))) {
-      console.log('✅ 通过URL扩展名识别为视频任务')
       return true
     }
     
     // 通过文件名判断（包含video关键词）
     if (firstImage.url && firstImage.url.toLowerCase().includes('video')) {
-      console.log('✅ 通过URL关键词识别为视频任务')
       return true
     }
     
     // 通过result_path判断（后端返回的路径）
     if (firstImage.result_path && (firstImage.result_path.endsWith('.mp4') || firstImage.result_path.endsWith('.avi') || firstImage.result_path.endsWith('.mov'))) {
-      console.log('✅ 通过result_path扩展名识别为视频任务')
       return true
     }
     
     // 通过result_path判断（包含video关键词）
     if (firstImage.result_path && firstImage.result_path.toLowerCase().includes('video')) {
-      console.log('✅ 通过result_path关键词识别为视频任务')
       return true
     }
-    
-    console.log('❌ 未识别为视频任务')
   }
   return false
 })
@@ -221,9 +234,9 @@ defineEmits([
   'editImage',
   'regenerateImage',
   'deleteImage', 
-  'downloadImage',
   'previewImage',
   'toggleFavorite',
+  'toggleVideoFavorite',
   'upscale'
 ])
 </script>
@@ -348,10 +361,6 @@ defineEmits([
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   opacity: 0;
   transition: opacity 0.3s ease;
   border-radius: 12px;
@@ -359,6 +368,15 @@ defineEmits([
 
 .image-container:hover .image-overlay {
   opacity: 1;
+}
+
+.image-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 3;
 }
 
 .overlay-btn {
@@ -376,15 +394,6 @@ defineEmits([
   transform: scale(1.1);
 }
 
-.preview-btn {
-  background: rgba(64, 169, 255, 0.3);
-  border-color: rgba(64, 169, 255, 0.5);
-}
-
-.preview-btn:hover {
-  background: rgba(64, 169, 255, 0.5);
-  border-color: rgba(64, 169, 255, 0.7);
-}
 
 .favorite-btn {
   background: rgba(255, 255, 255, 0.2);
@@ -493,26 +502,126 @@ defineEmits([
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   color: white;
   opacity: 0;
   transition: opacity 0.3s ease;
   border-radius: 12px;
+  padding: 16px;
 }
 
 .video-container:hover .video-overlay {
   opacity: 1;
 }
 
-.video-info {
-  text-align: center;
+/* 中央播放图标样式 */
+.video-play-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
 }
 
-.video-title {
-  font-size: 18px;
-  font-weight: 600;
+.play-icon-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-icon {
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  transition: all 0.3s ease;
+  z-index: 3;
+}
+
+.play-icon svg {
+  width: 24px;
+  height: 24px;
+  margin-left: 3px; /* 视觉居中调整 */
+}
+
+.play-icon:hover {
+  background: white;
+  transform: scale(1.1);
+}
+
+.play-ripple {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: ripple 2s infinite;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.video-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 3;
+}
+
+.video-actions .overlay-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.video-actions .overlay-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
   color: white;
 }
+
+.video-actions .favorite-btn.favorited {
+  background: rgba(255, 77, 79, 0.8);
+  border-color: #ff4d4f;
+  color: white;
+}
+
+.video-actions .favorite-btn.favorited:hover {
+  background: rgba(255, 77, 79, 0.9);
+  border-color: #ff4d4f;
+}
+
+/* 统一图标样式 */
+.action-icon {
+  width: 16px;
+  height: 16px;
+  transition: all 0.2s ease;
+}
+
+.action-icon.favorited {
+  color: #ff4757;
+}
+
 
 /* 任务类型图标样式 */
 .video-icon, .upscale-icon {

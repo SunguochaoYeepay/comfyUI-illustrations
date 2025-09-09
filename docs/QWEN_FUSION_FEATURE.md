@@ -2,11 +2,11 @@
 
 ## 📋 功能概述
 
-Qwen多图融合功能是基于Qwen图像编辑模型的新能力，支持将2-5张图像进行拼接和编辑，生成融合后的图像。
+Qwen多图融合功能是基于Qwen图像编辑模型的新能力，支持将2张图像进行拼接和编辑，生成融合后的图像。
 
 ## 🎯 主要特性
 
-- **多图拼接**: 支持2-5张图像的智能拼接
+- **多图拼接**: 支持2张图像的智能拼接
 - **图像编辑**: 基于拼接后的图像进行文本引导的编辑
 - **中文支持**: 完全支持中文描述和指令
 - **独立API**: 不影响现有的单图生成功能
@@ -35,7 +35,7 @@ Qwen多图融合功能是基于Qwen图像编辑模型的新能力，支持将2-5
 
 **参数**:
 - `description` (string, 必需): 融合描述文本
-- `reference_images` (file[], 必需): 参考图像文件列表（2-5张）
+- `reference_images` (file[], 必需): 参考图像文件列表（2张）
 - `fusion_mode` (string, 可选): 融合模式，默认"concat"
 - `steps` (int, 可选): 采样步数，默认20
 - `cfg` (float, 可选): CFG值，默认2.5
@@ -57,16 +57,15 @@ Qwen多图融合功能是基于Qwen图像编辑模型的新能力，支持将2-5
 ```python
 import requests
 
-# 准备多张图像文件
+# 准备2张图像文件
 files = [
     ('reference_images', ('image1.png', open('image1.png', 'rb'), 'image/png')),
-    ('reference_images', ('image2.png', open('image2.png', 'rb'), 'image/png')),
-    ('reference_images', ('image3.png', open('image3.png', 'rb'), 'image/png'))
+    ('reference_images', ('image2.png', open('image2.png', 'rb'), 'image/png'))
 ]
 
 # 准备请求数据
 data = {
-    'description': '将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上',
+    'description': '将两张图像拼接后，让左边的女人手里拎着右边的棕色包，坐在白色沙发上',
     'fusion_mode': 'concat',
     'steps': 20,
     'cfg': 2.5,

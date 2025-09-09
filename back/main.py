@@ -521,8 +521,8 @@ async def generate_image_fusion(
         # 验证图像数量
         if len(reference_images) < 2:
             raise HTTPException(status_code=400, detail="多图融合至少需要2张图像")
-        if len(reference_images) > 5:
-            raise HTTPException(status_code=400, detail="多图融合最多支持5张图像")
+        if len(reference_images) > 2:
+            raise HTTPException(status_code=400, detail="多图融合最多支持2张图像")
         
         # 处理多张参考图像
         image_paths = []

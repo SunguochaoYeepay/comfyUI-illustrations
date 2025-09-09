@@ -9,11 +9,11 @@
       :before-upload="beforeUpload"
       @preview="handlePreview"
       @remove="handleRemove"
-      :max-count="5"
+      :max-count="2"
       multiple
       :style="{ '--ant-upload-border': 'none !important' }"
     >
-      <div v-if="showUploadButton && localFileList.length < 5">
+      <div v-if="showUploadButton && localFileList.length < 2">
         <PlusOutlined />
         <div class="upload-text">上传图片</div>
       </div>
@@ -66,8 +66,8 @@ const beforeUpload = (file) => {
   }
   
   // 检查是否超过最大数量
-  if (localFileList.value.length >= 5) {
-    message.error('最多只能上传5张图片!')
+  if (localFileList.value.length >= 2) {
+    message.error('最多只能上传2张图片!')
     return false
   }
   

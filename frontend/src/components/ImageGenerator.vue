@@ -233,8 +233,8 @@ const generateImage = async (options = {}) => {
     message.warning('请上传至少1张图片')
     return
   }
-  if (referenceImages.value.length > 5) {
-    message.warning('最多支持5张图片')
+  if (referenceImages.value.length > 2) {
+    message.warning('最多支持2张图片')
     return
   }
   

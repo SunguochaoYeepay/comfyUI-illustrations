@@ -21,7 +21,7 @@
   },
   "151": {
     "inputs": {
-      "image": "jimeng-2025-07-01-2879-纯色背景，一个LV品牌的手拎包.jpeg"
+      "image": "generated-image-1757406452372.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -30,7 +30,7 @@
   },
   "152": {
     "inputs": {
-      "image": "image.png"
+      "image": "generated-image-1757304156264.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -105,7 +105,7 @@
   },
   "158": {
     "inputs": {
-      "seed": 802361824566230,
+      "seed": 298278277481397,
       "steps": 8,
       "cfg": 2.5,
       "sampler_name": "euler",

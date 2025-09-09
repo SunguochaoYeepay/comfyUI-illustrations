@@ -59,7 +59,7 @@ class QwenFusionWorkflow(BaseWorkflow):
         # 加载工作流模板（根据图片数量选择）
         workflow = self._load_fusion_template(len(image_paths))
         
-        # 更新模型配置
+        # 更新模型配置（多图融合使用编辑版本）
         workflow = self._update_model_config(workflow)
         
         # 更新文本描述
@@ -145,10 +145,11 @@ class QwenFusionWorkflow(BaseWorkflow):
         return workflow
     
     def _update_model_config(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
-        """更新模型配置"""
+        """更新模型配置（多图融合使用编辑版本）"""
         if "167" in workflow:
-            workflow["167"]["inputs"]["unet_name"] = self.model_config.unet_file
-            print(f"✅ 更新UNETLoader: {self.model_config.unet_file}")
+            # 多图融合使用编辑版本
+            workflow["167"]["inputs"]["unet_name"] = "qwen_image_edit_fp8_e4m3fn.safetensors"
+            print(f"✅ 更新UNETLoader: qwen_image_edit_fp8_e4m3fn.safetensors")
         
         if "165" in workflow:
             workflow["165"]["inputs"]["clip_name"] = self.model_config.clip_file
@@ -188,9 +189,9 @@ class QwenFusionWorkflow(BaseWorkflow):
         """动态更新图像尺寸配置"""
         # 更新节点164（LatentUpscale）的尺寸配置
         if "164" in workflow:
-            workflow["164"]["inputs"]["width"] = 640
-            workflow["164"]["inputs"]["height"] = 360
-            print(f"✅ 动态更新多图融合图像尺寸: 640x360")
+            workflow["164"]["inputs"]["width"] = 1024
+            workflow["164"]["inputs"]["height"] = 768
+            print(f"✅ 动态更新多图融合图像尺寸: 1024x768")
         
         return workflow
     
@@ -203,8 +204,41 @@ class QwenFusionWorkflow(BaseWorkflow):
         return workflow
     
     def _update_lora_config(self, workflow: Dict[str, Any], loras: list) -> Dict[str, Any]:
-        """更新LoRA配置（多图融合工作流暂不支持LoRA）"""
-        print("ℹ️ 多图融合工作流暂不支持LoRA配置")
+        """更新LoRA配置"""
+        if "170" not in workflow:
+            print("ℹ️ 多图融合工作流未找到LoRA节点，使用默认设置")
+            return workflow
+        
+        processed_loras = self._process_loras(loras)
+        
+        if not processed_loras:
+            print("ℹ️ 未检测到LoRA配置，使用默认设置")
+            return workflow
+        
+        print(f"🎨 检测到 {len(processed_loras)} 个LoRA配置")
+        
+        # 保留默认的8步生图LoRA，前端LoRA从lora_02开始
+        # lora_01 保持默认的 Qwen-Image-Lightning-8steps-V1.0.safetensors
+        workflow["170"]["inputs"]["lora_02"] = "None"
+        workflow["170"]["inputs"]["strength_02"] = 1
+        workflow["170"]["inputs"]["lora_03"] = "None"
+        workflow["170"]["inputs"]["strength_03"] = 1
+        workflow["170"]["inputs"]["lora_04"] = "None"
+        workflow["170"]["inputs"]["strength_04"] = 1
+        
+        # 设置前端选择的LoRA（从lora_02开始）
+        for i, lora in enumerate(processed_loras):
+            if i >= 3:  # 限制最多3个额外LoRA（lora_02, lora_03, lora_04）
+                break
+                
+            lora_key = f"lora_{i+2:02d}"  # 从lora_02开始
+            strength_key = f"strength_{i+2:02d}"
+            
+            workflow["170"]["inputs"][lora_key] = lora["name"]
+            workflow["170"]["inputs"][strength_key] = lora["strength_model"]
+            print(f"✅ 设置LoRA {i+2}: {lora['name']} (强度: {lora['strength_model']})")
+        
+        print(f"✅ LoRA配置完成: 1个默认LoRA + {len(processed_loras)} 个用户LoRA")
         return workflow
     
     def _convert_path_for_comfyui(self, image_path: str) -> str:

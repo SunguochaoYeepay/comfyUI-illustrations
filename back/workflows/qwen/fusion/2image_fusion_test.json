@@ -16,12 +16,12 @@
     },
     "class_type": "ImageConcatMulti",
     "_meta": {
-      "title": "Image Concatenate Multi"
+      "title": "图像联结（多个）"
     }
   },
   "151": {
     "inputs": {
-      "image": "jimeng-2025-07-01-2879-纯色背景，一个LV品牌的手拎包.jpeg"
+      "image": "generated-image-1757406452372.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -30,7 +30,7 @@
   },
   "152": {
     "inputs": {
-      "image": "image.png"
+      "image": "generated-image-1757304156264.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -105,14 +105,14 @@
   },
   "158": {
     "inputs": {
-      "seed": 802361824566230,
+      "seed": 590344041921902,
       "steps": 8,
       "cfg": 2.5,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "160",
+        "170",
         0
       ],
       "positive": [
@@ -137,7 +137,7 @@
     "inputs": {
       "shift": 3.1,
       "model": [
-        "170",
+        "167",
         0
       ]
     },
@@ -260,7 +260,7 @@
       "lora_04": "None",
       "strength_04": 1,
       "model": [
-        "167",
+        "160",
         0
       ],
       "clip": [

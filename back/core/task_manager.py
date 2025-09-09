@@ -266,9 +266,19 @@ class TaskManager:
             fusion_parameters = parameters.copy()
             fusion_parameters["reference_image_paths"] = reference_image_paths
             
-            workflow = self.workflow_template.customize_workflow(
-                reference_image_paths[0], translated_description, fusion_parameters, model_name
-            )
+            # 对于Flux1模型，直接传递图片路径列表
+            if model_name == "flux1":
+                from core.workflows import Flux1VectorWorkflow
+                from core.model_manager import get_model_config
+                model_config = get_model_config(model_name)
+                workflow_creator = Flux1VectorWorkflow(model_config)
+                workflow = workflow_creator.create_workflow(
+                    reference_image_paths, translated_description, fusion_parameters
+                )
+            else:
+                workflow = self.workflow_template.customize_workflow(
+                    reference_image_paths[0], translated_description, fusion_parameters, model_name
+                )
             print(f"✅ 多图融合工作流准备完成")
             
             # 提交到ComfyUI
@@ -416,49 +426,109 @@ class TaskManager:
                         if not result_paths:
                             print("🔍 尝试从文件系统中查找最新生成的文件...")
                             try:
-                                # 优先查找video目录中最新的视频文件
-                                video_dir = COMFYUI_MAIN_OUTPUT_DIR / "video"
-                                if video_dir.exists():
-                                    # 获取所有视频文件并按修改时间排序
-                                    video_files = list(video_dir.glob("*.mp4")) + list(video_dir.glob("*.avi")) + list(video_dir.glob("*.mov"))
-                                    if video_files:
-                                        # 按修改时间排序，获取最新的文件
-                                        latest_file = max(video_files, key=lambda f: f.stat().st_mtime)
-                                        print(f"🎬 找到最新视频文件: {latest_file.name}")
-                                        
-                                        # 复制到输出目录
-                                        dest_path = OUTPUT_DIR / latest_file.name
-                                        shutil.copy2(latest_file, dest_path)
-                                        result_paths.append(f"outputs/{latest_file.name}")
-                                        print(f"✅ 复制视频成功: {latest_file.name}")
-                                        
-                                        return result_paths
+                                # 根据任务类型决定查找什么类型的文件
+                                # 获取任务信息来判断任务类型
+                                task_info = self.db.get_task(task_id)
+                                if task_info:
+                                    # parameters字段是JSON字符串，需要解析
+                                    parameters_str = task_info.get('parameters', '{}')
+                                    try:
+                                        task_params = json.loads(parameters_str)
+                                        model_name = task_params.get('model', '')
+                                    except (json.JSONDecodeError, TypeError) as e:
+                                        print(f"❌ 无法解析任务参数: {e}，跳过文件系统查找")
+                                        task_params = {}
+                                        model_name = ''
+                                    
+                                    # 如果是视频模型，优先查找视频文件
+                                    if model_name == 'wan2.2-video':
+                                        print("🎬 检测到视频任务，查找视频文件...")
+                                        video_dir = COMFYUI_MAIN_OUTPUT_DIR / "video"
+                                        if video_dir.exists():
+                                            # 获取所有视频文件并按修改时间排序
+                                            video_files = list(video_dir.glob("*.mp4")) + list(video_dir.glob("*.avi")) + list(video_dir.glob("*.mov"))
+                                            if video_files:
+                                                # 按修改时间排序，获取最新的文件
+                                                latest_file = max(video_files, key=lambda f: f.stat().st_mtime)
+                                                print(f"🎬 找到最新视频文件: {latest_file.name}")
+                                                
+                                                # 复制到输出目录
+                                                dest_path = OUTPUT_DIR / latest_file.name
+                                                shutil.copy2(latest_file, dest_path)
+                                                result_paths.append(f"outputs/{latest_file.name}")
+                                                print(f"✅ 复制视频成功: {latest_file.name}")
+                                                
+                                                return result_paths
+                                            else:
+                                                print("❌ video目录中没有找到视频文件")
+                                        else:
+                                            print("❌ video目录不存在")
+                                    
+                                    # 如果是图像任务（包括多图融合），查找图片文件
                                     else:
-                                        print("❌ video目录中没有找到视频文件")
+                                        print("🖼️ 检测到图像任务，查找图片文件...")
+                                        # 查找yeepay目录中最新的图片文件
+                                        yeepay_dir = COMFYUI_MAIN_OUTPUT_DIR / "yeepay"
+                                        if yeepay_dir.exists():
+                                            # 获取任务创建时间，只查找任务开始后生成的文件
+                                            task_created_at = task_info.get('created_at')
+                                            if task_created_at:
+                                                # 解析任务创建时间
+                                                try:
+                                                    if isinstance(task_created_at, str):
+                                                        task_time = datetime.fromisoformat(task_created_at.replace('Z', '+00:00'))
+                                                    else:
+                                                        task_time = task_created_at
+                                                    print(f"🕐 任务创建时间: {task_time}")
+                                                except:
+                                                    task_time = None
+                                            else:
+                                                task_time = None
+                                            
+                                            # 获取所有图片文件并按修改时间排序
+                                            image_files = (list(yeepay_dir.glob("*.png")) + 
+                                                         list(yeepay_dir.glob("*.jpg")) + 
+                                                         list(yeepay_dir.glob("*.jpeg")) + 
+                                                         list(yeepay_dir.glob("*.webp")))
+                                            
+                                            if image_files:
+                                                # 过滤出任务开始后生成的文件
+                                                if task_time:
+                                                    filtered_files = []
+                                                    for file_path in image_files:
+                                                        file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+                                                        # 放宽时间条件：允许文件时间比任务时间早5分钟
+                                                        time_diff = (task_time - file_mtime).total_seconds()
+                                                        if time_diff <= 300:  # 5分钟 = 300秒
+                                                            filtered_files.append(file_path)
+                                                            print(f"📅 文件 {file_path.name} 修改时间: {file_mtime} (任务时间: {task_time}, 时间差: {time_diff:.1f}秒)")
+                                                    
+                                                    if filtered_files:
+                                                        # 按修改时间排序，获取最新的文件
+                                                        latest_file = max(filtered_files, key=lambda f: f.stat().st_mtime)
+                                                        print(f"📄 找到任务后生成的最新图片文件: {latest_file.name}")
+                                                    else:
+                                                        print("❌ 没有找到任务开始后生成的图片文件")
+                                                        latest_file = None
+                                                else:
+                                                    # 如果没有任务时间，使用原来的逻辑
+                                                    latest_file = max(image_files, key=lambda f: f.stat().st_mtime)
+                                                    print(f"📄 找到最新图片文件: {latest_file.name}")
+                                                
+                                                if latest_file:
+                                                    # 复制到输出目录
+                                                    dest_path = OUTPUT_DIR / latest_file.name
+                                                    shutil.copy2(latest_file, dest_path)
+                                                    result_paths.append(f"outputs/{latest_file.name}")
+                                                    print(f"✅ 复制图片成功: {latest_file.name}")
+                                                    
+                                                    return result_paths
+                                            else:
+                                                print("❌ yeepay目录中没有找到图片文件")
+                                        else:
+                                            print("❌ yeepay目录不存在")
                                 else:
-                                    print("❌ video目录不存在")
-                                
-                                # 查找yeepay目录中最新的图片文件
-                                yeepay_dir = COMFYUI_MAIN_OUTPUT_DIR / "yeepay"
-                                if yeepay_dir.exists():
-                                    # 获取所有png文件并按修改时间排序
-                                    png_files = list(yeepay_dir.glob("*.png"))
-                                    if png_files:
-                                        # 按修改时间排序，获取最新的文件
-                                        latest_file = max(png_files, key=lambda f: f.stat().st_mtime)
-                                        print(f"📄 找到最新图片文件: {latest_file.name}")
-                                        
-                                        # 复制到输出目录
-                                        dest_path = OUTPUT_DIR / latest_file.name
-                                        shutil.copy2(latest_file, dest_path)
-                                        result_paths.append(f"outputs/{latest_file.name}")
-                                        print(f"✅ 复制图片成功: {latest_file.name}")
-                                        
-                                        return result_paths
-                                    else:
-                                        print("❌ yeepay目录中没有找到png文件")
-                                else:
-                                    print("❌ yeepay目录不存在")
+                                    print("❌ 无法获取任务信息，跳过文件系统查找")
                                     
                             except Exception as e:
                                 print(f"❌ 从文件系统查找文件时出错: {e}")

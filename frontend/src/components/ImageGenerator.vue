@@ -233,12 +233,12 @@ const generateImage = async (options = {}) => {
     message.warning('请上传至少1张图片')
     return
   }
-  if (referenceImages.value.length > 2) {
-    message.warning('最多支持2张图片')
+  if (referenceImages.value.length > 3) {
+    message.warning('最多支持3张图片')
     return
   }
   
-  // 多图融合模式验证
+  // 多图融合模式特殊验证
   if (mode === 'fusion' && referenceImages.value.length < 2) {
     message.warning('多图融合至少需要2张图片')
     return

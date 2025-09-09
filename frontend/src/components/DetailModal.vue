@@ -40,9 +40,12 @@
         <!-- 参考图 -->
         <div class="info-row">
           <span class="info-label">参考图:</span>
-          <div class="reference-image">
+          <div class="reference-image" v-if="getReferenceImageUrl()">
+            <img :src="getReferenceImageUrl()" :alt="'参考图'" class="reference-img" />
+          </div>
+          <div class="reference-image" v-else>
             <ExclamationCircleOutlined />
-            <span>参考图加载失败</span>
+            <span>无参考图</span>
           </div>
         </div>
         
@@ -110,6 +113,8 @@ import {
   ExclamationCircleOutlined 
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:9000'
 
 const props = defineProps({
   open: {
@@ -203,6 +208,28 @@ const getLoRAStrength = () => {
 
 const hasOtherParams = () => {
   return props.item?.parameters?.steps || props.item?.parameters?.cfg
+}
+
+const getReferenceImageUrl = () => {
+  if (!props.item?.referenceImagePath) {
+    return null
+  }
+  
+  // 如果是数组（多图融合），取第一张
+  if (Array.isArray(props.item.referenceImagePath)) {
+    if (props.item.referenceImagePath.length > 0) {
+      const imagePath = props.item.referenceImagePath[0]
+      return `${API_BASE}/api/image/upload/${imagePath}`
+    }
+    return null
+  }
+  
+  // 如果是字符串（单图）
+  if (typeof props.item.referenceImagePath === 'string') {
+    return `${API_BASE}/api/image/upload/${props.item.referenceImagePath}`
+  }
+  
+  return null
 }
 </script>
 
@@ -464,6 +491,14 @@ html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .
 .reference-image .anticon {
   font-size: 16px;
   color: #ffa500;
+}
+
+.reference-img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #333;
 }
 
 .prompt-display {

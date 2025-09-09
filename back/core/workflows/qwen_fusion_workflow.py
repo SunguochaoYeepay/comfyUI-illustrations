@@ -7,6 +7,7 @@ Qwen多图融合工作流实现
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 from .base_workflow import BaseWorkflow
@@ -37,7 +38,7 @@ class QwenFusionWorkflow(BaseWorkflow):
         """创建Qwen多图融合工作流
         
         Args:
-            image_paths: 图像路径列表（2-5张图像）
+            image_paths: 图像路径列表（3张图像）
             description: 融合描述
             parameters: 生成参数
             
@@ -49,14 +50,14 @@ class QwenFusionWorkflow(BaseWorkflow):
         # 验证图像数量
         if len(image_paths) < 2:
             raise ValueError("多图融合至少需要2张图像")
-        if len(image_paths) > 5:
-            raise ValueError("多图融合最多支持5张图像")
+        if len(image_paths) > 3:
+            raise ValueError("多图融合最多支持3张图像")
         
         # 验证参数
         validated_params = self._validate_parameters(parameters)
         
-        # 加载工作流模板
-        workflow = self._load_fusion_template()
+        # 加载工作流模板（根据图片数量选择）
+        workflow = self._load_fusion_template(len(image_paths))
         
         # 更新模型配置
         workflow = self._update_model_config(workflow)
@@ -81,165 +82,29 @@ class QwenFusionWorkflow(BaseWorkflow):
         print(f"✅ Qwen多图融合工作流创建完成，处理 {len(image_paths)} 张图像")
         return workflow
     
-    def _load_fusion_template(self) -> Dict[str, Any]:
-        """加载多图融合工作流模板"""
-        try:
-            workflow_path = "workflows/qwen_image_fusion_workflow.json"
-            with open(workflow_path, 'r', encoding='utf-8') as f:
-                workflow = json.load(f)
-            print(f"✅ 加载Qwen多图融合工作流模板: {workflow_path}")
-            return workflow
-        except FileNotFoundError:
-            print(f"⚠️ Qwen多图融合工作流模板文件不存在，使用内置模板")
-            return self._get_builtin_fusion_template()
-        except json.JSONDecodeError as e:
-            print(f"❌ Qwen多图融合工作流模板文件格式错误: {str(e)}")
-            return self._get_builtin_fusion_template()
-    
-    def _get_builtin_fusion_template(self) -> Dict[str, Any]:
-        """获取内置多图融合模板"""
-        from config.settings import TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
+    def _load_fusion_template(self, image_count: int) -> Dict[str, Any]:
+        """根据图片数量加载对应的工作流模板"""
+        # 根据图片数量选择对应的工作流模板
+        if image_count == 2:
+            template_name = "2image_fusion.json"
+        elif image_count == 3:
+            template_name = "3image_fusion.json"
+        else:
+            raise ValueError(f"不支持 {image_count} 张图片的融合，目前只支持2-3张图片")
         
-        return {
-            "149": {
-                "class_type": "ImageConcatMulti",
-                "inputs": {
-                    "inputcount": 3,
-                    "direction": "right",
-                    "match_image_size": False,
-                    "image_1": ["152", 0],
-                    "image_2": ["151", 0],
-                    "image_3": ["150", 0]
-                },
-                "_meta": {"title": "Image Concatenate Multi"}
-            },
-            "150": {
-                "class_type": "LoadImage",
-                "inputs": {"image": "{{image_1_path}}"},
-                "_meta": {"title": "加载图像1"}
-            },
-            "151": {
-                "class_type": "LoadImage", 
-                "inputs": {"image": "{{image_2_path}}"},
-                "_meta": {"title": "加载图像2"}
-            },
-            "152": {
-                "class_type": "LoadImage",
-                "inputs": {"image": "{{image_3_path}}"},
-                "_meta": {"title": "加载图像3"}
-            },
-            "153": {
-                "class_type": "FluxKontextImageScale",
-                "inputs": {"image": ["149", 0]},
-                "_meta": {"title": "FluxKontextImageScale"}
-            },
-            "156": {
-                "class_type": "VAELoader",
-                "inputs": {"vae_name": "qwen_image_vae.safetensors"},
-                "_meta": {"title": "VAE加载器"}
-            },
-            "157": {
-                "class_type": "TextEncodeQwenImageEdit",
-                "inputs": {
-                    "prompt": "色调艳丽，过曝，静态，细节模糊不清，风格，作品，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，杂乱的背景，三条腿，",
-                    "speak_and_recognation": True,
-                    "clip": ["165", 0],
-                    "vae": ["156", 0],
-                    "image": ["153", 0]
-                },
-                "_meta": {"title": "TextEncodeQwenImageEdit"}
-            },
-            "158": {
-                "class_type": "KSampler",
-                "inputs": {
-                    "seed": 745159675686423,
-                    "steps": 20,
-                    "cfg": 2.5,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "denoise": 1,
-                    "model": ["160", 0],
-                    "positive": ["169", 0],
-                    "negative": ["157", 0],
-                    "latent_image": ["164", 0]
-                },
-                "_meta": {"title": "K采样器"}
-            },
-            "160": {
-                "class_type": "ModelSamplingAuraFlow",
-                "inputs": {
-                    "shift": 3.1000000000000005,
-                    "model": ["167", 0]
-                },
-                "_meta": {"title": "模型采样算法AuraFlow"}
-            },
-            "161": {
-                "class_type": "VAEDecode",
-                "inputs": {
-                    "samples": ["158", 0],
-                    "vae": ["156", 0]
-                },
-                "_meta": {"title": "VAE解码"}
-            },
-            "162": {
-                "class_type": "VAEEncode",
-                "inputs": {
-                    "pixels": ["153", 0],
-                    "vae": ["156", 0]
-                },
-                "_meta": {"title": "VAE编码"}
-            },
-            "164": {
-                "class_type": "LatentUpscale",
-                "inputs": {
-                    "upscale_method": "nearest-exact",
-                    "width": 640,
-                    "height": 360,
-                    "crop": "disabled",
-                    "samples": ["162", 0]
-                },
-                "_meta": {"title": "Latent缩放"}
-            },
-            "165": {
-                "class_type": "CLIPLoader",
-                "inputs": {
-                    "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-                    "type": "qwen_image",
-                    "device": "default"
-                },
-                "_meta": {"title": "CLIP加载器"}
-            },
-            "166": {
-                "class_type": "SaveImage",
-                "inputs": {
-                    "filename_prefix": "yeepay/yeepay",
-                    "images": ["161", 0]
-                },
-                "_meta": {"title": "保存图像"}
-            },
-            "167": {
-                "class_type": "UNETLoader",
-                "inputs": {
-                    "unet_name": "qwen_image_edit_fp8_e4m3fn.safetensors",
-                    "weight_dtype": "default"
-                },
-                "_meta": {"title": "UNET加载器"}
-            },
-            "169": {
-                "class_type": "TextEncodeQwenImageEdit",
-                "inputs": {
-                    "prompt": "{{description}}",
-                    "speak_and_recognation": True,
-                    "clip": ["165", 0],
-                    "vae": ["156", 0],
-                    "image": ["153", 0]
-                },
-                "_meta": {"title": "TextEncodeQwenImageEdit"}
-            }
-        }
+        # 使用配置文件中的工作流目录
+        from config.settings import WORKFLOWS_DIR
+        workflow_path = WORKFLOWS_DIR / "qwen" / "fusion" / template_name
+        print(f"🔍 加载工作流模板: {workflow_path}")
+        
+        with open(workflow_path, 'r', encoding='utf-8') as f:
+            workflow = json.load(f)
+        print(f"✅ 加载Qwen多图融合工作流模板: {template_name} (支持{image_count}张图片)")
+        return workflow
+    
     
     def _add_multi_image_nodes(self, workflow: Dict[str, Any], image_paths: List[str]) -> Dict[str, Any]:
-        """添加多图输入节点到工作流
+        """更新多图输入节点的图像路径
         
         Args:
             workflow: 工作流字典
@@ -248,41 +113,33 @@ class QwenFusionWorkflow(BaseWorkflow):
         Returns:
             更新后的工作流字典
         """
-        print(f"📸 为Qwen多图融合工作流添加 {len(image_paths)} 张图像")
+        print(f"📸 为Qwen多图融合工作流更新 {len(image_paths)} 张图像路径")
         
-        # 动态调整ImageConcatMulti节点的inputcount
-        if "149" in workflow:
-            workflow["149"]["inputs"]["inputcount"] = len(image_paths)
-            print(f"✅ 设置图像拼接数量: {len(image_paths)}")
+        # 动态查找LoadImage节点
+        load_image_nodes = []
+        for node_id, node_data in workflow.items():
+            if node_data.get("class_type") == "LoadImage":
+                load_image_nodes.append(node_id)
         
-        # 为每张图像创建LoadImage节点
+        # 按节点ID排序，确保顺序一致
+        load_image_nodes.sort()
+        
+        print(f"🔍 找到 {len(load_image_nodes)} 个LoadImage节点: {load_image_nodes}")
+        
+        if len(load_image_nodes) < len(image_paths):
+            raise ValueError(f"工作流中只有 {len(load_image_nodes)} 个LoadImage节点，但需要 {len(image_paths)} 个")
+        
+        # 更新每个LoadImage节点的图像路径
         for i, image_path in enumerate(image_paths):
-            node_id = str(150 + i)  # 从150开始
+            node_id = load_image_nodes[i]
             # 转换Windows路径为ComfyUI兼容的路径格式
             comfyui_path = self._convert_path_for_comfyui(image_path)
-            workflow[node_id] = {
-                "inputs": {
-                    "image": comfyui_path
-                },
-                "class_type": "LoadImage",
-                "_meta": {"title": f"加载图像{i+1}"}
-            }
-            print(f"✅ 创建LoadImage节点 {node_id}: {os.path.basename(image_path)} -> {comfyui_path}")
-        
-        # 更新ImageConcatMulti节点的图像连接
-        if "149" in workflow:
-            for i in range(len(image_paths)):
-                image_key = f"image_{i+1}"
-                node_id = str(150 + i)
-                workflow["149"]["inputs"][image_key] = [node_id, 0]
-                print(f"✅ 连接图像 {i+1} 到拼接节点: {node_id}")
-        
-        # 如果图像数量少于3张，禁用多余的图像输入
-        for i in range(len(image_paths), 5):  # 最多支持5张
-            image_key = f"image_{i+1}"
-            if image_key in workflow.get("149", {}).get("inputs", {}):
-                workflow["149"]["inputs"][image_key] = ["150", 0]  # 连接到第一张图像
-                print(f"✅ 禁用多余图像输入: {image_key}")
+            
+            if node_id in workflow:
+                workflow[node_id]["inputs"]["image"] = comfyui_path
+                print(f"✅ 更新LoadImage节点 {node_id}: {os.path.basename(image_path)} -> {comfyui_path}")
+            else:
+                print(f"⚠️ 节点 {node_id} 不存在于工作流中")
         
         print(f"✅ Qwen多图融合节点配置完成，处理 {len(image_paths)} 张图像")
         return workflow
@@ -320,7 +177,7 @@ class QwenFusionWorkflow(BaseWorkflow):
                 workflow["158"]["inputs"]["seed"] = parameters["seed"]
             if parameters.get("cfg"):
                 workflow["158"]["inputs"]["cfg"] = parameters["cfg"]
-            print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 20)}, 种子={parameters.get('seed', 'random')}")
+            print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 20)}, 种子={workflow['158']['inputs']['seed']}, CFG={parameters.get('cfg', 2.5)}")
         
         # 动态更新图像尺寸配置
         workflow = self._update_image_dimensions(workflow)

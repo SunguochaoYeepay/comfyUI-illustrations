@@ -78,6 +78,7 @@ const loadFavorites = async () => {
                 imageUrl: image.url || image.directUrl,
                 prompt: task.description,
                 parameters: task.parameters || {},
+                referenceImagePath: task.reference_image_path,
                 createdAt: task.created_at
               })
             }
@@ -138,8 +139,8 @@ onMounted(() => {
 
 .inspiration-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
 }
 
 .inspiration-item {
@@ -190,13 +191,13 @@ onMounted(() => {
 }
 
 .item-info {
-  padding: 16px;
+  padding: 12px;
 }
 
 .item-info h4 {
   color: #fff;
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 6px 0;
+  font-size: 14px;
 }
 
 .item-info p {

@@ -232,9 +232,9 @@
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式
 const isFusionMode = computed(() => {
-  // 只有Qwen模型才支持多图融合
-  const isQwenModel = localModel.value === 'qwen-image'
-  return isQwenModel && localReferenceImages.value.length >= 2
+  // Qwen和Flux1模型都支持多图融合
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1'
+  return isMultiImageModel && localReferenceImages.value.length >= 2
 })
 
 // 计算属性：判断是否为视频模型
@@ -244,10 +244,10 @@ const isVideoModel = computed(() => {
 
 // 计算属性：判断是否应该显示上传按钮
 const shouldShowUploadButton = computed(() => {
-  const isQwenModel = localModel.value === 'qwen-image'
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1'
   
-  // Qwen模型：支持多图，始终显示上传按钮
-  if (isQwenModel) {
+  // 支持多图的模型：始终显示上传按钮
+  if (isMultiImageModel) {
     return true
   }
   
@@ -289,10 +289,10 @@ const videoFps = ref('16') // 默认16 FPS
 watch(() => localReferenceImages.value.length, (newCount) => {
   console.log('🔄 图片数量变化:', newCount)
   
-  // 如果上传了2张或更多图片，且当前不是Qwen模型，则切换到qwen-image
+  // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到qwen-image
   if (newCount >= 2) {
-    const isQwenModel = localModel.value === 'qwen-image'
-    if (!isQwenModel) {
+    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1'
+    if (!isMultiImageModel) {
       console.log('🔄 自动切换到Qwen模型')
       localModel.value = 'qwen-image'
     }
@@ -301,11 +301,11 @@ watch(() => localReferenceImages.value.length, (newCount) => {
 
 // 监听模型变化，处理图片数量限制
 watch(() => localModel.value, (newModel) => {
-  const isQwenModel = newModel === 'qwen-image'
+  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'flux1'
   
-  // 如果切换到非Qwen模型，且有多张图片，只保留第一张
-  if (!isQwenModel && localReferenceImages.value.length > 1) {
-    console.log('🔄 切换到非Qwen模型，只保留第一张图片')
+  // 如果切换到不支持多图的模型，且有多张图片，只保留第一张
+  if (!isMultiImageModel && localReferenceImages.value.length > 1) {
+    console.log('🔄 切换到不支持多图的模型，只保留第一张图片')
     localReferenceImages.value = [localReferenceImages.value[0]]
   }
 }, { immediate: true })

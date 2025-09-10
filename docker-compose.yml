@@ -32,7 +32,7 @@ services:
       - E:/AI-Image/ComfyUI-aki-v1.4/output:/app/comfyui/output
       - E:/AI-Image/ComfyUI-aki-v1.4/output/yeepay:/app/comfyui/output/yeepay
       - E:/AI-Image/ComfyUI-aki-v1.4/input:/app/comfyui/input
-      - E:/AI-Image/ComfyUI-aki-v1.4/models/loras:/app/comfyui/models/loras
+      - E:/AI-Image/ComfyUI-aki-v1.4/models:/app/comfyui/models
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]

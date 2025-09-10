@@ -42,8 +42,18 @@ class ModelConfig:
     def _check_availability(self) -> bool:
         """检查模型文件是否可用"""
         try:
+            # API模型（如Gemini）不需要本地文件，直接返回可用
+            if self.model_type == ModelType.GEMINI:
+                print(f"✅ API模型 {self.name} 可用")
+                return True
+            
             # 使用统一配置的模型目录路径
             model_dir = COMFYUI_MODELS_DIR
+            
+            # 在Docker环境中，如果模型目录不存在，假设模型通过挂载可用
+            if not model_dir.exists():
+                print(f"⚠️ 模型目录不存在，假设模型 {self.name} 通过挂载可用: {model_dir}")
+                return True
             
             # 根据模型类型确定文件路径
             if self.model_type == ModelType.FLUX:
@@ -68,9 +78,17 @@ class ModelConfig:
                 clip_path = model_dir / "clip" / self.clip_file
                 vae_path = model_dir / "vae" / self.vae_file
             
-            return (unet_path.exists() and 
-                   clip_path.exists() and 
-                   vae_path.exists())
+            unet_exists = unet_path.exists()
+            clip_exists = clip_path.exists()
+            vae_exists = vae_path.exists()
+            
+            # 调试信息（生产环境可注释掉）
+            # print(f"🔍 检查模型 {self.name} 文件:")
+            # print(f"  - UNet: {unet_path} - {'✅' if unet_exists else '❌'}")
+            # print(f"  - CLIP: {clip_path} - {'✅' if clip_exists else '❌'}")
+            # print(f"  - VAE: {vae_path} - {'✅' if vae_exists else '❌'}")
+            
+            return (unet_exists and clip_exists and vae_exists)
         except Exception:
             return False
     

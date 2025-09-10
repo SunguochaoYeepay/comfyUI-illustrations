@@ -39,7 +39,6 @@
         </div>
         <div class="item-info">
           <h4>{{ item.title }}</h4>
-          <p>{{ item.description }}</p>
           <div class="item-meta">
             <span class="date">{{ formatDate(item.createdAt) }}</span>
             <HeartFilled class="favorite-icon" />

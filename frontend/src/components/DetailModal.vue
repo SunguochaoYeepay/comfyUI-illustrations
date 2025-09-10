@@ -23,7 +23,7 @@
           </div>
           
           <!-- 操作按钮 -->
-          <div class="action-buttons">
+          <div class="action-buttons" style="display: none;">
             <a-button @click="downloadImage" class="action-btn">
               <DownloadOutlined />
               下载

@@ -36,6 +36,9 @@ from core.service_manager import (
 # 导入缓存管理器
 from core.cache_manager import get_cache_manager
 
+# 导入缩略图管理器
+from core.thumbnail_manager import get_thumbnail_manager
+
 # 导入放大服务
 from api.upscale_routes import router as upscale_router
 
@@ -50,6 +53,7 @@ from core.translation_client import get_translation_client
 db_manager = get_db_manager()
 task_manager = get_task_manager()
 cache_manager = get_cache_manager()
+thumbnail_manager = get_thumbnail_manager()
 
 
 
@@ -803,6 +807,46 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
     
     return FileResponse(image_path)
 
+@app.get("/api/thumbnail/{thumbnail_filename}")
+async def get_thumbnail(thumbnail_filename: str):
+    """获取缩略图"""
+    try:
+        # 解析缩略图文件名格式: {task_id}_{index}_small.jpg
+        if '_small.jpg' in thumbnail_filename:
+            task_id = thumbnail_filename.replace('_small.jpg', '').rsplit('_', 1)[0]
+            image_index = int(thumbnail_filename.replace('_small.jpg', '').rsplit('_', 1)[1])
+            
+            # 获取任务信息
+            task = task_manager.get_task_status(task_id)
+            if not task or task["status"] != "completed" or not task["result_path"]:
+                raise HTTPException(status_code=404, detail="任务不存在")
+            
+            # 解析结果路径
+            import json
+            result_paths = json.loads(task["result_path"])
+            
+            if isinstance(result_paths, list) and image_index < len(result_paths):
+                original_path = result_paths[image_index]
+                # 处理相对路径
+                if not Path(original_path).is_absolute():
+                    if original_path.startswith("outputs/"):
+                        image_path = OUTPUT_DIR / original_path[8:]
+                    else:
+                        image_path = OUTPUT_DIR / original_path
+                else:
+                    image_path = Path(original_path)
+                
+                # 生成缩略图
+                thumbnail_path = thumbnail_manager.generate_thumbnail(str(image_path), 'small')
+                if thumbnail_path:
+                    return FileResponse(thumbnail_path)
+        
+        # 如果无法解析或生成缩略图，返回404
+        raise HTTPException(status_code=404, detail="缩略图不存在")
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取缩略图失败: {str(e)}")
+
 @app.get("/api/video/{task_id}")
 async def get_generated_video(task_id: str, filename: str = None):
     """获取生成的视频"""
@@ -884,6 +928,20 @@ async def get_history(limit: int = 20, offset: int = 0, order: str = "asc", favo
             favorite_filter=favorite_filter, 
             time_filter=time_filter
         )
+        
+        # 为每个任务添加缩略图URL
+        for task in result.get('tasks', []):
+            if task.get('image_urls'):
+                task['thumbnail_urls'] = []
+                for i, image_url in enumerate(task['image_urls']):
+                    # 从image_url提取task_id
+                    if '/api/image/' in image_url:
+                        task_id = image_url.split('/api/image/')[1].split('/')[0]
+                        # 生成缩略图URL
+                        thumbnail_url = f"/api/thumbnail/{task_id}_{i}_small.jpg"
+                        task['thumbnail_urls'].append(thumbnail_url)
+                    else:
+                        task['thumbnail_urls'].append(image_url)
         
         # 缓存结果
         cache_manager.set_history_cache(

@@ -47,6 +47,7 @@ Thumbs.db
 *.sqlite3
 uploads/
 outputs/
+thumbnails/
 temp/
 .env
 .env.*

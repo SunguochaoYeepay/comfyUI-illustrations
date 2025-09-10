@@ -1425,6 +1425,7 @@ const processTaskImages = (task) => {
         return {
           url: imageUrl,
           directUrl: null,
+          thumbnailUrl: task.thumbnail_urls && task.thumbnail_urls[index] ? `${API_BASE}${task.thumbnail_urls[index]}` : null,
           filename: `generated_${task.task_id}_${index + 1}.png`,
           task_id: task.task_id,
           image_index: index, // 使用与后端一致的字段名

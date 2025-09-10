@@ -2,7 +2,7 @@
   <div class="single-image-card">
     <!-- 图像容器 -->
     <div class="image-container" @click="$emit('previewImage', image)">
-      <img :src="image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
+      <img :src="image.thumbnailUrl || image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
       
       <!-- 图片操作悬浮层 -->
       <div class="image-overlay">

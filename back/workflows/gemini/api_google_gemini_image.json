@@ -1,0 +1,80 @@
+{
+  "4": {
+    "inputs": {
+      "preview": "## 处理日志\n使用用户输入的API密钥\n已保存API密钥到节点目录\n使用指定的种子值: 66666666\n使用温度值: 1.0，种子值: 66666666\n检测到 2 张参考图像\n参考图像 1 处理成功，尺寸: 640x360\n参考图像 2 处理成功，尺寸: 640x360\n成功添加 2 张参考图像到请求中\n请求Gemini API生成图像，种子值: 66666666, 包含参考图像数: 2\nAPI响应接收成功，正在处理...\nAPI返回文本: I will create an image showing the furry panda character with glasses and a ukulele dancing joyfully...\nAPI返回数据解析处理\n图像数据类型: <class 'bytes'>, MIME类型: image/png, 数据长度: 903116\n图像数据前8字节: 69 56 42 4f 52 77 30 4b\n检测到Base64编码的PNG，正在解码...\nBase64解码成功，新数据长度: 677336\n成功打开图像: 1024x582, 格式: PNG\n图像转换为张量成功, 形状: torch.Size([1, 582, 1024, 3])\n\n## API返回\nI will create an image showing the furry panda character with glasses and a ukulele dancing joyfully with the young girl who was previously flying a kite. They will be on a brightly lit stage with a dark background and red curtains.\n\n",
+      "source": [
+        "32",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "预览任意"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image1": [
+        "11",
+        0
+      ],
+      "image2": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "ImageBatch",
+    "_meta": {
+      "title": "图像组合批次"
+    }
+  },
+  "11": {
+    "inputs": {
+      "image": "generated-image-1757406452372.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "12": {
+    "inputs": {
+      "image": "generated-image-1757304165746.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "30": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "32",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "32": {
+    "inputs": {
+      "prompt": "The character in the first picture is dancing together with the one in the second chapter\n",
+      "api_key": "${GEMINI_API_KEY}",
+      "model": "models/gemini-2.0-flash-preview-image-generation",
+      "aspect_ratio": "Free (自由比例)",
+      "temperature": 1,
+      "seed": 161050069,
+      "images": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "Google-Gemini",
+    "_meta": {
+      "title": "Gemini 2.0 image"
+    }
+  }
+}

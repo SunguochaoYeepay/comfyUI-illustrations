@@ -92,7 +92,7 @@ class Flux1VectorWorkflow(BaseWorkflow):
                 print(f"📁 加载单图风格迁移工作流: {template_path}")
         else:
             # 无参考图 - 纯文本生成
-            template_path = WORKFLOWS_DIR / "flux1_vector_workflow.json"
+            template_path = WORKFLOWS_DIR / "flux1" / "flux1_vector_workflow.json"
             print(f"📁 加载纯文本生成工作流: {template_path}")
         
         if not template_path.exists():

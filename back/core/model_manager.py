@@ -20,6 +20,7 @@ class ModelType(Enum):
     QWEN = "qwen"
     WAN = "wan" # Added WAN model type
     FLUX1 = "flux1" # Added FLUX1 model type
+    GEMINI = "gemini" # Added GEMINI model type
 
 
 class ModelConfig:
@@ -144,15 +145,28 @@ class ModelManager:
             description="Flux1基础模型，支持多种工作流，可配置不同LoRA，输出高质量图像"
         )
         
+        # Google Gemini 模型配置
+        gemini_config = ModelConfig(
+            model_type=ModelType.GEMINI,
+            name="gemini-image",
+            display_name="Nano Banana",
+            unet_file="",  # Gemini 使用 API，不需要本地文件
+            clip_file="",
+            vae_file="",
+            template_path="workflows/google/api_google_gemini_image.json",
+            description="Google Gemin图像编辑&融合，支持无图、1图、2图的智能合成"
+        )
+        
         self.models[flux_config.name] = flux_config
         self.models[qwen_config.name] = qwen_config
         self.models[wan_config.name] = wan_config
         self.models[flux1_config.name] = flux1_config
+        self.models[gemini_config.name] = gemini_config
     
     def get_available_models(self) -> List[Dict[str, Any]]:
         """获取可用的模型列表，按照指定顺序排序"""
         # 定义模型显示顺序
-        model_order = ['qwen-image', 'flux1-dev', 'flux1', 'wan2.2-video']
+        model_order = ['qwen-image', 'flux1-dev', 'flux1', 'wan2.2-video', 'gemini-image']
         
         available_models = []
         ordered_models = []

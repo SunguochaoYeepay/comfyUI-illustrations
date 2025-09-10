@@ -80,6 +80,9 @@ class WorkflowTemplate:
         elif model_config.model_type == ModelType.FLUX1:  # 新增
             from core.workflows import Flux1VectorWorkflow
             workflow_creator = Flux1VectorWorkflow(model_config)
+        elif model_config.model_type == ModelType.GEMINI:
+            from core.workflows import GeminiWorkflow
+            workflow_creator = GeminiWorkflow(model_config)
         else:
             raise ValueError(f"不支持的模型类型: {model_config.model_type}")
         

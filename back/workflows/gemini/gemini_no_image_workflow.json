@@ -1,0 +1,42 @@
+{
+  "4": {
+    "inputs": {
+      "preview": "## 处理日志\n使用用户输入的API密钥\n已保存API密钥到节点目录\n使用指定的种子值: 66666666\n使用温度值: 1.0，种子值: 66666666\n请求Gemini API生成图像，种子值: 66666666, 包含参考图像数: 0\nAPI响应接收成功，正在处理...\nAPI返回文本: I will create a detailed image of a beautiful Chinese girl. She will have traditional dark hair styl...\nAPI返回数据解析处理\n图像数据类型: <class 'bytes'>, MIME类型: image/png, 数据长度: 1653148\n图像数据前8字节: 69 56 42 4f 52 77 30 4b\n检测到Base64编码的PNG，正在解码...\nBase64解码成功，新数据长度: 1239860\n成功打开图像: 1024x1024, 格式: PNG\n图像转换为张量成功, 形状: torch.Size([1, 1024, 1024, 3])\n\n## API返回\nI will create a detailed image of a beautiful Chinese girl. She will have traditional dark hair styled elegantly, wearing a vibrant red and gold patterned cheongsam dress. Her expression will be serene, and the background will subtly feature traditional Chinese architectural elements like a curved roof and red lanterns, creating a culturally rich scene.\n",
+      "source": [
+        "32",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "预览任意"
+    }
+  },
+  "30": {
+    "inputs": {
+      "filename_prefix": "yeepay/yeepay",
+      "images": [
+        "32",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "32": {
+    "inputs": {
+      "prompt": "1 china gril",
+      "api_key": "${GEMINI_API_KEY}",
+      "model": "models/gemini-2.0-flash-preview-image-generation",
+      "aspect_ratio": "Free (自由比例)",
+      "temperature": 1,
+      "seed": 1109472741
+    },
+    "class_type": "Google-Gemini",
+    "_meta": {
+      "title": "Gemini 2.0 image"
+    }
+  }
+}

@@ -125,9 +125,18 @@ class TaskManager:
                         print(f"⚠️ Ollama服务不可用，使用原描述: {description}")
                 else:
                     print(f"✅ Flux模型描述已经是英文，无需翻译: {description}")
-            else:
+            elif model_name.startswith("gemini"):
+                # Nano Banana模型支持中文，无需翻译
+                print(f"✅ Nano Banana模型支持中文，直接使用原描述: {description}")
+            elif model_name.startswith("qwen"):
                 # Qwen模型支持中文，无需翻译
                 print(f"✅ Qwen模型支持中文，直接使用原描述: {description}")
+            elif model_name.startswith("wan"):
+                # Wan模型支持中文，无需翻译
+                print(f"✅ Wan模型支持中文，直接使用原描述: {description}")
+            else:
+                # 其他模型默认支持中文
+                print(f"✅ {model_name}模型支持中文，直接使用原描述: {description}")
             
             # 获取生成数量
             count = int(parameters.get("count", 1))

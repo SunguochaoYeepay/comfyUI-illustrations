@@ -232,8 +232,8 @@
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式
 const isFusionMode = computed(() => {
-  // Qwen和Flux1模型都支持多图融合
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1'
+  // Qwen、Flux1和Gemini模型都支持多图融合
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1' || localModel.value === 'gemini-image'
   return isMultiImageModel && localReferenceImages.value.length >= 2
 })
 
@@ -244,11 +244,13 @@ const isVideoModel = computed(() => {
 
 // 计算属性：判断是否应该显示上传按钮
 const shouldShowUploadButton = computed(() => {
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1'
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1' || localModel.value === 'gemini-image'
   
-  // 支持多图的模型：始终显示上传按钮
+  // 支持多图的模型：根据图片数量限制显示上传按钮
   if (isMultiImageModel) {
-    return true
+    // Qwen模型支持3张图片，其他模型最多2张
+    const maxImages = localModel.value === 'qwen-image' ? 3 : 2
+    return localReferenceImages.value.length < maxImages
   }
   
   // 其他模型：只有没有图片时才显示上传按钮
@@ -291,7 +293,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
   
   // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到qwen-image
   if (newCount >= 2) {
-    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1'
+    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1' || localModel.value === 'gemini-image'
     if (!isMultiImageModel) {
       console.log('🔄 自动切换到Qwen模型')
       localModel.value = 'qwen-image'
@@ -301,7 +303,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
 
 // 监听模型变化，处理图片数量限制
 watch(() => localModel.value, (newModel) => {
-  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'flux1'
+  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'flux1' || newModel === 'gemini-image'
   
   // 如果切换到不支持多图的模型，且有多张图片，只保留第一张
   if (!isMultiImageModel && localReferenceImages.value.length > 1) {

@@ -49,6 +49,12 @@ uploads/
 outputs/
 temp/
 .env
+.env.*
+*.key
+*api_key*
+*secret*
+*password*
+*credentials*
 
 # Logs
 *.log

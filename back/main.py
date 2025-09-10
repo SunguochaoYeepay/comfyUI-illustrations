@@ -515,8 +515,8 @@ async def generate_image_fusion(
     """多图融合生成API"""
     try:
         # 验证模型类型
-        if model not in ['qwen-image', 'flux1']:
-            raise HTTPException(status_code=400, detail="多图融合只支持Qwen和Flux1模型")
+        if model not in ['qwen-image', 'flux1', 'gemini-image']:
+            raise HTTPException(status_code=400, detail="多图融合只支持Qwen、Flux1和Gemini模型")
         
         # 验证图像数量
         if len(reference_images) < 2:

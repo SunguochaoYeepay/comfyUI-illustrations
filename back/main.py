@@ -33,6 +33,9 @@ from core.service_manager import (
     get_db_manager, get_task_manager, get_comfyui_client
 )
 
+# 导入缓存管理器
+from core.cache_manager import get_cache_manager
+
 # 导入放大服务
 from api.upscale_routes import router as upscale_router
 
@@ -46,6 +49,7 @@ from core.translation_client import get_translation_client
 # 使用服务管理器获取实例（延迟初始化）
 db_manager = get_db_manager()
 task_manager = get_task_manager()
+cache_manager = get_cache_manager()
 
 
 
@@ -616,7 +620,18 @@ async def generate_image_fusion(
 @app.get("/api/task/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str):
     """获取任务状态"""
-    task = task_manager.get_task_status(task_id)
+    # 尝试从缓存获取
+    cached_task = cache_manager.get_task_cache(task_id)
+    
+    if cached_task:
+        task = cached_task
+    else:
+        # 缓存未命中，从数据库获取
+        task = task_manager.get_task_status(task_id)
+        
+        if task:
+            # 缓存任务状态
+            cache_manager.set_task_cache(task_id, task)
     
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -849,6 +864,19 @@ async def get_generated_video(task_id: str, filename: str = None):
 async def get_history(limit: int = 20, offset: int = 0, order: str = "asc", favorite_filter: str = None, time_filter: str = None):
     """获取历史记录"""
     try:
+        # 尝试从缓存获取
+        cached_result = cache_manager.get_history_cache(
+            limit=limit, 
+            offset=offset, 
+            order=order, 
+            favorite_filter=favorite_filter, 
+            time_filter=time_filter
+        )
+        
+        if cached_result:
+            return cached_result
+        
+        # 缓存未命中，从数据库获取
         result = db_manager.get_tasks_with_filters(
             limit=limit, 
             offset=offset, 
@@ -856,6 +884,17 @@ async def get_history(limit: int = 20, offset: int = 0, order: str = "asc", favo
             favorite_filter=favorite_filter, 
             time_filter=time_filter
         )
+        
+        # 缓存结果
+        cache_manager.set_history_cache(
+            data=result,
+            limit=limit, 
+            offset=offset, 
+            order=order, 
+            favorite_filter=favorite_filter, 
+            time_filter=time_filter
+        )
+        
         return result
     except Exception as e:
         print(f"获取历史记录失败: {e}")
@@ -868,6 +907,10 @@ async def toggle_favorite(task_id: str):
         new_favorite = db_manager.toggle_favorite(task_id)
         if new_favorite is False and not db_manager.get_task(task_id):
             raise HTTPException(status_code=404, detail="任务不存在")
+        
+        # 清除相关缓存
+        cache_manager.invalidate_task_cache(task_id)
+        cache_manager.invalidate_history_cache()
         
         return {
             "task_id": task_id,
@@ -1172,10 +1215,14 @@ async def health_check():
     from datetime import datetime
     overall_healthy = db_healthy and comfyui_status
     
+    # 获取缓存统计信息
+    cache_stats = cache_manager.get_cache_stats()
+    
     return {
         "status": "healthy" if overall_healthy else "unhealthy",
         "database_connected": db_healthy,
         "comfyui_connected": comfyui_status,
+        "redis_cache": cache_stats,
         "timestamp": datetime.now().isoformat()
     }
 

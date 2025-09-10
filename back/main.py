@@ -715,7 +715,14 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
                 found = False
                 for path in result_paths:
                     if Path(path).name == filename or Path(path).name.endswith(f"/{filename}"):
-                        image_path = Path(path)
+                        # 处理相对路径，转换为绝对路径
+                        if not Path(path).is_absolute():
+                            if path.startswith("outputs/"):
+                                image_path = OUTPUT_DIR / path[8:]  # 去掉 "outputs/" 前缀
+                            else:
+                                image_path = OUTPUT_DIR / path
+                        else:
+                            image_path = Path(path)
                         found = True
                         break
                 if not found:
@@ -724,24 +731,57 @@ async def get_generated_image(task_id: str, index: int = 0, filename: str = None
                 # 单个结果，检查是否匹配
                 if Path(result_paths).name != filename and not Path(result_paths).name.endswith(f"/{filename}"):
                     raise HTTPException(status_code=404, detail=f"指定的文件名 {filename} 不存在")
-                image_path = Path(result_paths)
+                # 处理相对路径，转换为绝对路径
+                if not Path(result_paths).is_absolute():
+                    if result_paths.startswith("outputs/"):
+                        image_path = OUTPUT_DIR / result_paths[8:]  # 去掉 "outputs/" 前缀
+                    else:
+                        image_path = OUTPUT_DIR / result_paths
+                else:
+                    image_path = Path(result_paths)
         else:
             # 使用索引获取图像
             if isinstance(result_paths, list):
                 # 多个图像
                 if index >= len(result_paths) or index < 0:
                     raise HTTPException(status_code=404, detail="图像索引不存在")
-                image_path = Path(result_paths[index])
+                # 处理相对路径，转换为绝对路径
+                relative_path = result_paths[index]
+                if not Path(relative_path).is_absolute():
+                    # 如果是相对路径，需要根据路径前缀确定正确的目录
+                    if relative_path.startswith("outputs/"):
+                        image_path = OUTPUT_DIR / relative_path[8:]  # 去掉 "outputs/" 前缀
+                    else:
+                        image_path = OUTPUT_DIR / relative_path
+                else:
+                    image_path = Path(relative_path)
             else:
                 # 单个图像（向后兼容）
                 if index != 0:
                     raise HTTPException(status_code=404, detail="图像索引不存在")
-                image_path = Path(result_paths)
+                # 处理相对路径，转换为绝对路径
+                relative_path = result_paths
+                if not Path(relative_path).is_absolute():
+                    # 如果是相对路径，需要根据路径前缀确定正确的目录
+                    if relative_path.startswith("outputs/"):
+                        image_path = OUTPUT_DIR / relative_path[8:]  # 去掉 "outputs/" 前缀
+                    else:
+                        image_path = OUTPUT_DIR / relative_path
+                else:
+                    image_path = Path(relative_path)
     except (json.JSONDecodeError, TypeError):
         # 如果不是JSON格式，按单个图像处理（向后兼容）
         if index != 0:
             raise HTTPException(status_code=404, detail="图像索引不存在")
-        image_path = Path(task["result_path"])
+        # 处理相对路径，转换为绝对路径
+        relative_path = task["result_path"]
+        if not Path(relative_path).is_absolute():
+            if relative_path.startswith("outputs/"):
+                image_path = OUTPUT_DIR / relative_path[8:]  # 去掉 "outputs/" 前缀
+            else:
+                image_path = OUTPUT_DIR / relative_path
+        else:
+            image_path = Path(relative_path)
     
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="图像文件不存在")

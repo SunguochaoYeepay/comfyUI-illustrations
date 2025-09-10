@@ -67,7 +67,15 @@ const emit = defineEmits(['show-detail'])
 const favorites = ref([])
 const loading = ref(false)
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:9000'
+// API基础URL - 自动检测环境
+const API_BASE = (() => {
+  // 开发环境：指向后端9000端口
+  if (import.meta.env.DEV) {
+    return 'http://localhost:9000'
+  }
+  // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
+  return import.meta.env.VITE_API_BASE_URL || ''
+})()
 
 const loadFavorites = async () => {
   loading.value = true

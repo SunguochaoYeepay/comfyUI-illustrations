@@ -49,7 +49,7 @@
               </div>
               <div class="model-dropdown-item-info">
                 <div class="model-dropdown-item-name">{{ model.display_name }}</div>
-                <div class="model-dropdown-item-desc">{{ getModelDescription(model.name) }}</div>
+                <div class="model-dropdown-item-desc">{{ model.description || getModelDescription(model.name) }}</div>
               </div>
               <div class="model-dropdown-item-status">
                 <div v-if="model.name === currentModel.name" class="model-dropdown-selected-icon">

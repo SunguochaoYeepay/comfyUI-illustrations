@@ -66,7 +66,7 @@
              </div>
              
                            <!-- LoRA选择器 - 下拉菜单样式 -->
-              <div class="lora-dropdown-section">
+              <div v-if="shouldShowLoraPanel" class="lora-dropdown-section">
                                  <a-dropdown 
                    :trigger="['click']" 
                    placement="bottomLeft"
@@ -240,6 +240,13 @@ const isFusionMode = computed(() => {
 // 计算属性：判断是否为视频模型
 const isVideoModel = computed(() => {
   return localModel.value === 'wan2.2-video'
+})
+
+// 计算属性：判断是否应该显示LoRA面板
+const shouldShowLoraPanel = computed(() => {
+  // 不支持LoRA的模型：Nano Banana（API模型）和Wan2.2视频模型
+  const unsupportedModels = ['gemini-image', 'wan2.2-video']
+  return !unsupportedModels.includes(localModel.value)
 })
 
 // 计算属性：判断是否应该显示上传按钮

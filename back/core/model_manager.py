@@ -166,7 +166,7 @@ class ModelManager:
     def get_available_models(self) -> List[Dict[str, Any]]:
         """获取可用的模型列表，按照指定顺序排序"""
         # 定义模型显示顺序
-        model_order = ['qwen-image', 'flux1-dev', 'flux1', 'wan2.2-video', 'gemini-image']
+        model_order = ['qwen-image', 'gemini-image', 'flux1-dev', 'flux1', 'wan2.2-video']
         
         available_models = []
         ordered_models = []

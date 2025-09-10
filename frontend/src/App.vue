@@ -23,6 +23,22 @@ const handleRemoveFavorite = (item) => {
   const updated = favorites.filter(fav => fav.id !== item.id)
   localStorage.setItem('favorites', JSON.stringify(updated))
 }
+
+const handleRegenerate = (regenerateData) => {
+  console.log('处理再次生成:', regenerateData)
+  
+  // 切换到生图标签
+  activeTab.value = 'generate'
+  
+  // 将回填数据存储到localStorage，供ImageGenerator组件使用
+  localStorage.setItem('regenerateData', JSON.stringify(regenerateData))
+  
+  // 显示提示信息
+  setTimeout(() => {
+    // 这里可以添加一个提示，告诉用户参数已回填
+    console.log('参数已回填到生图页面')
+  }, 100)
+}
 </script>
 
 <template>
@@ -44,6 +60,7 @@ const handleRemoveFavorite = (item) => {
       :item="selectedItem"
       @update:open="detailModalOpen = $event"
       @remove-favorite="handleRemoveFavorite"
+      @regenerate="handleRegenerate"
     />
   </div>
 </template>

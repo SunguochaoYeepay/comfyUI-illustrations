@@ -33,34 +33,31 @@ a,
   }
 }
 
-/* 强制覆盖Ant Design模态框的白色背景 */
-:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
-  background-color: #000000 !important;
-}
-
-:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
+/* 完全绕过 ant-modal-content，直接覆盖模态框容器 */
+.ant-modal {
+  background-color: #1a1a1a !important;
   color: #ffffff !important;
 }
 
-/* 使用属性选择器覆盖所有可能的Ant Design样式 */
-[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
-  background-color: #000000 !important;
-}
-
-[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
+/* 覆盖所有模态框相关元素 */
+.ant-modal * {
+  background-color: #1a1a1a !important;
   color: #ffffff !important;
 }
 
-/* 最高优先级覆盖 */
-html body [class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
-  background-color: #000000 !important;
+/* 特殊处理标题和关闭按钮 */
+.ant-modal-title {
+  color: #ffffff !important;
 }
 
-html body [class*="css-dev-only-do-not-override"].ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
+.ant-modal-close {
   color: #ffffff !important;
+  background: transparent !important;
+}
+
+.ant-modal-close:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* 自定义模态框位置和样式 */
@@ -125,29 +122,58 @@ html body [class*="css-dev-only-do-not-override"].ant-modal .ant-modal-header {
   color: #fff !important;
 }
 
-/* 强制设置模态框高度 */
-:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal {
+/* 强制设置模态框高度和尺寸 - 不依赖 ant-modal-content */
+.ant-modal {
   height: 98vh !important;
+  max-height: 98vh !important;
+  /* 覆盖Ant Design的硬编码transform-origin */
+  transform-origin: center center !important;
 }
 
-:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
-  height: 98vh !important;
-}
-
-:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-body {
+.ant-modal .ant-modal-body {
   height: calc(100vh - 60px) !important;
   overflow-y: auto;
 }
 
-[class*="css-dev-only-do-not-override"].ant-modal {
-  height: 100vh !important;
+/* 强制覆盖所有可能的硬编码值 - 包括内联样式 */
+.ant-modal[style*="width"],
+.ant-modal[style*="520px"],
+.ant-modal[style*="transform-origin"] {
+  width: 90vw !important;
+  max-width: 1200px !important;
+  min-width: 600px !important;
+  transform-origin: center center !important;
 }
 
-[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
-  height: 100vh !important;
+/* 使用最高优先级的选择器覆盖内联样式 */
+html body .ant-modal[style],
+html body .ant-modal[style*="520px"],
+html body .ant-modal[style*="width"] {
+  width: 90vw !important;
+  max-width: 1200px !important;
+  min-width: 600px !important;
+  transform-origin: center center !important;
 }
 
-[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-body {
-  height: calc(100vh - 60px) !important;
-  overflow-y: auto;
+/* 针对特定模态框类名的覆盖 */
+.detail-modal.ant-modal,
+.detail-modal.ant-modal[style],
+.detail-modal.ant-modal[style*="520px"] {
+  width: 90vw !important;
+  max-width: 1200px !important;
+  min-width: 600px !important;
+  transform-origin: center center !important;
+}
+
+/* 使用CSS变量强制覆盖 */
+.ant-modal {
+  --modal-width: 90vw !important;
+  --modal-max-width: 1200px !important;
+  --modal-min-width: 600px !important;
+}
+
+.ant-modal[style] {
+  width: var(--modal-width) !important;
+  max-width: var(--modal-max-width) !important;
+  min-width: var(--modal-min-width) !important;
 }

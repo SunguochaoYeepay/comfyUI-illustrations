@@ -562,6 +562,34 @@ class DatabaseManager:
                     # 如果不是JSON，当作单个文件处理
                     image_url = f"/api/image/{task_id}/0"
             
+            # 构建参考图URL
+            reference_image_url = None
+            if reference_image_path and reference_image_path != 'uploads/blank.png' and reference_image_path != 'uploads\\blank.png':
+                # 处理多图融合的情况，reference_image_path可能是数组
+                try:
+                    reference_paths = json.loads(reference_image_path)
+                    if isinstance(reference_paths, list):
+                        # 多图融合时，将完整的URL数组作为JSON字符串传递
+                        clean_paths = []
+                        for path in reference_paths:
+                            clean_path = path.replace('\\', '/').replace('//', '/')
+                            if not clean_path.startswith('uploads/'):
+                                clean_path = f"uploads/{clean_path}"
+                            clean_paths.append(f"/api/image/upload/{clean_path.replace('uploads/', '')}")
+                        reference_image_url = json.dumps(clean_paths)
+                    else:
+                        # 单个文件
+                        clean_path = reference_paths.replace('\\', '/').replace('//', '/')
+                        if not clean_path.startswith('uploads/'):
+                            clean_path = f"uploads/{clean_path}"
+                        reference_image_url = f"/api/image/upload/{clean_path.replace('uploads/', '')}"
+                except:
+                    # 如果不是JSON，当作单个文件处理
+                    clean_path = reference_image_path.replace('\\', '/').replace('//', '/')
+                    if not clean_path.startswith('uploads/'):
+                        clean_path = f"uploads/{clean_path}"
+                    reference_image_url = f"/api/image/upload/{clean_path.replace('uploads/', '')}"
+
             favorite_item = {
                 "id": f"{task_id}_{image_index}",
                 "task_id": task_id,
@@ -572,7 +600,8 @@ class DatabaseManager:
                 "prompt": description,
                 "parameters": params,
                 "createdAt": created_at,
-                "filename": filename
+                "filename": filename,
+                "referenceImage": reference_image_url
             }
             
             favorites.append(favorite_item)

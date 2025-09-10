@@ -1,13 +1,8 @@
 <template>
-  <a-modal
-    v-model:open="visible"
-    :title="null"
-    width="90%"
-    :footer="null"
-    @cancel="closeModal"
-    class="detail-modal"
-  >
-    <div class="detail-content" v-if="item">
+  <!-- 自定义弹窗 - 完全不用Ant Design -->
+  <div v-if="visible" class="custom-modal-overlay" @click="closeModal">
+    <div class="custom-modal" @click.stop>
+      <div class="detail-content" v-if="item">
       <!-- 左右布局容器 -->
       <div class="content-layout">
         <!-- 左侧图片区域 -->
@@ -20,32 +15,44 @@
           <!-- 标题 -->
           <div class="modal-title">
             <h3>生成信息</h3>
+            
           </div>
           
           <!-- 操作按钮 -->
           <div class="action-buttons" style="display: none;">
-            <a-button @click="downloadImage" class="action-btn">
-              <DownloadOutlined />
+            <button @click="downloadImage" class="action-btn">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 10.5L4.5 7h2V2h3v5h2L8 10.5zM2 12v2h12v-2H2z"/>
+              </svg>
               下载
-            </a-button>
-            <a-button class="action-btn">
-              <SearchOutlined />
+            </button>
+            <button class="action-btn">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+              </svg>
               高清放大
-            </a-button>
-            <a-button class="action-btn">
-              <VideoCameraOutlined />
+            </button>
+            <button class="action-btn">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
+              </svg>
               生成视频
-            </a-button>
+            </button>
           </div>
         <!-- 参考图 -->
         <div class="info-row">
           <span class="info-label">参考图:</span>
-          <div class="reference-image" v-if="getReferenceImageUrl()">
-            <img :src="getReferenceImageUrl()" :alt="'参考图'" class="reference-img" />
-          </div>
-          <div class="reference-image" v-else>
-            <ExclamationCircleOutlined />
-            <span>无参考图</span>
+          <div class="reference-image-container">
+            <div v-if="getReferenceImageUrl()" class="reference-image">
+              <img :src="getReferenceImageUrl()" :alt="'参考图'" class="reference-img" />
+            </div>
+            <div v-else class="reference-image no-image">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+              </svg>
+              <span>无参考图</span>
+            </div>
           </div>
         </div>
         
@@ -98,20 +105,21 @@
         </div>
         </div>
       </div>
+      </div>
+      
+      <!-- 关闭按钮 -->
+      <button class="custom-modal-close" @click="closeModal">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 8.707l3.646 3.647.708-.707L8.707 8l3.647-3.646-.707-.708L8 7.293 4.354 3.646l-.707.708L7.293 8l-3.646 3.646.707.708L8 8.707z"/>
+        </svg>
+      </button>
     </div>
-  </a-modal>
+  </div>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
-import { 
-  DownloadOutlined, 
-  DeleteOutlined, 
-  SearchOutlined, 
-  DownOutlined, 
-  VideoCameraOutlined,
-  ExclamationCircleOutlined 
-} from '@ant-design/icons-vue'
+// 移除所有Ant Design图标导入
 import { message } from 'ant-design-vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:9000'
@@ -127,7 +135,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:open', 'remove-favorite'])
+const emit = defineEmits(['update:open', 'remove-favorite', 'regenerate'])
 
 const visible = ref(false)
 
@@ -141,6 +149,50 @@ watch(visible, (newVal) => {
 
 const closeModal = () => {
   visible.value = false
+}
+
+const regenerateImage = () => {
+  // 构建回填数据
+  let referenceImages = []
+  
+  if (props.item?.referenceImage) {
+    // 如果是JSON字符串数组（多图融合）
+    if (typeof props.item.referenceImage === 'string' && props.item.referenceImage.startsWith('[') && props.item.referenceImage.endsWith(']')) {
+      try {
+        const imageUrls = JSON.parse(props.item.referenceImage)
+        // 从URL中提取文件路径
+        referenceImages = imageUrls.map(url => {
+          // 从完整URL中提取路径部分
+          const match = url.match(/\/api\/image\/upload\/(.+)$/)
+          return match ? match[1] : url
+        })
+      } catch (error) {
+        console.error('解析参考图JSON失败:', error)
+      }
+    } else if (typeof props.item.referenceImage === 'string') {
+      // 单图情况，从URL中提取路径
+      const match = props.item.referenceImage.match(/\/api\/image\/upload\/(.+)$/)
+      referenceImages = match ? [match[1]] : []
+    }
+  }
+  
+  const regenerateData = {
+    prompt: props.item.prompt || '',
+    model: props.item.model || '',
+    referenceImages: referenceImages,
+    loras: props.item.loras || [],
+    parameters: props.item.parameters || {}
+  }
+  
+  console.log('🔄 再次生成数据:', regenerateData)
+  console.log('🔄 原始item数据:', props.item)
+  console.log('🔄 所有字段:', Object.keys(props.item || {}))
+  
+  // 发送事件给父组件
+  emit('regenerate', regenerateData)
+  
+  // 关闭当前弹窗
+  closeModal()
 }
 
 const downloadImage = () => {
@@ -211,162 +263,118 @@ const hasOtherParams = () => {
 }
 
 const getReferenceImageUrl = () => {
-  if (!props.item?.referenceImagePath) {
+  console.log('🔍 检查参考图数据:', props.item)
+  console.log('🔍 所有字段:', Object.keys(props.item || {}))
+  console.log('🔍 参考图路径 (referenceImage):', props.item?.referenceImage)
+  console.log('🔍 参考图路径类型:', typeof props.item?.referenceImage)
+  console.log('🔍 参考图是否为null:', props.item?.referenceImage === null)
+  console.log('🔍 参考图是否为undefined:', props.item?.referenceImage === undefined)
+  
+  if (!props.item?.referenceImage || props.item?.referenceImage === null) {
+    console.log('❌ 没有参考图路径或为null')
     return null
   }
   
-  // 如果是数组（多图融合），取第一张
-  if (Array.isArray(props.item.referenceImagePath)) {
-    if (props.item.referenceImagePath.length > 0) {
-      const imagePath = props.item.referenceImagePath[0]
-      return `${API_BASE}/api/image/upload/${imagePath}`
+  // 如果是JSON字符串数组（多图融合）
+  if (typeof props.item.referenceImage === 'string' && props.item.referenceImage.startsWith('[') && props.item.referenceImage.endsWith(']')) {
+    try {
+      const imageUrls = JSON.parse(props.item.referenceImage)
+      console.log('📁 参考图是JSON数组:', imageUrls)
+      if (imageUrls.length > 0) {
+        // 将相对路径转换为完整的后端URL
+        let imageUrl = imageUrls[0]
+        if (imageUrl.startsWith('/api/')) {
+          imageUrl = `${API_BASE}${imageUrl}`
+        }
+        console.log('✅ 使用第一张参考图:', imageUrl)
+        return imageUrl
+      }
+      console.log('❌ 参考图数组为空')
+      return null
+    } catch (error) {
+      console.error('解析参考图JSON失败:', error)
+      return null
     }
-    return null
   }
   
   // 如果是字符串（单图）
-  if (typeof props.item.referenceImagePath === 'string') {
-    return `${API_BASE}/api/image/upload/${props.item.referenceImagePath}`
+  if (typeof props.item.referenceImage === 'string') {
+    // 将相对路径转换为完整的后端URL
+    let imageUrl = props.item.referenceImage
+    if (imageUrl.startsWith('/api/')) {
+      imageUrl = `${API_BASE}${imageUrl}`
+    }
+    console.log('✅ 单张参考图:', imageUrl)
+    return imageUrl
   }
   
+  console.log('❌ 参考图路径类型未知:', typeof props.item.referenceImage)
   return null
 }
 </script>
 
 <style scoped>
-.detail-modal :deep(.ant-modal-content) {
-  background: #1a1a1a !important;
-  color: #fff;
-  border-radius: 8px;
+/* 自定义弹窗 - 完全不用Ant Design */
+.custom-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
 }
 
-/* 强制覆盖Ant Design的高优先级样式 - 使用更具体的选择器 */
-.detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
-  background-color: #1a1a1a !important;
-}
-
-.detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
-  color: #ffffff !important;
-}
-
-/* 使用属性选择器覆盖 */
-[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
-  background-color: #1a1a1a !important;
-}
-
-[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
-  color: #ffffff !important;
-}
-
-/* 全局覆盖所有可能的Ant Design模态框样式 */
-.ant-modal .ant-modal-content {
-  background-color: #1a1a1a !important;
-}
-
-.ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
-  color: #ffffff !important;
-}
-
-/* 使用最高优先级的选择器 */
-html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
-  background-color: #1a1a1a !important;
-}
-
-html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-header {
-  background: #1a1a1a !important;
-  color: #ffffff !important;
-}
-
-/* 自定义模态框位置 - 可配置距离 */
-.detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal {
-  top: 50px; /* 可配置的顶部距离，可以根据需要调整 */
-}
-
-.detail-modal[class*="css-dev-only-do-not-override"].ant-modal {
-  top: 50px; /* 可配置的顶部距离 */
-}
-
-.detail-modal :deep(.ant-modal) {
-  background: rgba(0, 0, 0, 0.8) !important;
-}
-
-.detail-modal :deep(.ant-modal-wrap) {
-  background: rgba(0, 0, 0, 0.8) !important;
-}
-
-.detail-modal :deep(.ant-modal-header) {
+.custom-modal {
   background: #1a1a1a;
-  border-bottom: none;
-  padding: 16px 20px 0 20px;
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 1400px;
+  min-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-.detail-modal :deep(.ant-modal-title) {
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
+.custom-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.3s;
+  z-index: 10;
 }
 
-.detail-modal :deep(.ant-modal-close) {
-  color: #fff !important;
-  background: transparent !important;
-  border: none !important;
-  width: 32px !important;
-  height: 32px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  border-radius: 4px !important;
-  transition: all 0.3s !important;
+.custom-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
-.detail-modal :deep(.ant-modal-close:hover) {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-}
-
-.detail-modal :deep(.ant-modal-close:focus) {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-  outline: none !important;
-}
-
-/* 使用最高优先级选择器强制设置高度 */
-.detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal {
-  height: 100vh !important;
-}
-
-.detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-content {
-  height: 100vh !important;
-}
-
-.detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .ant-modal-body {
-  background: #1a1a1a !important;
-  padding: 0 20px 0 20px;
-  height: calc(100vh - 60px) !important;
-  overflow-y: auto;
-}
-
-/* 备用选择器 */
-.detail-modal[class*="css-dev-only-do-not-override"].ant-modal {
-  height: 100vh !important;
-}
-
-.detail-modal[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-content {
-  height: 100vh !important;
-}
-
-.detail-modal[class*="css-dev-only-do-not-override"].ant-modal .ant-modal-body {
-  background: #1a1a1a !important;
-  padding: 0 20px 0 20px;
-  height: calc(100vh - 60px) !important;
-  overflow-y: auto;
-}
-
-.detail-modal :deep(.ant-modal-mask) {
-  background: rgba(0, 0, 0, 0.8) !important;
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .custom-modal {
+    width: 95vw;
+    min-width: 320px;
+    max-height: 95vh;
+  }
+  
+  .custom-modal-overlay {
+    padding: 10px;
+  }
 }
 
 .detail-content {
@@ -416,6 +424,8 @@ html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .
   display: flex;
   align-items: center;
   gap: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
 .action-btn:hover {
@@ -436,6 +446,9 @@ html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .
 }
 
 .modal-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
 
@@ -447,19 +460,40 @@ html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .
   padding: 0;
 }
 
+.regenerate-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 500;
+}
+
+.regenerate-btn:hover {
+  background: linear-gradient(135deg, #764ba2, #667eea);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
 .info-row {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
 }
 
 .info-label {
   color: #888;
   font-size: 14px;
   font-weight: 500;
-  min-width: 80px;
-  flex-shrink: 0;
+  margin-bottom: 2px;
 }
 
 .info-value {
@@ -475,30 +509,32 @@ html body .detail-modal:where(.css-dev-only-do-not-override-1p3hq3p).ant-modal .
   word-break: break-all;
 }
 
+.reference-image-container {
+  flex: 1;
+}
+
 .reference-image {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reference-image.no-image {
   background: #2a2a2a;
   border: 1px solid #444;
   border-radius: 6px;
   padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   color: #888;
   font-size: 14px;
-  flex: 1;
-}
-
-.reference-image .anticon {
-  font-size: 16px;
-  color: #ffa500;
 }
 
 .reference-img {
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid #333;
+  background: #2a2a2a;
 }
 
 .prompt-display {

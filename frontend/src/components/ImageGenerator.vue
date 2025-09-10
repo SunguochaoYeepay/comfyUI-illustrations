@@ -60,6 +60,53 @@ const API_BASE = (() => {
   return import.meta.env.VITE_API_BASE_URL || ''
 })()
 
+// 将文件路径转换为文件对象的函数
+const convertPathsToFiles = async (imagePaths) => {
+  const files = []
+  
+  for (const path of imagePaths) {
+    try {
+      const imageUrl = `${API_BASE}/api/image/upload/${path}`
+      console.log('正在获取参考图:', imageUrl)
+      
+      // 获取图片数据
+      const response = await fetch(imageUrl)
+      if (!response.ok) {
+        console.error('获取参考图失败:', response.status, response.statusText)
+        continue
+      }
+      
+      const blob = await response.blob()
+      
+      // 创建文件对象
+      const file = new File([blob], path.split('/').pop() || 'reference.png', {
+        type: blob.type || 'image/png'
+      })
+      
+      // 创建预览URL
+      const preview = URL.createObjectURL(blob)
+      
+      // 创建符合ant-design-vue Upload组件格式的对象
+      const fileObj = {
+        uid: `reference-${Date.now()}-${Math.random()}`,
+        name: file.name,
+        status: 'done',
+        url: preview,
+        preview: preview,
+        originFileObj: file
+      }
+      
+      files.push(fileObj)
+      console.log('✅ 参考图转换成功:', file.name)
+      
+    } catch (error) {
+      console.error('转换参考图失败:', error, '路径:', path)
+    }
+  }
+  
+  return files
+}
+
 
 
 
@@ -1612,6 +1659,65 @@ const handleFilterChange = async (filterParams) => {
 // 组件挂载时加载历史记录
 onMounted(async () => {
   await loadHistory()
+  
+  // 检查是否有回填数据
+  const regenerateData = localStorage.getItem('regenerateData')
+  if (regenerateData) {
+    try {
+      const data = JSON.parse(regenerateData)
+      console.log('🔄 发现回填数据，正在回填参数...', data)
+      
+      // 回填提示词
+      if (data.prompt) {
+        prompt.value = data.prompt
+      }
+      
+      // 回填模型
+      if (data.model) {
+        selectedModel.value = data.model
+      }
+      
+      // 回填参考图
+      if (data.referenceImages && data.referenceImages.length > 0) {
+        try {
+          // 将文件路径转换为文件对象
+          const referenceImageFiles = await convertPathsToFiles(data.referenceImages)
+          referenceImages.value = referenceImageFiles
+          console.log('✅ 参考图回填成功:', referenceImageFiles.length, '张')
+        } catch (error) {
+          console.error('参考图回填失败:', error)
+          message.warning('参考图回填失败，请手动重新上传')
+        }
+      }
+      
+      // 回填LoRA
+      if (data.loras && data.loras.length > 0) {
+        selectedLoras.value = data.loras
+      }
+      
+      // 回填其他参数
+      if (data.parameters) {
+        if (data.parameters.steps) {
+          // 这里需要根据实际的参数结构来设置
+          console.log('回填步数:', data.parameters.steps)
+        }
+        if (data.parameters.cfg) {
+          console.log('回填CFG:', data.parameters.cfg)
+        }
+      }
+      
+      // 清除回填数据
+      localStorage.removeItem('regenerateData')
+      console.log('✅ 参数回填完成')
+      
+      // 显示提示
+      message.success('参数已回填，可以开始生成')
+      
+    } catch (error) {
+      console.error('回填数据解析失败:', error)
+      localStorage.removeItem('regenerateData')
+    }
+  }
   
   // 尝试恢复放大状态
   console.log('🔄 检查是否有进行中的放大任务...')

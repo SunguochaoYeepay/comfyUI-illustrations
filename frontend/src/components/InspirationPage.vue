@@ -41,7 +41,13 @@
           <h4>{{ item.title }}</h4>
           <div class="item-meta">
             <span class="date">{{ formatDate(item.createdAt) }}</span>
-            <HeartFilled class="favorite-icon" />
+            <button 
+              class="remove-favorite-btn" 
+              @click.stop="removeFavorite(item)"
+              title="取消收藏"
+            >
+              <HeartFilled class="favorite-icon" />
+            </button>
           </div>
         </div>
       </div>
@@ -58,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { EyeOutlined, HeartFilled, StarOutlined } from '@ant-design/icons-vue'
 
 const emit = defineEmits(['show-detail'])
@@ -100,6 +106,37 @@ const showDetail = (item) => {
   emit('show-detail', item)
 }
 
+const removeFavorite = async (item) => {
+  try {
+    console.log('🗑️ 灵感页面取消收藏:', item)
+    
+    if (item.type === 'video') {
+      // 取消视频收藏
+      const response = await fetch(`${API_BASE}/api/favorites/videos/${item.task_id}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) {
+        throw new Error('取消视频收藏失败')
+      }
+    } else {
+      // 取消图片收藏
+      const response = await fetch(`${API_BASE}/api/favorites/images/${item.task_id}/${item.image_index}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) {
+        throw new Error('取消图片收藏失败')
+      }
+    }
+    
+    // 重新加载收藏列表
+    await loadFavorites()
+    
+  } catch (error) {
+    console.error('取消收藏失败:', error)
+    alert(`取消收藏失败: ${error.message}`)
+  }
+}
+
 const formatDate = (dateString) => {
   const date = new Date(dateString)
   return date.toLocaleDateString('zh-CN')
@@ -107,6 +144,13 @@ const formatDate = (dateString) => {
 
 onMounted(() => {
   loadFavorites()
+  
+  // 监听取消收藏事件，重新加载收藏列表
+  window.addEventListener('refresh-favorites', loadFavorites)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('refresh-favorites', loadFavorites)
 })
 </script>
 
@@ -234,6 +278,27 @@ onMounted(() => {
 .favorite-icon {
   color: #ff4757;
   font-size: 16px;
+}
+
+.remove-favorite-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-favorite-btn:hover {
+  background: rgba(255, 71, 87, 0.1);
+  transform: scale(1.1);
+}
+
+.remove-favorite-btn:hover .favorite-icon {
+  color: #ff3742;
 }
 
 .empty-state {

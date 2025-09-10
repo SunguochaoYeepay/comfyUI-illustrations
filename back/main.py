@@ -1003,6 +1003,55 @@ async def delete_task(task_id: str):
         print(f"删除任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"删除任务失败: {str(e)}")
 
+@app.delete("/api/favorites/images/{task_id}/{image_index}")
+async def delete_image_favorite(task_id: str, image_index: int):
+    """删除图片收藏"""
+    try:
+        print(f"收到删除图片收藏请求: task_id={task_id}, image_index={image_index}")
+        
+        # 先检查任务是否存在
+        task = db_manager.get_task(task_id)
+        if not task:
+            print(f"任务不存在: {task_id}")
+            raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+        
+        success = db_manager.remove_image_favorite(task_id, image_index)
+        if not success:
+            print(f"收藏记录不存在: task_id={task_id}, image_index={image_index}")
+            raise HTTPException(status_code=404, detail=f"收藏记录不存在: task_id={task_id}, image_index={image_index}")
+        
+        print(f"成功删除图片收藏: task_id={task_id}, image_index={image_index}")
+        return {
+            "task_id": task_id,
+            "image_index": image_index,
+            "message": "图片收藏已删除"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"删除图片收藏失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除图片收藏失败: {str(e)}")
+
+@app.delete("/api/favorites/videos/{task_id}")
+async def delete_video_favorite(task_id: str):
+    """删除视频收藏"""
+    try:
+        success = db_manager.remove_video_favorite(task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="收藏记录不存在")
+        
+        return {
+            "task_id": task_id,
+            "message": "视频收藏已删除"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"删除视频收藏失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除视频收藏失败: {str(e)}")
+
 @app.post("/api/translate")
 async def translate_text(text: str = Form(...)):
     """翻译文本API"""

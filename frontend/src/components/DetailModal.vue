@@ -5,9 +5,23 @@
       <div class="detail-content" v-if="item">
       <!-- 左右布局容器 -->
       <div class="content-layout">
-        <!-- 左侧图片区域 -->
+        <!-- 左侧图片/视频区域 -->
         <div class="image-section">
-          <img :src="item.imageUrl" :alt="item.title" class="detail-image" />
+          <!-- 视频显示 -->
+          <video 
+            v-if="item.type === 'video'" 
+            :src="item.videoUrl" 
+            class="detail-video"
+            controls
+            preload="metadata"
+          />
+          <!-- 图片显示 -->
+          <img 
+            v-else
+            :src="item.imageUrl" 
+            :alt="item.title" 
+            class="detail-image" 
+          />
         </div>
         
         <!-- 右侧信息区域 -->
@@ -19,25 +33,47 @@
           </div>
           
           <!-- 操作按钮 -->
-          <div class="action-buttons" style="display: none;">
-            <button @click="downloadImage" class="action-btn">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 10.5L4.5 7h2V2h3v5h2L8 10.5zM2 12v2h12v-2H2z"/>
-              </svg>
-              下载
-            </button>
-            <button class="action-btn">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
-              </svg>
-              高清放大
-            </button>
-            <button class="action-btn">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z"/>
-              </svg>
-              生成视频
-            </button>
+          <div class="action-buttons">
+            <!-- 图片类型：显示再次生成和下载按钮 -->
+            <template v-if="!item.type || item.type !== 'video'">
+              <button class="action-btn regenerate-btn" @click="regenerateImage">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.69 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                  <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+                </svg>
+                再次生成
+              </button>
+              <button @click="downloadImage" class="action-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 10.5L4.5 7h2V2h3v5h2L8 10.5zM2 12v2h12v-2H2z"/>
+                </svg>
+                下载
+              </button>
+              <button @click="removeFavorite" class="action-btn remove-favorite-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                  <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                </svg>
+                取消收藏
+              </button>
+            </template>
+            
+            <!-- 视频类型：显示下载和取消收藏按钮 -->
+            <template v-else>
+              <button @click="downloadVideo" class="action-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 10.5L4.5 7h2V2h3v5h2L8 10.5zM2 12v2h12v-2H2z"/>
+                </svg>
+                下载视频
+              </button>
+              <button @click="removeFavorite" class="action-btn remove-favorite-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                  <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                </svg>
+                取消收藏
+              </button>
+            </template>
           </div>
         <!-- 参考图 -->
         <div class="info-row">
@@ -118,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 // 移除所有Ant Design图标导入
 import { message } from 'ant-design-vue'
 
@@ -150,6 +186,21 @@ watch(visible, (newVal) => {
 const closeModal = () => {
   visible.value = false
 }
+
+// ESC键关闭弹窗
+const handleKeydown = (event) => {
+  if (event.key === 'Escape' && visible.value) {
+    closeModal()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 
 const regenerateImage = () => {
   // 构建回填数据
@@ -202,6 +253,16 @@ const downloadImage = () => {
     link.download = `${props.item.title || 'image'}.png`
     link.click()
     message.success('图片下载已开始')
+  }
+}
+
+const downloadVideo = () => {
+  if (props.item?.videoUrl) {
+    const link = document.createElement('a')
+    link.href = props.item.videoUrl
+    link.download = `${props.item.title || 'video'}.mp4`
+    link.click()
+    message.success('视频下载已开始')
   }
 }
 
@@ -270,8 +331,13 @@ const getReferenceImageUrl = () => {
   console.log('🔍 参考图是否为null:', props.item?.referenceImage === null)
   console.log('🔍 参考图是否为undefined:', props.item?.referenceImage === undefined)
   
-  if (!props.item?.referenceImage || props.item?.referenceImage === null) {
-    console.log('❌ 没有参考图路径或为null')
+  // 检查参考图是否存在且不为null/undefined/空字符串
+  if (!props.item?.referenceImage || 
+      props.item?.referenceImage === null || 
+      props.item?.referenceImage === undefined ||
+      props.item?.referenceImage === '' ||
+      props.item?.referenceImage === 'null') {
+    console.log('❌ 没有参考图路径或为null/undefined/空')
     return null
   }
   
@@ -413,6 +479,14 @@ const getReferenceImageUrl = () => {
   object-fit: contain;
 }
 
+.detail-video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  object-fit: contain;
+}
+
 .action-btn {
   background: #2a2a2a;
   border: 1px solid #444;
@@ -460,26 +534,29 @@ const getReferenceImageUrl = () => {
   padding: 0;
 }
 
-.regenerate-btn {
+.action-btn.regenerate-btn {
   background: linear-gradient(135deg, #667eea, #764ba2);
   border: none;
   color: #fff;
-  border-radius: 6px;
-  height: 32px;
-  padding: 0 12px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-  font-weight: 500;
 }
 
-.regenerate-btn:hover {
+.action-btn.regenerate-btn:hover {
   background: linear-gradient(135deg, #764ba2, #667eea);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.action-btn.remove-favorite-btn {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: #fff;
+}
+
+.action-btn.remove-favorite-btn:hover {
+  background: #c82333;
+  border-color: #bd2130;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
 }
 
 .info-row {

@@ -427,7 +427,7 @@ const toggleFavorite = async () => {
       })
     } else {
       // 图片收藏
-      response = await fetch(`/api/image/${props.imageData.task_id}/${props.imageData.imageIndex || 0}/favorite`, {
+      response = await fetch(`/api/image/${props.imageData.task_id}/${props.imageData.image_index || 0}/favorite`, {
         method: 'POST'
       })
     }

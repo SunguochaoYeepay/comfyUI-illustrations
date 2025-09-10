@@ -469,14 +469,21 @@ class DatabaseManager:
             if result:
                 # 更新现有记录
                 current_favorite = result[0]
-                new_favorite = 0 if current_favorite else 1
-                cursor.execute("UPDATE image_favorites SET is_favorited = ?, updated_at = ? WHERE task_id = ? AND image_index = ?", 
-                              (new_favorite, datetime.now(), task_id, image_index))
+                if current_favorite:
+                    # 如果当前已收藏，则删除记录（取消收藏）
+                    cursor.execute("DELETE FROM image_favorites WHERE task_id = ? AND image_index = ?", 
+                                  (task_id, image_index))
+                    new_favorite = False
+                else:
+                    # 如果当前未收藏，则设置为已收藏
+                    cursor.execute("UPDATE image_favorites SET is_favorited = ?, updated_at = ? WHERE task_id = ? AND image_index = ?", 
+                                  (1, datetime.now(), task_id, image_index))
+                    new_favorite = True
             else:
                 # 创建新记录
-                new_favorite = 1
+                new_favorite = True
                 cursor.execute("INSERT INTO image_favorites (task_id, image_index, filename, is_favorited, created_at) VALUES (?, ?, ?, ?, ?)", 
-                              (task_id, image_index, filename, new_favorite, datetime.now()))
+                              (task_id, image_index, filename, 1, datetime.now()))
             
             conn.commit()
             return bool(new_favorite)
@@ -530,16 +537,17 @@ class DatabaseManager:
                 if.is_favorited
             FROM tasks t
             INNER JOIN image_favorites if ON t.id = if.task_id
-            WHERE if.is_favorited = 1
+            WHERE if.is_favorited = 1 AND if.image_index >= 0
             ORDER BY if.created_at DESC
         """)
         
         results = cursor.fetchall()
-        conn.close()
+        print(f"查询到 {len(results)} 条收藏记录")
         
         favorites = []
         for row in results:
             task_id, description, created_at, parameters, result_path, reference_image_path, image_index, filename, is_favorited = row
+            print(f"处理收藏记录: task_id={task_id}, image_index={image_index}, filename={filename}")
             
             # 解析参数
             try:
@@ -630,14 +638,21 @@ class DatabaseManager:
             if result:
                 # 更新现有记录
                 current_favorite = result[0]
-                new_favorite = 0 if current_favorite else 1
-                cursor.execute("UPDATE image_favorites SET is_favorited = ?, updated_at = ? WHERE task_id = ? AND image_index = -1", 
-                              (new_favorite, datetime.now(), task_id))
+                if current_favorite:
+                    # 如果当前已收藏，则删除记录（取消收藏）
+                    cursor.execute("DELETE FROM image_favorites WHERE task_id = ? AND image_index = -1", 
+                                  (task_id,))
+                    new_favorite = False
+                else:
+                    # 如果当前未收藏，则设置为已收藏
+                    cursor.execute("UPDATE image_favorites SET is_favorited = ?, updated_at = ? WHERE task_id = ? AND image_index = -1", 
+                                  (1, datetime.now(), task_id))
+                    new_favorite = True
             else:
                 # 创建新记录（使用image_index = -1 表示视频）
-                new_favorite = 1
+                new_favorite = True
                 cursor.execute("INSERT INTO image_favorites (task_id, image_index, filename, is_favorited, created_at) VALUES (?, ?, ?, ?, ?)", 
-                              (task_id, -1, filename, new_favorite, datetime.now()))
+                              (task_id, -1, filename, 1, datetime.now()))
             
             conn.commit()
             return bool(new_favorite)
@@ -667,6 +682,68 @@ class DatabaseManager:
             return bool(result[0]) if result else False
         except Exception as e:
             print(f"获取视频收藏状态失败: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def remove_image_favorite(self, task_id: str, image_index: int) -> bool:
+        """删除图片收藏
+        
+        Args:
+            task_id: 任务ID
+            image_index: 图片索引
+            
+        Returns:
+            是否删除成功
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # 先检查记录是否存在
+            cursor.execute("SELECT * FROM image_favorites WHERE task_id = ? AND image_index = ?", 
+                          (task_id, image_index))
+            existing_record = cursor.fetchone()
+            
+            if not existing_record:
+                print(f"收藏记录不存在: task_id={task_id}, image_index={image_index}")
+                return False
+            
+            print(f"删除收藏记录: task_id={task_id}, image_index={image_index}")
+            cursor.execute("DELETE FROM image_favorites WHERE task_id = ? AND image_index = ?", 
+                          (task_id, image_index))
+            conn.commit()
+            
+            success = cursor.rowcount > 0
+            print(f"删除结果: {success}, 影响行数: {cursor.rowcount}")
+            return success
+        except Exception as e:
+            print(f"删除图片收藏失败: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def remove_video_favorite(self, task_id: str) -> bool:
+        """删除视频收藏
+        
+        Args:
+            task_id: 任务ID
+            
+        Returns:
+            是否删除成功
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("DELETE FROM image_favorites WHERE task_id = ? AND image_index = -1", 
+                          (task_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"删除视频收藏失败: {e}")
+            conn.rollback()
             return False
         finally:
             conn.close()

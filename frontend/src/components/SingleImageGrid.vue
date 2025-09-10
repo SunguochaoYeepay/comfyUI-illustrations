@@ -4,7 +4,7 @@
     <div class="grid-container">
       <SingleImageCard
         v-for="(image, index) in images"
-        :key="`${image.task_id}-${image.imageIndex || index}`"
+        :key="`${image.task_id}-${image.image_index || index}`"
         :image="image"
         @preview-image="$emit('previewImage', $event)"
         @toggle-favorite="$emit('toggleFavorite', $event)"

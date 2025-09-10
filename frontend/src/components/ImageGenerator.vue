@@ -901,7 +901,7 @@ const updateImageFavoriteStatus = async () => {
 const toggleFavorite = async (image) => {
   try {
     // 调用后端API切换单张图片收藏状态
-    const response = await fetch(`${API_BASE}/api/image/${image.task_id}/${image.imageIndex || 0}/favorite`, {
+    const response = await fetch(`${API_BASE}/api/image/${image.task_id}/${image.image_index || 0}/favorite`, {
       method: 'POST'
     })
     
@@ -910,7 +910,7 @@ const toggleFavorite = async (image) => {
       
       // 在allImages中找到对应的图片并更新收藏状态
       const targetImage = allImages.value.find(img => 
-        img.url === image.url && img.task_id === image.task_id && img.imageIndex === image.imageIndex
+        img.url === image.url && img.task_id === image.task_id && img.image_index === image.image_index
       )
       
       if (targetImage) {
@@ -921,6 +921,8 @@ const toggleFavorite = async (image) => {
           message.success('已添加到收藏')
         } else {
           message.success('已取消收藏')
+          // 通知灵感页面刷新收藏列表
+          window.dispatchEvent(new CustomEvent('refresh-favorites'))
         }
       }
     } else {
@@ -958,6 +960,8 @@ const toggleVideoFavorite = async (video) => {
         message.success('已添加到收藏')
       } else {
         message.success('已取消收藏')
+        // 通知灵感页面刷新收藏列表
+        window.dispatchEvent(new CustomEvent('refresh-favorites'))
       }
     } else {
       throw new Error('切换收藏状态失败')
@@ -1418,7 +1422,7 @@ const processTaskImages = (task) => {
           directUrl: null,
           filename: `generated_${task.task_id}_${index + 1}.png`,
           task_id: task.task_id,
-          imageIndex: index, // 添加图片索引
+          image_index: index, // 使用与后端一致的字段名
           prompt: task.description || '',
           createdAt: new Date(task.created_at || Date.now()),
           referenceImage: referenceImageUrl,

@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { message } from 'ant-design-vue'
 import NavigationSidebar from './components/NavigationSidebar.vue'
 import ImageGenerator from './components/ImageGenerator.vue'
 import InspirationPage from './components/InspirationPage.vue'
@@ -18,10 +19,46 @@ const handleShowDetail = (item) => {
   detailModalOpen.value = true
 }
 
-const handleRemoveFavorite = (item) => {
-  const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
-  const updated = favorites.filter(fav => fav.id !== item.id)
-  localStorage.setItem('favorites', JSON.stringify(updated))
+const handleRemoveFavorite = async (item) => {
+  try {
+    const API_BASE = import.meta.env.DEV ? 'http://localhost:9000' : ''
+    
+    console.log('🗑️ 取消收藏项目:', item)
+    console.log('🗑️ 项目类型:', item.type)
+    console.log('🗑️ 任务ID:', item.task_id)
+    console.log('🗑️ 图片索引:', item.image_index)
+    
+    if (item.type === 'video') {
+      // 取消视频收藏
+      console.log('🗑️ 取消视频收藏:', `${API_BASE}/api/favorites/videos/${item.task_id}`)
+      const response = await fetch(`${API_BASE}/api/favorites/videos/${item.task_id}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('取消视频收藏失败:', response.status, errorText)
+        throw new Error(`取消视频收藏失败: ${response.status}`)
+      }
+    } else {
+      // 取消图片收藏
+      console.log('🗑️ 取消图片收藏:', `${API_BASE}/api/favorites/images/${item.task_id}/${item.image_index}`)
+      const response = await fetch(`${API_BASE}/api/favorites/images/${item.task_id}/${item.image_index}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('取消图片收藏失败:', response.status, errorText)
+        throw new Error(`取消图片收藏失败: ${response.status}`)
+      }
+    }
+    
+    // 重新加载收藏列表
+    window.dispatchEvent(new CustomEvent('refresh-favorites'))
+    
+  } catch (error) {
+    console.error('取消收藏失败:', error)
+    message.error(`取消收藏失败: ${error.message}`)
+  }
 }
 
 const handleRegenerate = (regenerateData) => {

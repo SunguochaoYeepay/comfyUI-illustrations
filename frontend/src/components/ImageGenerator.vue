@@ -17,6 +17,7 @@
         :has-more="hasMore"
         :is-loading-history="isLoadingHistory"
         :total-count="totalCount"
+        :cache-status="cacheStatus"
         @edit-image="editImage"
         @regenerate-image="regenerateImage"
         @delete-image="deleteImage"
@@ -26,7 +27,7 @@
         @toggle-video-favorite="toggleVideoFavorite"
         @filter-change="handleFilterChange"
         @upscale="handleUpscale"
-        @refreshHistory="loadHistory(1, false)"
+        @refreshHistory="(options) => loadHistory(1, false, {}, options)"
         @video-task-created="handleVideoTaskCreated"
       />
 
@@ -49,6 +50,7 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
+import cacheManager from '../utils/cacheManager.js'
 
 // API基础URL - 自动检测环境
 const API_BASE = (() => {
@@ -128,6 +130,9 @@ const totalCount = ref(0)
 const hasMore = ref(false)
 const isLoadingHistory = ref(false)
 const referenceImages = ref([])
+
+// 缓存状态
+const cacheStatus = ref(null)
 const selectedLoras = ref([]) // 新增：选择的LoRA配置
 const selectedModel = ref('qwen-image') // 新增：选择的模型
 const previewVisible = ref(false)
@@ -401,8 +406,8 @@ const generateImage = async (options = {}) => {
               // 等待一下确保数据库更新
               await new Promise(resolve => setTimeout(resolve, 500))
               
-              // 强制刷新历史记录，添加时间戳避免缓存
-              await loadHistory(1, false)
+              // 强制刷新历史记录，清除缓存确保获取最新数据
+              await loadHistory(1, false, {}, { forceRefresh: true })
               
               // 再次检查是否成功刷新
               console.log('📊 刷新后历史记录数量:', history.value.length)
@@ -1444,7 +1449,7 @@ const processTaskImages = (task) => {
 }
 
 // 加载历史记录（支持分页，从最新开始）
-const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
+const loadHistory = async (page = 1, prepend = false, filterParams = {}, options = {}) => {
   if (isLoadingHistory.value) return
   
   const startTime = performance.now()
@@ -1457,22 +1462,13 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     // 记录加载前的历史记录数量，用于计算新内容位置
     const beforeCount = history.value.length
     
-    // 使用AbortController来支持请求取消
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => {
-      console.log('请求超时，取消请求')
-      controller.abort()
-    }, 15000) // 减少到15秒超时
-    
-    console.log('开始加载历史记录，页面:', page, '偏移量:', offset, '筛选参数:', filterParams)
-    
     // 构建查询参数
-            const queryParams = new URLSearchParams({
-          limit: pageSize.value.toString(),
-          offset: offset.toString(),
-          order: 'desc', // 降序排列，最新的任务在第一页
-          _t: Date.now().toString() // 添加时间戳避免缓存
-        })
+    const queryParams = new URLSearchParams({
+      limit: pageSize.value.toString(),
+      offset: offset.toString(),
+      order: 'desc', // 降序排列，最新的任务在第一页
+      _t: Date.now().toString() // 添加时间戳避免缓存
+    })
     
     // 添加筛选参数
     if (filterParams.favoriteFilter && filterParams.favoriteFilter !== 'all') {
@@ -1481,85 +1477,144 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}) => {
     if (filterParams.timeFilter && filterParams.timeFilter !== 'all') {
       queryParams.append('time_filter', filterParams.timeFilter)
     }
-    const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
-      signal: controller.signal,
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
+
+    // 智能加载函数
+    const loadFunction = async () => {
+      // 使用AbortController来支持请求取消
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        console.log('请求超时，取消请求')
+        controller.abort()
+      }, 15000) // 减少到15秒超时
+      
+      console.log('开始加载历史记录，页面:', page, '偏移量:', offset, '筛选参数:', filterParams)
+      
+      const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      clearTimeout(timeoutId)
+      console.log('API响应状态:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`API响应失败: ${response.status}`)
       }
-    })
-    
-    clearTimeout(timeoutId)
-    console.log('API响应状态:', response.status)
-    
-    if (response.ok) {
+      
       const data = await response.json()
       
-      // 更新分页状态
-      totalCount.value = data.total || 0
-      hasMore.value = data.has_more || false
-      currentPage.value = page
-      
-      if (data.tasks && data.tasks.length > 0) {
-        // 使用nextTick优化DOM更新
-        await nextTick()
-        
+      // 处理任务数据
+      const processedTasks = data.tasks ? data.tasks.map(task => {
         try {
-          const newHistoryItems = data.tasks.map(task => {
-            try {
-              const processedImages = processTaskImages(task)
-              return {
-                id: task.task_id,
-                task_id: task.task_id,  // 保持task_id字段用于删除操作
-                prompt: task.description,
-                timestamp: task.created_at,
-                status: task.status,
-                images: processedImages,
-                result_path: task.result_path,  // 保留result_path字段
-                model: task.parameters?.model,  // 保留model字段
-                parameters: task.parameters  // 保留完整参数
-              }
-            } catch (taskError) {
-              console.error('处理单个任务数据失败:', taskError, task)
-              return null
-            }
-          }).filter(item => item !== null) // 过滤掉处理失败的项目
-          
-                          if (prepend) {
-                  // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
-                  // 由于后端返回的是降序排列，新加载的内容是更早的数据，应该放在现有内容的后面
-                  history.value = [...history.value, ...newHistoryItems]
-                } else {
-                  // 替换模式：替换现有历史记录（首次加载）
-                  history.value = newHistoryItems
-                }
-          
-          const endTime = performance.now()
-          console.log(`[性能监控] 数据处理完成，历史记录数量: ${history.value.length}, 耗时: ${(endTime - startTime).toFixed(2)}ms`)
-          
-          // 获取所有图片的收藏状态
-          await updateImageFavoriteStatus()
-        } catch (error) {
-          console.error('处理历史数据时出错:', error)
-          // 即使处理失败也要清除loading状态
-          isLoadingHistory.value = false
-          return
+          const processedImages = processTaskImages(task)
+          return {
+            id: task.task_id,
+            task_id: task.task_id,
+            prompt: task.description,
+            timestamp: task.created_at,
+            status: task.status,
+            images: processedImages,
+            result_path: task.result_path,
+            model: task.parameters?.model,
+            parameters: task.parameters
+          }
+        } catch (taskError) {
+          console.error('处理单个任务数据失败:', taskError, task)
+          return null
+        }
+      }).filter(item => item !== null) : []
+      
+      return {
+        data: processedTasks,
+        totalCount: data.total || 0,
+        hasMore: data.has_more || false
+      }
+    }
+
+    // 使用智能缓存加载
+    let result
+    if (page === 1 && !prepend && !options.forceRefresh) {
+      // 第一页且非强制刷新，使用缓存
+      result = await cacheManager.smartLoad(loadFunction, {
+        forceRefresh: options.forceRefresh,
+        useCache: true
+      })
+      
+      // 生产环境不显示缓存状态，开发环境可选显示
+      if (import.meta.env.DEV && result.fromCache === true) {
+        if (result.stale) {
+          cacheStatus.value = {
+            type: 'stale',
+            icon: '⚠️',
+            text: '使用过期缓存'
+          }
+        } else {
+          cacheStatus.value = {
+            type: 'valid',
+            icon: '✅',
+            text: '使用缓存数据'
+          }
         }
         
-        // 立即清除loading状态
-        isLoadingHistory.value = false
+        // 3秒后隐藏缓存状态
+        setTimeout(() => {
+          cacheStatus.value = null
+        }, 3000)
       } else {
-        // 如果没有数据需要处理，直接清除loading状态
-        if (!prepend) {
-          history.value = []
-        }
-        isLoadingHistory.value = false
+        // 生产环境或非缓存数据，不显示状态
+        cacheStatus.value = null
       }
     } else {
-      // API响应不成功，清除loading状态
-      isLoadingHistory.value = false
-      throw new Error(`API响应失败: ${response.status}`)
+      // 其他情况直接加载
+      result = await loadFunction()
+      
+      // 生产环境不显示状态
+      cacheStatus.value = null
     }
+    
+    // 更新分页状态
+    totalCount.value = result.totalCount
+    hasMore.value = result.hasMore
+    currentPage.value = page
+    
+    if (result.data && result.data.length > 0) {
+      // 使用nextTick优化DOM更新
+      await nextTick()
+      
+      try {
+        if (prepend) {
+          // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
+          // 由于后端返回的是降序排列，新加载的内容是更早的数据，应该放在现有内容的后面
+          history.value = [...history.value, ...result.data]
+        } else {
+          // 替换模式：替换现有历史记录（首次加载）
+          history.value = result.data
+        }
+        
+        const endTime = performance.now()
+        console.log(`[性能监控] 数据处理完成，历史记录数量: ${history.value.length}, 耗时: ${(endTime - startTime).toFixed(2)}ms`)
+        
+        // 获取所有图片的收藏状态
+        await updateImageFavoriteStatus()
+      } catch (error) {
+        console.error('处理历史数据时出错:', error)
+        // 即使处理失败也要清除loading状态
+        isLoadingHistory.value = false
+        return
+      }
+    } else {
+      // 如果没有数据需要处理，直接清除loading状态
+      if (!prepend) {
+        history.value = []
+      }
+    }
+    
+    // 立即清除loading状态
+    isLoadingHistory.value = false
+    
   } catch (error) {
     if (error.name === 'AbortError') {
       console.log('请求被取消')

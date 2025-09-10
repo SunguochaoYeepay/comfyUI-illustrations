@@ -2,6 +2,15 @@
   <div class="gallery-container">
     <!-- 右上角控制按钮 -->
     <div v-if="allImages.length > 0" class="gallery-controls">
+      <!-- 刷新按钮 -->
+      <div class="refresh-trigger" @click="handleRefresh" title="刷新列表">
+        <div class="refresh-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+        </div>
+      </div>
+      
       <!-- 筛选器触发按钮 -->
       <div class="filter-trigger" @click="toggleFilter">
         <div class="filter-icon">
@@ -138,6 +147,14 @@
       <p class="loading-progress">加载完成后将自动定位到新内容</p>
     </div>
     
+    <!-- 缓存状态提示 -->
+    <div v-if="cacheStatus" class="cache-status">
+      <div class="cache-indicator" :class="cacheStatus.type">
+        <span class="cache-icon">{{ cacheStatus.icon }}</span>
+        <span class="cache-text">{{ cacheStatus.text }}</span>
+      </div>
+    </div>
+    
     
 
     <!-- 图片预览组件 -->
@@ -216,6 +233,10 @@ const props = defineProps({
   totalCount: {
     type: Number,
     default: 0
+  },
+  cacheStatus: {
+    type: Object,
+    default: null
   }
 })
 
@@ -422,6 +443,12 @@ const handleVideoTaskCreated = (taskId) => {
 // 处理刷新历史记录
 const handleRefreshHistory = () => {
   emit('refreshHistory')
+}
+
+// 处理手动刷新
+const handleRefresh = () => {
+  console.log('🔄 用户手动刷新列表')
+  emit('refreshHistory', { forceRefresh: true })
 }
 
 // 处理收藏切换
@@ -801,9 +828,35 @@ onUnmounted(() => {
 
 
 
-/* 右上角筛选器样式 */
+/* 右上角控制按钮样式 */
+.refresh-trigger {
+  position: relative;
+}
+
 .filter-trigger {
   position: relative;
+}
+
+.refresh-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.refresh-icon:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 1);
+  transform: scale(1.05);
 }
 
 .filter-icon {
@@ -1044,5 +1097,64 @@ onUnmounted(() => {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
   max-width: 200px;
+}
+
+/* 缓存状态样式 */
+.cache-status {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 999;
+  animation: slideInRight 0.3s ease;
+}
+
+.cache-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.cache-indicator.valid {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.cache-indicator.stale {
+  background: rgba(255, 193, 7, 0.2);
+  color: #FFC107;
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.cache-indicator.invalid {
+  background: rgba(244, 67, 54, 0.2);
+  color: #F44336;
+  border-color: rgba(244, 67, 54, 0.3);
+}
+
+.cache-icon {
+  font-size: 14px;
+}
+
+.cache-text {
+  white-space: nowrap;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 </style>

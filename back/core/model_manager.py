@@ -150,20 +150,32 @@ class ModelManager:
         self.models[flux1_config.name] = flux1_config
     
     def get_available_models(self) -> List[Dict[str, Any]]:
-        """获取可用的模型列表"""
+        """获取可用的模型列表，按照指定顺序排序"""
+        # 定义模型显示顺序
+        model_order = ['qwen-image', 'flux1-dev', 'flux1', 'wan2.2-video']
+        
         available_models = []
+        ordered_models = []
+        
+        # 按照指定顺序添加模型
+        for model_name in model_order:
+            if model_name in self.models and self.models[model_name].available:
+                ordered_models.append(self.models[model_name].to_dict())
+        
+        # 添加其他可用模型（如果有的话）
         for model in self.models.values():
-            if model.available:
-                available_models.append(model.to_dict())
-        return available_models
+            if model.available and model.name not in model_order:
+                ordered_models.append(model.to_dict())
+        
+        return ordered_models
     
     def get_model_config(self, model_name: str) -> Optional[ModelConfig]:
         """获取指定模型的配置"""
         return self.models.get(model_name)
     
     def get_default_model(self) -> ModelConfig:
-        """获取默认模型（Flux）"""
-        return self.models["flux1-dev"]
+        """获取默认模型（Qwen）"""
+        return self.models["qwen-image"]
     
     def is_model_available(self, model_name: str) -> bool:
         """检查模型是否可用"""

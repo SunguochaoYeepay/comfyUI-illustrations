@@ -10,7 +10,7 @@
         <div class="model-trigger-content">
           <div class="model-trigger-icon">🤖</div>
           <div class="model-trigger-info">
-            <div class="model-trigger-name">{{ currentModel.display_name || 'Flux Kontext' }}</div>
+            <div class="model-trigger-name">{{ currentModel.display_name || 'Qwen' }}</div>
           </div>
           <!-- 移除状态显示 -->
         </div>
@@ -85,7 +85,7 @@ const API_BASE = (() => {
 const props = defineProps({
   model: {
     type: String,
-    default: 'flux1-dev'
+    default: 'qwen-image'
   }
 })
 
@@ -101,9 +101,9 @@ const loading = ref(false)
     get: () => {
       const model = availableModels.value.find(m => m.name === props.model)
       return model || {
-        name: 'flux1-dev',
-        display_name: 'Flux Kontext',
-        description: 'Flux Kontext开发版本，支持高质量图像生成',
+        name: 'qwen-image',
+        display_name: 'Qwen',
+        description: 'Qwen支持中文较好，适合中文描述生成',
         available: true
       }
     },

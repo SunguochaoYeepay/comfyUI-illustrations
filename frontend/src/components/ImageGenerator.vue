@@ -82,7 +82,7 @@ const hasMore = ref(false)
 const isLoadingHistory = ref(false)
 const referenceImages = ref([])
 const selectedLoras = ref([]) // 新增：选择的LoRA配置
-const selectedModel = ref('flux1-dev') // 新增：选择的模型
+const selectedModel = ref('qwen-image') // 新增：选择的模型
 const previewVisible = ref(false)
 const previewImage = ref('')
 
@@ -229,11 +229,8 @@ const generateImage = async (options = {}) => {
     return
   }
 
-  // 图片数量验证 - Qwen模型支持无图片生成
-  if (referenceImages.value.length === 0 && selectedModel.value !== 'qwen-image') {
-    message.warning('请上传至少1张图片')
-    return
-  }
+  // 图片数量验证 - 所有模型都支持无图片生成
+  // 移除强制要求上传图片的限制
   if (referenceImages.value.length > 3) {
     message.warning('最多支持3张图片')
     return

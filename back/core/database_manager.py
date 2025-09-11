@@ -598,6 +598,9 @@ class DatabaseManager:
                         clean_path = f"uploads/{clean_path}"
                     reference_image_url = f"/api/image/upload/{clean_path.replace('uploads/', '')}"
 
+            # 生成缩略图URL
+            thumbnail_url = f"/api/thumbnail/{task_id}_{image_index}_small.jpg" if image_url else None
+            
             favorite_item = {
                 "id": f"{task_id}_{image_index}",
                 "task_id": task_id,
@@ -605,6 +608,7 @@ class DatabaseManager:
                 "title": description[:50] + "..." if description and len(description) > 50 else description or "未命名作品",
                 "description": description or "暂无描述",
                 "imageUrl": image_url,
+                "thumbnailUrl": thumbnail_url,
                 "prompt": description,
                 "parameters": params,
                 "createdAt": created_at,

@@ -838,13 +838,18 @@ async def get_thumbnail(thumbnail_filename: str):
                 
                 # 生成缩略图
                 thumbnail_path = thumbnail_manager.generate_thumbnail(str(image_path), 'small')
-                if thumbnail_path:
+                if thumbnail_path and thumbnail_path.exists():
                     return FileResponse(thumbnail_path)
+                else:
+                    # 如果缩略图生成失败，返回原图（作为临时方案）
+                    if image_path.exists():
+                        return FileResponse(image_path)
         
         # 如果无法解析或生成缩略图，返回404
         raise HTTPException(status_code=404, detail="缩略图不存在")
         
     except Exception as e:
+        print(f"获取缩略图失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取缩略图失败: {str(e)}")
 
 @app.get("/api/video/{task_id}")

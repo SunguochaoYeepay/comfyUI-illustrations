@@ -29,7 +29,7 @@
           <!-- 图片显示 -->
           <img 
             v-else
-            :src="item.imageUrl" 
+            :src="item.thumbnailUrl || item.imageUrl" 
             :alt="item.title" 
           />
           <div class="item-overlay">

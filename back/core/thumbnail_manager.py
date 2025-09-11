@@ -6,10 +6,10 @@
 """
 
 import os
+import hashlib
 from pathlib import Path
 from typing import Optional, Tuple
 from PIL import Image, ImageOps
-import hashlib
 
 
 class ThumbnailManager:

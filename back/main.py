@@ -823,7 +823,18 @@ async def get_thumbnail(thumbnail_filename: str):
             
             # 解析结果路径
             import json
-            result_paths = json.loads(task["result_path"])
+            result_path_str = task["result_path"]
+            if not result_path_str or result_path_str.strip() == "":
+                raise HTTPException(status_code=404, detail="任务结果路径为空")
+
+            try:
+                result_paths = json.loads(result_path_str)
+                if not isinstance(result_paths, list):
+                    result_paths = [result_paths]  # 如果不是数组，转为数组
+            except json.JSONDecodeError as e:
+                print(f"JSON解析失败: {e}, result_path: {result_path_str}")
+                # 如果不是JSON格式，当作单个文件处理
+                result_paths = [result_path_str]
             
             if isinstance(result_paths, list) and image_index < len(result_paths):
                 original_path = result_paths[image_index]

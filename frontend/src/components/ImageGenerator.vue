@@ -1537,8 +1537,8 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}, options
 
     // 使用智能缓存加载
     let result
-    if (page === 1 && !prepend && !options.forceRefresh) {
-      // 第一页且非强制刷新，使用缓存
+    if (page === 1 && !prepend && !options.forceRefresh && import.meta.env.DEV) {
+      // 只在开发环境使用缓存，生产环境直接加载
       result = await cacheManager.smartLoad(loadFunction, {
         forceRefresh: options.forceRefresh,
         useCache: true

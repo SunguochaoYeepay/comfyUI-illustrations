@@ -359,16 +359,24 @@ const handlePreviewImage = async (image) => {
     }
 
     const imageUrl = image.directUrl || image.url
-    const dimensions = await getImageDimensions(imageUrl)
     
+    // 先设置基本信息并立即显示预览窗口
     selectedImage.value = {
       ...image,
       url: imageUrl,
       createdAt: image.createdAt || image.timestamp || new Date(),
+      width: null, // 先设为null，后续异步获取
+      height: null // 先设为null，后续异步获取
+    }
+    previewVisible.value = true
+    
+    // 异步获取图片尺寸（不阻塞预览窗口显示）
+    const dimensions = await getImageDimensions(imageUrl)
+    selectedImage.value = {
+      ...selectedImage.value,
       width: dimensions.width,
       height: dimensions.height
     }
-    previewVisible.value = true
   } catch (error) {
     console.error('处理图片预览时出错:', error, image)
   }

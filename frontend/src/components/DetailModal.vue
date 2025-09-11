@@ -88,9 +88,22 @@
         <div class="info-row">
           <span class="info-label">参考图:</span>
           <div class="reference-image-container">
-            <div v-if="getReferenceImageUrl()" class="reference-image">
+            <!-- 多图融合时显示多张参考图 -->
+            <div v-if="isMultiImageFusion()" class="reference-images-grid">
+              <div 
+                v-for="(imageUrl, index) in getReferenceImageUrls()" 
+                :key="index"
+                class="reference-image-item"
+              >
+                <img :src="imageUrl" :alt="`参考图 ${index + 1}`" class="reference-img" />
+                <span class="reference-image-label">{{ index + 1 }}</span>
+              </div>
+            </div>
+            <!-- 单图时显示单张参考图 -->
+            <div v-else-if="getReferenceImageUrl()" class="reference-image">
               <img :src="getReferenceImageUrl()" :alt="'参考图'" class="reference-img" />
             </div>
+            <!-- 无图时显示 -->
             <div v-else class="reference-image no-image">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
@@ -348,13 +361,10 @@ const hasOtherParams = () => {
   return props.item?.parameters?.steps || props.item?.parameters?.cfg
 }
 
-const getReferenceImageUrl = () => {
+// 获取所有参考图URL（用于多图融合）
+const getReferenceImageUrls = () => {
   console.log('🔍 检查参考图数据:', props.item)
-  console.log('🔍 所有字段:', Object.keys(props.item || {}))
   console.log('🔍 参考图路径 (referenceImage):', props.item?.referenceImage)
-  console.log('🔍 参考图路径类型:', typeof props.item?.referenceImage)
-  console.log('🔍 参考图是否为null:', props.item?.referenceImage === null)
-  console.log('🔍 参考图是否为undefined:', props.item?.referenceImage === undefined)
   
   // 检查参考图是否存在且不为null/undefined/空字符串
   if (!props.item?.referenceImage || 
@@ -363,7 +373,7 @@ const getReferenceImageUrl = () => {
       props.item?.referenceImage === '' ||
       props.item?.referenceImage === 'null') {
     console.log('❌ 没有参考图路径或为null/undefined/空')
-    return null
+    return []
   }
   
   // 如果是JSON字符串数组（多图融合）
@@ -371,36 +381,81 @@ const getReferenceImageUrl = () => {
     try {
       const imageUrls = JSON.parse(props.item.referenceImage)
       console.log('📁 参考图是JSON数组:', imageUrls)
-      if (imageUrls.length > 0) {
-        // 将相对路径转换为完整的后端URL
-        let imageUrl = imageUrls[0]
-        if (imageUrl.startsWith('/api/')) {
-          imageUrl = `${API_BASE}${imageUrl}`
+      
+      // 处理所有URL
+      const processedUrls = imageUrls.map(imageUrl => {
+        // 如果是完整URL，直接返回
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+          return imageUrl
         }
-        console.log('✅ 使用第一张参考图:', imageUrl)
+        
+        // 如果是相对路径，转换为完整的后端URL
+        if (imageUrl.startsWith('/api/')) {
+          return `${API_BASE}${imageUrl}`
+        }
+        
         return imageUrl
-      }
-      console.log('❌ 参考图数组为空')
-      return null
+      })
+      
+      console.log('✅ 处理后的参考图URLs:', processedUrls)
+      return processedUrls
     } catch (error) {
       console.error('解析参考图JSON失败:', error)
-      return null
+      return []
     }
   }
   
-  // 如果是字符串（单图）
+  // 如果是字符串（单图），返回单元素数组
   if (typeof props.item.referenceImage === 'string') {
-    // 将相对路径转换为完整的后端URL
     let imageUrl = props.item.referenceImage
+    
+    // 如果是完整URL，直接返回
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      console.log('✅ 完整URL参考图:', imageUrl)
+      return [imageUrl]
+    }
+    
+    // 如果是相对路径，转换为完整的后端URL
     if (imageUrl.startsWith('/api/')) {
       imageUrl = `${API_BASE}${imageUrl}`
     }
     console.log('✅ 单张参考图:', imageUrl)
-    return imageUrl
+    return [imageUrl]
   }
   
   console.log('❌ 参考图路径类型未知:', typeof props.item.referenceImage)
-  return null
+  return []
+}
+
+// 判断是否为多图融合
+const isMultiImageFusion = () => {
+  if (!props.item?.referenceImage || 
+      props.item?.referenceImage === null || 
+      props.item?.referenceImage === undefined ||
+      props.item?.referenceImage === '' ||
+      props.item?.referenceImage === 'null') {
+    return false
+  }
+  
+  // 如果是JSON字符串数组且长度大于1，则为多图融合
+  if (typeof props.item.referenceImage === 'string' && 
+      props.item.referenceImage.startsWith('[') && 
+      props.item.referenceImage.endsWith(']')) {
+    try {
+      const imageUrls = JSON.parse(props.item.referenceImage)
+      return imageUrls.length > 1
+    } catch (error) {
+      return false
+    }
+  }
+  
+  return false
+}
+
+// 获取单张参考图URL（用于向后兼容）
+const getReferenceImageUrl = () => {
+  const urls = getReferenceImageUrls()
+  return urls.length > 0 ? urls[0] : null
 }
 </script>
 
@@ -686,6 +741,46 @@ const getReferenceImageUrl = () => {
   border-radius: 8px;
   border: 1px solid #333;
   background: #2a2a2a;
+}
+
+/* 多图参考图网格样式 */
+.reference-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  max-width: 300px;
+}
+
+.reference-image-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.reference-image-item .reference-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  border: 2px solid #444;
+  object-fit: cover;
+}
+
+.reference-image-label {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #667eea;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  border: 2px solid #333;
 }
 
 .prompt-display {

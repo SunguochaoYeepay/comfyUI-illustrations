@@ -33,13 +33,22 @@
               @click.stop
             />
             <!-- 图片显示 -->
-            <img 
-              v-else
-              :src="imageData.url" 
-              :alt="imageData.prompt || '生成的图片'"
-              class="preview-image"
-              @click.stop
-            />
+            <template v-else>
+              <!-- 图片加载骨架屏 -->
+              <div v-if="imageLoading" class="preview-image-skeleton">
+                <div class="skeleton-shimmer"></div>
+              </div>
+              <!-- 实际图片 -->
+              <img 
+                v-show="!imageLoading"
+                :src="imageData.url" 
+                :alt="imageData.prompt || '生成的图片'"
+                class="preview-image"
+                @click.stop
+                @load="handleImageLoad"
+                @error="handleImageError"
+              />
+            </template>
           </div>
           
           <!-- 下一张按钮 -->
@@ -302,6 +311,7 @@ const isVideoTask = computed(() => {
 // 响应式数据
 const referenceImageError = ref(false)
 const videoGeneratorVisible = ref(false)
+const imageLoading = ref(true)
 
 // 处理参考图URL，支持多图融合的情况
 const processedReferenceImage = computed(() => {
@@ -370,9 +380,22 @@ const handleReferenceImageError = () => {
   referenceImageError.value = true
 }
 
-// 监听图片数据变化，重置错误状态
+// 监听图片数据变化，重置错误状态和加载状态
 watch(() => props.imageData, () => {
   referenceImageError.value = false
+  // 当图片数据变化时，重置图片加载状态
+  if (props.imageData && props.imageData.url && !isVideoTask.value) {
+    imageLoading.value = true
+    // 检查图片是否已经缓存，如果已缓存则立即隐藏骨架屏
+    const img = new Image()
+    img.onload = () => {
+      imageLoading.value = false
+    }
+    img.onerror = () => {
+      imageLoading.value = false
+    }
+    img.src = props.imageData.url
+  }
 }, { deep: true })
 
 // 关闭预览
@@ -387,6 +410,17 @@ const handleOverlayClick = (e) => {
   if (e.target === e.currentTarget) {
     closePreview()
   }
+}
+
+// 处理图片加载完成
+const handleImageLoad = () => {
+  imageLoading.value = false
+}
+
+// 处理图片加载错误
+const handleImageError = () => {
+  imageLoading.value = false
+  console.warn('预览图片加载失败:', props.imageData?.url)
 }
 
 // 下载图片或视频
@@ -756,6 +790,39 @@ onUnmounted(() => {
   justify-content: center;
   overflow: hidden;
   margin-bottom: 16px;
+}
+
+.preview-image-skeleton {
+  width: 100%;
+  height: 100%;
+  background: #2a2a2a;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
 .preview-image {

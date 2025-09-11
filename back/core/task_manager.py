@@ -18,6 +18,7 @@ from core.database_manager import DatabaseManager
 from core.comfyui_client import ComfyUIClient
 from core.workflow_template import WorkflowTemplate
 from core.translation_client import get_translation_client
+from core.cache_manager import get_cache_manager
 
 
 class TaskManager:
@@ -215,6 +216,9 @@ class TaskManager:
                     if video_paths:
                         print(f"🎬 找到视频文件: {video_paths}")
                         self.db.update_task_status(task_id, "completed", result_path=video_paths[0])
+                        # 清除历史记录缓存
+                        cache_manager = get_cache_manager()
+                        cache_manager.invalidate_history_cache()
                     else:
                         print(f"❌ 未找到视频文件")
                         self.db.update_task_status(task_id, "failed", error="No video generated")
@@ -224,11 +228,17 @@ class TaskManager:
                         # 单张图片，直接存储路径
                         print(f"💾 保存单张图片: {result_paths[0]}")
                         self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
+                        # 清除历史记录缓存
+                        cache_manager = get_cache_manager()
+                        cache_manager.invalidate_history_cache()
                     else:
                         # 多张图片，将路径合并为JSON字符串存储
                         result_data = json.dumps(result_paths)
                         print(f"💾 保存多张图片JSON: {result_data}")
                         self.db.update_task_status(task_id, "completed", result_path=result_data)
+                        # 清除历史记录缓存
+                        cache_manager = get_cache_manager()
+                        cache_manager.invalidate_history_cache()
             else:
                 error_msg = "No output generated"
                 print(f"❌ {error_msg}")
@@ -304,11 +314,17 @@ class TaskManager:
                 if len(result_paths) == 1:
                     print(f"💾 保存多图融合结果: {result_paths[0]}")
                     self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
+                    # 清除历史记录缓存
+                    cache_manager = get_cache_manager()
+                    cache_manager.invalidate_history_cache()
                 else:
                     # 如果有多张结果，保存为JSON
                     result_data = json.dumps(result_paths)
                     print(f"💾 保存多图融合结果JSON: {result_data}")
                     self.db.update_task_status(task_id, "completed", result_path=result_data)
+                    # 清除历史记录缓存
+                    cache_manager = get_cache_manager()
+                    cache_manager.invalidate_history_cache()
             else:
                 error_msg = "多图融合任务失败，没有生成结果"
                 print(f"❌ {error_msg}")

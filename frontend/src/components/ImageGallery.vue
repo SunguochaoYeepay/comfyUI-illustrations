@@ -141,10 +141,7 @@
           <LoadingOutlined style="font-size: 24px" spin />
         </template>
       </a-spin>
-      <p>正在加载更多历史记录...</p>
-      <p class="loading-tip">请稍候，正在处理数据...</p>
-      <p class="loading-count">已加载 {{ totalCount }} 条记录</p>
-      <p class="loading-progress">加载完成后将自动定位到新内容</p>
+      <p>数据加载中...</p>
     </div>
     
     <!-- 缓存状态提示 -->

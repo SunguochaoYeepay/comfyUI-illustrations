@@ -27,11 +27,20 @@
             muted
           />
           <!-- 图片显示 -->
-          <img 
-            v-else
-            :src="item.thumbnailUrl || item.imageUrl" 
-            :alt="item.title" 
-          />
+          <template v-else>
+            <!-- 骨架屏 -->
+            <div v-if="getImageLoading(item.id)" class="image-skeleton">
+              <div class="skeleton-shimmer"></div>
+            </div>
+            <!-- 实际图片 -->
+            <img 
+              v-show="!getImageLoading(item.id)"
+              :src="item.thumbnailUrl || item.imageUrl" 
+              :alt="item.title"
+              @load="handleImageLoad(item.id)"
+              @error="handleImageError(item.id)"
+            />
+          </template>
           <div class="item-overlay">
             <EyeOutlined class="view-icon" />
             <span v-if="item.type === 'video'" class="video-badge">🎬</span>
@@ -71,6 +80,7 @@ const emit = defineEmits(['show-detail'])
 
 const favorites = ref([])
 const loading = ref(false)
+const imageLoadingStates = ref(new Map()) // 存储每个图片的加载状态
 
 // API基础URL - 自动检测环境
 const API_BASE = (() => {
@@ -90,6 +100,13 @@ const loadFavorites = async () => {
     if (response.ok) {
       const data = await response.json()
       favorites.value = data.favorites || []
+      
+      // 初始化所有图片的加载状态
+      favorites.value.forEach(item => {
+        if (item.type !== 'video') {
+          imageLoadingStates.value.set(item.id, true)
+        }
+      })
     } else {
       console.error('获取收藏列表失败:', response.statusText)
       favorites.value = []
@@ -100,6 +117,22 @@ const loadFavorites = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 获取图片加载状态
+const getImageLoading = (itemId) => {
+  return imageLoadingStates.value.get(itemId) || false
+}
+
+// 处理图片加载完成
+const handleImageLoad = (itemId) => {
+  imageLoadingStates.value.set(itemId, false)
+}
+
+// 处理图片加载错误
+const handleImageError = (itemId) => {
+  imageLoadingStates.value.set(itemId, false)
+  console.warn('灵感页面图片加载失败:', itemId)
 }
 
 const showDetail = (item) => {
@@ -207,6 +240,50 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.image-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    rgba(255, 255, 255, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 12px;
+  position: relative;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .item-video {

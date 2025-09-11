@@ -16,12 +16,21 @@
             preload="metadata"
           />
           <!-- 图片显示 -->
-          <img 
-            v-else
-            :src="item.imageUrl" 
-            :alt="item.title" 
-            class="detail-image" 
-          />
+          <template v-else>
+            <!-- 图片加载骨架屏 -->
+            <div v-if="imageLoading" class="detail-image-skeleton">
+              <div class="skeleton-shimmer"></div>
+            </div>
+            <!-- 实际图片 -->
+            <img 
+              v-show="!imageLoading"
+              :src="item.imageUrl" 
+              :alt="item.title" 
+              class="detail-image"
+              @load="handleImageLoad"
+              @error="handleImageError"
+            />
+          </template>
         </div>
         
         <!-- 右侧信息区域 -->
@@ -174,14 +183,30 @@ const props = defineProps({
 const emit = defineEmits(['update:open', 'remove-favorite', 'regenerate'])
 
 const visible = ref(false)
+const imageLoading = ref(true)
 
 watch(() => props.open, (newVal) => {
   visible.value = newVal
+  if (newVal && props.item && props.item.type !== 'video') {
+    // 弹窗打开时重置图片加载状态
+    imageLoading.value = true
+  }
 })
 
 watch(visible, (newVal) => {
   emit('update:open', newVal)
 })
+
+// 处理图片加载完成
+const handleImageLoad = () => {
+  imageLoading.value = false
+}
+
+// 处理图片加载错误
+const handleImageError = () => {
+  imageLoading.value = false
+  console.warn('详情弹窗图片加载失败:', props.item?.imageUrl)
+}
 
 const closeModal = () => {
   visible.value = false
@@ -469,6 +494,55 @@ const getReferenceImageUrl = () => {
   justify-content: center;
   background: #000000;
   border-radius: 8px;
+  position: relative;
+}
+
+.detail-image-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    rgba(255, 255, 255, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 8px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.detail-image-skeleton .skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .detail-image {

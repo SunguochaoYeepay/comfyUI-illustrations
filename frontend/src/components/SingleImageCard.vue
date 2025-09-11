@@ -2,7 +2,19 @@
   <div class="single-image-card">
     <!-- 图像容器 -->
     <div class="image-container" @click="$emit('previewImage', image)">
-      <img :src="image.thumbnailUrl || image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
+      <!-- 骨架屏 -->
+      <div v-if="imageLoading" class="image-skeleton">
+        <div class="skeleton-shimmer"></div>
+      </div>
+      <!-- 实际图片 -->
+      <img 
+        v-show="!imageLoading"
+        :src="image.thumbnailUrl || image.directUrl || image.url" 
+        :alt="image.prompt" 
+        class="gallery-image"
+        @load="handleImageLoad"
+        @error="handleImageError"
+      />
       
       <!-- 图片操作悬浮层 -->
       <div class="image-overlay">
@@ -56,10 +68,11 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import { EyeOutlined, HeartOutlined, HeartFilled, DownloadOutlined } from '@ant-design/icons-vue'
 
 // Props
-defineProps({
+const props = defineProps({
   image: {
     type: Object,
     required: true
@@ -72,6 +85,25 @@ defineEmits([
   'toggleFavorite',
   'downloadImage'
 ])
+
+// 图片加载状态
+const imageLoading = ref(true)
+
+// 处理图片加载完成
+const handleImageLoad = () => {
+  imageLoading.value = false
+}
+
+// 处理图片加载错误
+const handleImageError = () => {
+  imageLoading.value = false
+  console.warn('图片加载失败:', props.image.thumbnailUrl || props.image.directUrl || props.image.url)
+}
+
+// 组件挂载时重置加载状态
+onMounted(() => {
+  imageLoading.value = true
+})
 
 // 格式化时间
 const formatTime = (date) => {
@@ -111,6 +143,50 @@ const formatTime = (date) => {
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
   margin-bottom: 8px;
+}
+
+.image-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    rgba(255, 255, 255, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 12px;
+  position: relative;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .gallery-image {

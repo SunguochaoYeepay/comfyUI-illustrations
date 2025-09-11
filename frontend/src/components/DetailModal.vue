@@ -180,7 +180,14 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 // 移除所有Ant Design图标导入
 import { message } from 'ant-design-vue'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:9000'
+const API_BASE = (() => {
+  // 开发环境：指向后端9000端口
+  if (import.meta.env.DEV) {
+    return 'http://localhost:9000'
+  }
+  // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
+  return import.meta.env.VITE_API_BASE_URL || ''
+})()
 
 const props = defineProps({
   open: {

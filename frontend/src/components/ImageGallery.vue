@@ -109,7 +109,7 @@
     />
     
     <!-- 空状态 -->
-    <div v-if="!isGenerating && allImages.length === 0" class="empty-gallery">
+    <div v-if="!isGenerating && !isLoadingHistory && allImages.length === 0" class="empty-gallery">
       <div class="empty-content">
         <PictureOutlined class="empty-icon" />
         <h3>还没有生成图像</h3>
@@ -118,7 +118,7 @@
     </div>
     
     <!-- 筛选结果为空 -->
-    <div v-if="!isGenerating && allImages.length > 0 && filteredImages.length === 0" class="empty-gallery">
+    <div v-if="!isGenerating && !isLoadingHistory && allImages.length > 0 && filteredImages.length === 0" class="empty-gallery">
       <div class="empty-content">
         <PictureOutlined class="empty-icon" />
         <h3>没有找到符合条件的图像</h3>

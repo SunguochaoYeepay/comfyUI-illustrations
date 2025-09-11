@@ -100,7 +100,19 @@
         >
           <!-- 图像容器 -->
           <div class="image-container" @click="$emit('previewImage', image)">
-            <img :src="image.thumbnailUrl || image.directUrl || image.url" :alt="image.prompt" class="gallery-image" />
+            <!-- 骨架屏 -->
+            <div v-if="getImageLoading(`${image.task_id}_${image.image_index || 0}`)" class="image-skeleton">
+              <div class="skeleton-shimmer"></div>
+            </div>
+            <!-- 实际图片 -->
+            <img 
+              v-show="!getImageLoading(`${image.task_id}_${image.image_index || 0}`)"
+              :src="image.thumbnailUrl || image.directUrl || image.url" 
+              :alt="image.prompt" 
+              class="gallery-image"
+              @load="handleImageLoad(`${image.task_id}_${image.image_index || 0}`)"
+              @error="handleImageError(`${image.task_id}_${image.image_index || 0}`)"
+            />
             
             <!-- 图片操作悬浮层 -->
             <div class="image-overlay">
@@ -162,7 +174,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { DownloadOutlined, EyeOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons-vue'
 import VideoGeneratingState from './VideoGeneratingState.vue'
 import UpscalingState from './UpscalingState.vue'
@@ -173,6 +185,34 @@ const props = defineProps({
     type: Array,
     required: true
   }
+})
+
+// 图片加载状态管理
+const imageLoadingStates = ref({})
+
+// 获取图片加载状态
+const getImageLoading = (imageId) => {
+  return imageLoadingStates.value[imageId] !== false
+}
+
+// 处理图片加载完成
+const handleImageLoad = (imageId) => {
+  imageLoadingStates.value[imageId] = false
+}
+
+// 处理图片加载错误
+const handleImageError = (imageId) => {
+  imageLoadingStates.value[imageId] = false
+  console.warn('图片加载失败:', imageId)
+}
+
+// 组件挂载时初始化加载状态
+onMounted(() => {
+  // 为每个图片初始化加载状态
+  props.group.forEach(image => {
+    const imageId = `${image.task_id}_${image.image_index || 0}`
+    imageLoadingStates.value[imageId] = true
+  })
 })
 
 // 计算属性：判断是否为放大任务
@@ -352,6 +392,50 @@ defineEmits([
   object-fit: cover;
   border-radius: 12px;
   transition: all 0.3s ease;
+}
+
+.image-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    rgba(255, 255, 255, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 12px;
+  position: relative;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .image-overlay {

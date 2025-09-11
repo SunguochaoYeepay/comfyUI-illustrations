@@ -216,33 +216,44 @@ class TaskManager:
                     if video_paths:
                         print(f"🎬 找到视频文件: {video_paths}")
                         self.db.update_task_status(task_id, "completed", result_path=video_paths[0])
-                        # 清除历史记录缓存
+                        # 清除相关缓存
                         cache_manager = get_cache_manager()
                         cache_manager.invalidate_history_cache()
+                        cache_manager.invalidate_task_cache(task_id)
                     else:
                         print(f"❌ 未找到视频文件")
                         self.db.update_task_status(task_id, "failed", error="No video generated")
+                        # 清除相关缓存
+                        cache_manager = get_cache_manager()
+                        cache_manager.invalidate_history_cache()
+                        cache_manager.invalidate_task_cache(task_id)
                 else:
                     # 图片生成的处理逻辑
                     if len(result_paths) == 1:
                         # 单张图片，直接存储路径
                         print(f"💾 保存单张图片: {result_paths[0]}")
                         self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
-                        # 清除历史记录缓存
+                        # 清除相关缓存
                         cache_manager = get_cache_manager()
                         cache_manager.invalidate_history_cache()
+                        cache_manager.invalidate_task_cache(task_id)
                     else:
                         # 多张图片，将路径合并为JSON字符串存储
                         result_data = json.dumps(result_paths)
                         print(f"💾 保存多张图片JSON: {result_data}")
                         self.db.update_task_status(task_id, "completed", result_path=result_data)
-                        # 清除历史记录缓存
+                        # 清除相关缓存
                         cache_manager = get_cache_manager()
                         cache_manager.invalidate_history_cache()
+                        cache_manager.invalidate_task_cache(task_id)
             else:
                 error_msg = "No output generated"
                 print(f"❌ {error_msg}")
                 self.db.update_task_status(task_id, "failed", error=error_msg)
+                # 清除相关缓存
+                cache_manager = get_cache_manager()
+                cache_manager.invalidate_history_cache()
+                cache_manager.invalidate_task_cache(task_id)
                 
         except Exception as e:
             error_msg = f"任务执行失败: {str(e)}"
@@ -251,6 +262,10 @@ class TaskManager:
             print(f"详细错误信息:")
             print(traceback.format_exc())
             self.db.update_task_status(task_id, "failed", error=error_msg)
+            # 清除相关缓存
+            cache_manager = get_cache_manager()
+            cache_manager.invalidate_history_cache()
+            cache_manager.invalidate_task_cache(task_id)
     
     async def execute_fusion_task(self, task_id: str, reference_image_paths: list, description: str, parameters: Dict[str, Any]):
         """执行多图融合任务
@@ -329,6 +344,10 @@ class TaskManager:
                 error_msg = "多图融合任务失败，没有生成结果"
                 print(f"❌ {error_msg}")
                 self.db.update_task_status(task_id, "failed", error=error_msg)
+                # 清除相关缓存
+                cache_manager = get_cache_manager()
+                cache_manager.invalidate_history_cache()
+                cache_manager.invalidate_task_cache(task_id)
                 
         except Exception as e:
             error_msg = f"多图融合任务执行失败: {str(e)}"
@@ -337,6 +356,10 @@ class TaskManager:
             print(f"详细错误信息:")
             print(traceback.format_exc())
             self.db.update_task_status(task_id, "failed", error=error_msg)
+            # 清除相关缓存
+            cache_manager = get_cache_manager()
+            cache_manager.invalidate_history_cache()
+            cache_manager.invalidate_task_cache(task_id)
     
     async def wait_for_completion(self, task_id: str, prompt_id: str, max_wait_time: int = MAX_WAIT_TIME) -> Optional[list]:
         """等待任务完成

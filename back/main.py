@@ -1109,6 +1109,13 @@ async def delete_task(task_id: str):
             except Exception as file_error:
                 print(f"删除文件失败: {file_error}")
         
+        # 清除相关缓存
+        cache_manager = get_cache_manager()
+        cache_manager.invalidate_history_cache()
+        cache_manager.invalidate_task_cache(task_id)
+        cache_manager.invalidate_image_cache(task_id)
+        print(f"🗑️ 已清除相关缓存，任务 {task_id} 已删除")
+        
         return {
             "task_id": task_id,
             "message": "任务已删除"
@@ -1137,6 +1144,13 @@ async def delete_image_favorite(task_id: str, image_index: int):
             print(f"收藏记录不存在: task_id={task_id}, image_index={image_index}")
             raise HTTPException(status_code=404, detail=f"收藏记录不存在: task_id={task_id}, image_index={image_index}")
         
+        # 清除相关缓存
+        cache_manager = get_cache_manager()
+        cache_manager.invalidate_history_cache()
+        cache_manager.invalidate_task_cache(task_id)
+        cache_manager.invalidate_image_cache(task_id)
+        print(f"🗑️ 已清除相关缓存，图片收藏 {task_id}/{image_index} 已删除")
+        
         print(f"成功删除图片收藏: task_id={task_id}, image_index={image_index}")
         return {
             "task_id": task_id,
@@ -1157,6 +1171,13 @@ async def delete_video_favorite(task_id: str):
         success = db_manager.remove_video_favorite(task_id)
         if not success:
             raise HTTPException(status_code=404, detail="收藏记录不存在")
+        
+        # 清除相关缓存
+        cache_manager = get_cache_manager()
+        cache_manager.invalidate_history_cache()
+        cache_manager.invalidate_task_cache(task_id)
+        cache_manager.invalidate_image_cache(task_id)
+        print(f"🗑️ 已清除相关缓存，视频收藏 {task_id} 已删除")
         
         return {
             "task_id": task_id,

@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
-import models, schemas
+import models
+import schemas_legacy as schemas
+from schemas import base_model
 from security import get_password_hash
 
 def get_user_by_username(db: Session, username: str):
@@ -65,3 +67,33 @@ def create_prompt(db: Session, prompt: schemas.PromptCreate):
     db.commit()
     db.refresh(db_prompt)
     return db_prompt
+
+def create_base_model(db: Session, base_model: base_model.BaseModelCreate):
+    db_base_model = models.BaseModel(**base_model.dict())
+    db.add(db_base_model)
+    db.commit()
+    db.refresh(db_base_model)
+    return db_base_model
+
+def get_base_model(db: Session, base_model_id: int):
+    return db.query(models.BaseModel).filter(models.BaseModel.id == base_model_id).first()
+
+def get_base_models(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.BaseModel).offset(skip).limit(limit).all()
+
+def update_base_model(db: Session, base_model_id: int, base_model: base_model.BaseModelUpdate):
+    db_base_model = db.query(models.BaseModel).filter(models.BaseModel.id == base_model_id).first()
+    if db_base_model:
+        update_data = base_model.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_base_model, key, value)
+        db.commit()
+        db.refresh(db_base_model)
+    return db_base_model
+
+def delete_base_model(db: Session, base_model_id: int):
+    db_base_model = db.query(models.BaseModel).filter(models.BaseModel.id == base_model_id).first()
+    if db_base_model:
+        db.delete(db_base_model)
+        db.commit()
+    return db_base_model

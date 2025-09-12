@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 
-import schemas
+import schemas_legacy as schemas
 from config import settings
 from dependencies import get_current_user
 

@@ -51,3 +51,14 @@ class Prompt(Base):
     type = Column(String(20), nullable=False)  # 'positive' or 'negative'
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class BaseModel(Base):
+    __tablename__ = "base_models"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    model_file_path = Column(String(255), nullable=False)
+    preview_image_path = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

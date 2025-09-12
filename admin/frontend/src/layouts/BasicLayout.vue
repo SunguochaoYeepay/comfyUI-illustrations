@@ -17,6 +17,14 @@
             <picture-outlined />
             <span>图片管理</span>
           </a-menu-item>
+          <a-menu-item key="/lora-management">
+            <cloud-upload-outlined />
+            <span>LoRA模型管理</span>
+          </a-menu-item>
+          <a-menu-item key="/base-model-management">
+            <database-outlined />
+            <span>基础模型管理</span>
+          </a-menu-item>
         </a-menu>
       </a-layout-sider>
       <a-layout>
@@ -43,6 +51,8 @@ import { useRoute, useRouter } from 'vue-router';
 import {
   PieChartOutlined,
   PictureOutlined,
+  CloudUploadOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons-vue';
 import { theme, ConfigProvider, Layout, Breadcrumb, Menu } from 'ant-design-vue';
 
@@ -52,7 +62,7 @@ const selectedKeys = ref(['/dashboard']);
 const router = useRouter();
 const route = useRoute();
 
-const menuKeys = ['/', '/image-management'];
+const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management'];
 
 watch(
   () => route.path,

@@ -20,6 +20,16 @@ const routes = [
         path: '/image-management',
         name: 'ImageManagement',
         component: () => import('../views/ImageManagement.vue')
+      },
+      {
+        path: '/lora-management',
+        name: 'LoraManagement',
+        component: () => import('../views/LoraManagement.vue')
+      },
+      {
+        path: '/base-model-management',
+        name: 'BaseModelManagement',
+        component: () => import('../views/BaseModelManagement.vue')
       }
     ]
   }

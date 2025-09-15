@@ -81,12 +81,34 @@ def update_workflow(
     return db_workflow
 
 
+@router.patch("/{workflow_id}/status")
+def update_workflow_status(
+    workflow_id: int, 
+    status_data: Dict[str, str], 
+    db: Session = Depends(get_db)
+):
+    """更新工作流状态（启用/禁用）"""
+    workflow = crud.get_workflow(db, workflow_id=workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="工作流未找到")
+    
+    new_status = status_data.get("status")
+    if new_status not in ["enabled", "disabled"]:
+        raise HTTPException(status_code=400, detail="状态值必须是 'enabled' 或 'disabled'")
+    
+    return crud.update_workflow_status(db=db, workflow_id=workflow_id, status=new_status)
+
 @router.delete("/{workflow_id}")
 def delete_workflow(workflow_id: int, db: Session = Depends(get_db)):
-    workflow = crud.delete_workflow(db, workflow_id=workflow_id)
+    """删除工作流（只能删除禁用的工作流）"""
+    workflow = crud.get_workflow(db, workflow_id=workflow_id)
     if workflow is None:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    return {"message": "Workflow deleted successfully"}
+        raise HTTPException(status_code=404, detail="工作流未找到")
+    
+    if workflow.status == "enabled":
+        raise HTTPException(status_code=400, detail="只能删除禁用的工作流，请先禁用工作流")
+    
+    return crud.delete_workflow(db=db, workflow_id=workflow_id)
 
 
 @router.post("/upload", response_model=schemas.Workflow)

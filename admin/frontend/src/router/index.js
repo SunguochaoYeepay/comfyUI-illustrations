@@ -36,6 +36,11 @@ const routes = [
         path: '/workflow-upload',
         name: 'WorkflowUpload',
         component: () => import('../views/WorkflowUpload.vue')
+      },
+      {
+        path: '/image-gen-config',
+        name: 'ImageGenConfig',
+        component: () => import('../views/ImageGenConfig.vue')
       }
     ]
   }

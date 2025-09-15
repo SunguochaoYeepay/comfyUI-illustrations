@@ -86,7 +86,9 @@ class WorkflowUpdate(BaseModel):
 
 class Workflow(WorkflowBase):
     id: int
+    status: str = "enabled"
     created_at: datetime.datetime
+    updated_at: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True

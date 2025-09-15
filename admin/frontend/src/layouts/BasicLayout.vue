@@ -26,6 +26,10 @@
             <setting-outlined />
             <span>工作流管理</span>
           </a-menu-item>
+          <a-menu-item key="/image-gen-config">
+            <picture-outlined />
+            <span>生图配置</span>
+          </a-menu-item>
         </a-menu>
       </a-layout-sider>
       <a-layout>
@@ -66,7 +70,7 @@ const selectedKeys = ref(['/dashboard']);
 const router = useRouter();
 const route = useRoute();
 
-const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management', '/workflow-management'];
+const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management', '/workflow-management', '/image-gen-config'];
 
 watch(
   () => route.path,

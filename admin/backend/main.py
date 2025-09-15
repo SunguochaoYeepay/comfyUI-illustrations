@@ -10,7 +10,7 @@ import security
 import schemas_legacy as schemas
 from database import engine
 from config import settings
-from routers import inspirations, admin_audit_log, models as models_router, dashboard, tasks, images, workflows, prompts, lora_new as lora, base_model, file_system
+from routers import inspirations, admin_audit_log, models as models_router, dashboard, tasks, images, workflows, prompts, lora_new as lora, base_model, file_system, image_gen_config
 from dependencies import get_db, get_current_user
 
 models.Base.metadata.create_all(bind=engine)
@@ -37,6 +37,7 @@ app.include_router(workflows.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api")
 app.include_router(base_model.router, prefix="/api")
 app.include_router(file_system.router, prefix="/api")
+app.include_router(image_gen_config.router, prefix="/api/admin")
 
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):

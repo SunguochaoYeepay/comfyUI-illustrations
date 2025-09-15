@@ -39,6 +39,15 @@ export function updateWorkflow(id, data) {
   })
 }
 
+// 更新工作流状态
+export function updateWorkflowStatus(id, status) {
+  return request({
+    url: `/admin/workflows/${id}/status`,
+    method: 'patch',
+    data: { status }
+  })
+}
+
 // 删除工作流
 export function deleteWorkflow(id) {
   return request({

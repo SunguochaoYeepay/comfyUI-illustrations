@@ -63,6 +63,27 @@ def init_system_config():
                 "key": "model_paths_gemini",
                 "value": ",,",
                 "description": "Gemini模型文件子目录：API模型无需本地文件"
+            },
+            # 生图配置
+            {
+                "key": "image_gen_base_model_order",
+                "value": "qwen-image,gemini-image,flux1-dev,flux1,wan2.2-video",
+                "description": "基础模型排序配置，逗号分隔"
+            },
+            {
+                "key": "image_gen_lora_order",
+                "value": "{}",
+                "description": "LoRA排序配置：按基础模型分组的JSON对象"
+            },
+            {
+                "key": "image_gen_default_size",
+                "value": "1024,1024",
+                "description": "默认生图尺寸：宽度,高度"
+            },
+            {
+                "key": "image_gen_size_ratios",
+                "value": "1:1,4:3,3:4,16:9,9:16,21:9,3:2,2:3",
+                "description": "支持的图片比例，逗号分隔"
             }
         ]
         

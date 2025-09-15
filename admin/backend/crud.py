@@ -70,6 +70,17 @@ def update_workflow(db: Session, workflow_id: int, workflow: schemas.WorkflowUpd
         update_data = workflow.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_workflow, key, value)
+        db_workflow.updated_at = datetime.datetime.utcnow()
+        db.commit()
+        db.refresh(db_workflow)
+    return db_workflow
+
+def update_workflow_status(db: Session, workflow_id: int, status: str):
+    """更新工作流状态"""
+    db_workflow = db.query(models.Workflow).filter(models.Workflow.id == workflow_id).first()
+    if db_workflow:
+        db_workflow.status = status
+        db_workflow.updated_at = datetime.datetime.utcnow()
         db.commit()
         db.refresh(db_workflow)
     return db_workflow

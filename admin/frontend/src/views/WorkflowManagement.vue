@@ -24,7 +24,12 @@
       :loading="loading"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'workflow_json'">
+        <template v-if="column.key === 'status'">
+          <a-tag :color="record.status === 'enabled' ? 'green' : 'red'">
+            {{ record.status === 'enabled' ? '启用' : '禁用' }}
+          </a-tag>
+        </template>
+        <template v-else-if="column.key === 'workflow_json'">
           <a-tag color="blue">
             {{ Object.keys(record.workflow_json || {}).length }} 个节点
           </a-tag>
@@ -37,12 +42,17 @@
             <a @click="viewWorkflow(record)">查看</a>
             <a @click="editWorkflow(record)">编辑</a>
             <a @click="downloadWorkflow(record)">下载</a>
+            <a @click="toggleWorkflowStatus(record)">
+              {{ record.status === 'enabled' ? '禁用' : '启用' }}
+            </a>
             <a-popconfirm
+              v-if="record.status === 'disabled'"
               title="确定删除这个工作流吗？"
               @confirm="deleteWorkflow(record.id)"
             >
               <a style="color: #ff4d4f;">删除</a>
             </a-popconfirm>
+            <a v-else style="color: #ccc;" disabled>删除</a>
           </a-space>
         </template>
       </template>
@@ -97,7 +107,8 @@ import { useRouter } from 'vue-router'
 import { 
   getWorkflows, 
   deleteWorkflow as deleteWorkflowAPI, 
-  downloadWorkflow as downloadWorkflowAPI
+  downloadWorkflow as downloadWorkflowAPI,
+  updateWorkflowStatus
 } from '@/api/workflow'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
@@ -110,9 +121,10 @@ const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
   { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
   { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  { title: '状态', key: 'status', width: 80 },
   { title: '节点数', key: 'workflow_json', width: 100 },
   { title: '创建时间', key: 'created_at', width: 180 },
-  { title: '操作', key: 'action', width: 200 },
+  { title: '操作', key: 'action', width: 250 },
 ]
 
 const data = ref([])
@@ -205,6 +217,18 @@ const handleCreateSaved = () => {
 
 
 // 删除工作流
+const toggleWorkflowStatus = async (record) => {
+  try {
+    const newStatus = record.status === 'enabled' ? 'disabled' : 'enabled'
+    await updateWorkflowStatus(record.id, newStatus)
+    message.success(`工作流已${newStatus === 'enabled' ? '启用' : '禁用'}`)
+    fetchWorkflows(pagination.current, pagination.pageSize, searchQuery.value)
+  } catch (error) {
+    console.error('Error updating workflow status:', error)
+    message.error('更新工作流状态失败')
+  }
+}
+
 const deleteWorkflow = async (id) => {
   try {
     await deleteWorkflowAPI(id)

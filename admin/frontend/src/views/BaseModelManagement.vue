@@ -314,29 +314,58 @@ const extractModelFilesFromWorkflow = (workflowJson) => {
     // 识别不同类型的模型加载器
     if (classType === 'CheckpointLoaderSimple' || classType === 'UNETLoader') {
       if (inputs.ckpt_name) {
-        modelFiles.unet_file = inputs.ckpt_name;
+        // 将文件名转换为完整路径
+        modelFiles.unet_file = convertToFullPath(inputs.ckpt_name, 'unet');
       }
       if (inputs.unet_name) {
-        modelFiles.unet_file = inputs.unet_name;
+        // 将文件名转换为完整路径
+        modelFiles.unet_file = convertToFullPath(inputs.unet_name, 'unet');
       }
     }
     
     // 识别CLIP加载器
-    if (classType === 'CLIPLoader' || classType === 'CLIPTextEncode') {
+    if (classType === 'CLIPLoader' || classType === 'CLIPTextEncode' || classType === 'DualCLIPLoader') {
       if (inputs.clip_name) {
-        modelFiles.clip_file = inputs.clip_name;
+        modelFiles.clip_file = convertToFullPath(inputs.clip_name, 'clip');
+      }
+      if (inputs.clip_name1) {
+        modelFiles.clip_file = convertToFullPath(inputs.clip_name1, 'clip');
+      }
+      if (inputs.clip_name2) {
+        modelFiles.clip_file = convertToFullPath(inputs.clip_name2, 'clip');
       }
     }
     
     // 识别VAE加载器
     if (classType === 'VAELoader') {
       if (inputs.vae_name) {
-        modelFiles.vae_file = inputs.vae_name;
+        modelFiles.vae_file = convertToFullPath(inputs.vae_name, 'vae');
       }
     }
   }
   
   return modelFiles;
+};
+
+// 将文件名转换为完整的系统路径
+const convertToFullPath = (filename, type) => {
+  if (!filename) return '';
+  
+  // 如果已经是完整路径，直接返回
+  if (filename.includes('/') || filename.includes('\\')) {
+    return filename;
+  }
+  
+  // 根据文件类型添加目录前缀
+  const pathMapping = {
+    'unet': 'unet/',
+    'clip': 'clip/',
+    'vae': 'vae/',
+    'checkpoint': 'checkpoints/'
+  };
+  
+  const prefix = pathMapping[type] || '';
+  return prefix + filename;
 };
 
 // 监听工作流选择变化，自动更新模板路径和模型文件

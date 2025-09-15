@@ -23,17 +23,22 @@
         <div class="model-dropdown-menu">
           <div class="model-dropdown-header">
             <span class="model-dropdown-title">选择基础模型</span>
-            <a-button 
-              type="link" 
-              size="small" 
-              @click="fetchModels"
-              :loading="loading"
-            >
-              <template #icon>
-                <ReloadOutlined />
-              </template>
-              刷新
-            </a-button>
+            <div class="model-dropdown-actions">
+              <span v-if="configSource" class="config-source-indicator" :class="`config-source-${configSource}`">
+                {{ getConfigSourceText(configSource) }}
+              </span>
+              <a-button 
+                type="link" 
+                size="small" 
+                @click="fetchModels"
+                :loading="loading"
+              >
+                <template #icon>
+                  <ReloadOutlined />
+                </template>
+                刷新
+              </a-button>
+            </div>
           </div>
           
           <div class="model-dropdown-list">
@@ -95,6 +100,8 @@ const emit = defineEmits(['update:model'])
 // 状态
 const availableModels = ref([])
 const loading = ref(false)
+const configSource = ref('')
+const lastUpdated = ref('')
 
   // 当前选择的模型
   const currentModel = computed({
@@ -118,7 +125,10 @@ const fetchModels = async () => {
     if (response.ok) {
       const data = await response.json()
       availableModels.value = data.models || []
+      configSource.value = data.config_source || 'unknown'
+      lastUpdated.value = data.timestamp || ''
       console.log('🤖 获取到模型列表:', availableModels.value)
+      console.log('📊 配置来源:', configSource.value)
     } else {
       console.error('❌ 获取模型列表失败:', response.status)
       message.error('获取模型列表失败')
@@ -139,6 +149,19 @@ const getModelDescription = (modelName) => {
     return 'Qwen支持中文较好，适合中文描述生成'
   }
   return 'AI图像生成模型'
+}
+
+// 获取配置来源文本
+const getConfigSourceText = (source) => {
+  const sourceMap = {
+    'backend': '后台配置',
+    'cache': '缓存配置',
+    'local': '本地配置',
+    'default': '默认配置',
+    'error': '配置错误',
+    'unknown': '未知来源'
+  }
+  return sourceMap[source] || source
 }
 
 // 选择模型
@@ -246,6 +269,49 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 600;
   color: #fff;
+}
+
+.model-dropdown-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-source-indicator {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.config-source-backend {
+  background: #52c41a;
+  color: #fff;
+}
+
+.config-source-cache {
+  background: #1890ff;
+  color: #fff;
+}
+
+.config-source-local {
+  background: #faad14;
+  color: #fff;
+}
+
+.config-source-default {
+  background: #8c8c8c;
+  color: #fff;
+}
+
+.config-source-error {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.config-source-unknown {
+  background: #d9d9d9;
+  color: #666;
 }
 
 .model-dropdown-list {

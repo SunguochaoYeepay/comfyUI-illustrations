@@ -268,6 +268,8 @@ const shouldShowUploadButton = computed(() => {
 const availableLoras = ref([])
 const loading = ref(false)
 const loraPanelExpanded = ref(false) // 控制LoRA面板的展开/收起
+const loraConfigSource = ref('')
+const loraLastUpdated = ref('')
 
 // 视频生成配置状态
 const videoDuration = ref(5) // 默认5秒
@@ -349,28 +351,31 @@ const handleGenerate = () => {
   emit('generate', options)
 }
 
- // LoRA相关方法
- const fetchLoras = async () => {
-   try {
-     loading.value = true
-     // 添加模型参数来过滤LoRA
-     const response = await fetch(`${API_BASE}/api/loras?model=${localModel.value}`)
-     if (response.ok) {
-       const data = await response.json()
-       availableLoras.value = data.loras || []
-       console.log('📋 获取到LoRA列表:', availableLoras.value)
-       console.log('🎯 当前模型:', data.model, '模型类型:', data.model_type)
-     } else {
-       console.error('❌ 获取LoRA列表失败:', response.status)
-       message.error('获取LoRA列表失败')
-     }
-   } catch (error) {
-     console.error('❌ 获取LoRA列表出错:', error)
-     message.error('获取LoRA列表出错')
-   } finally {
-     loading.value = false
-   }
- }
+// LoRA相关方法
+const fetchLoras = async () => {
+  try {
+    loading.value = true
+    // 添加模型参数来过滤LoRA
+    const response = await fetch(`${API_BASE}/api/loras?model=${localModel.value}`)
+    if (response.ok) {
+      const data = await response.json()
+      availableLoras.value = data.loras?.loras || []
+      loraConfigSource.value = data.config_source || 'unknown'
+      loraLastUpdated.value = data.timestamp || ''
+      console.log('📋 获取到LoRA列表:', availableLoras.value)
+      console.log('🎯 当前模型:', data.model, '模型类型:', data.model_type)
+      console.log('📊 LoRA配置来源:', loraConfigSource.value)
+    } else {
+      console.error('❌ 获取LoRA列表失败:', response.status)
+      message.error('获取LoRA列表失败')
+    }
+  } catch (error) {
+    console.error('❌ 获取LoRA列表出错:', error)
+    message.error('获取LoRA列表出错')
+  } finally {
+    loading.value = false
+  }
+}
 
  const refreshLoras = () => {
    fetchLoras()

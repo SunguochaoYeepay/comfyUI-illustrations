@@ -113,72 +113,60 @@ async def get_upload_image(file_path: str):
 async def get_available_models():
     """获取可用的基础模型列表"""
     try:
-        from core.model_manager import get_available_models
+        from core.model_manager import get_available_models_async, get_available_models
         
-        models = get_available_models()
-        return {"models": models}
+        # 优先使用配置客户端获取模型
+        try:
+            models = await get_available_models_async()
+            return {
+                "models": models,
+                "config_source": "backend",
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as config_error:
+            print(f"⚠️ 配置客户端获取模型失败，使用降级方法: {config_error}")
+            # 降级到本地配置
+            models = get_available_models()
+            return {
+                "models": models,
+                "config_source": "local",
+                "timestamp": datetime.now().isoformat()
+            }
     except Exception as e:
         print(f"❌ 获取模型列表失败: {e}")
-        return {"models": []}
+        return {
+            "models": [],
+            "config_source": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 @app.get("/api/loras")
 async def get_available_loras(model: str = Query("flux1-dev", description="基础模型名称")):
     """获取可用的LoRA列表（根据模型过滤）"""
     try:
-        from pathlib import Path
-        from config.settings import COMFYUI_MAIN_OUTPUT_DIR
-        from core.model_manager import get_model_config, ModelType
-
-        # 获取模型配置
-        model_config = get_model_config(model)
-        if not model_config:
-            print(f"⚠️ 模型 {model} 不存在，使用默认Flux模型")
-            model_config = get_model_config("flux1-dev")
-
-        # 使用统一配置的LoRA目录
-        from config.settings import COMFYUI_LORAS_DIR
-        lora_dir = COMFYUI_LORAS_DIR
+        from core.lora_manager import get_loras_from_config
         
-        if not lora_dir.exists():
-            print(f"📁 LoRA目录不存在: {lora_dir}")
-            return {"loras": [], "message": "LoRA目录不存在"}
-        
-        # 查找所有.safetensors文件
-        lora_files = []
-        for file_path in lora_dir.glob("*.safetensors"):
-            lora_name = file_path.name
-            
-            # 根据模型类型过滤LoRA
-            is_compatible = True
-            if model_config.model_type == ModelType.FLUX:
-                # Flux模型：排除Qwen相关的LoRA
-                if any(keyword in lora_name.lower() for keyword in ['qwen', '千问', 'qwen2']):
-                    is_compatible = False
-            elif model_config.model_type == ModelType.QWEN:
-                # Qwen模型：优先选择Qwen相关的LoRA，排除明确为Flux的LoRA
-                if any(keyword in lora_name.lower() for keyword in ['flux', 'kontext', 'sdxl']):
-                    is_compatible = False
-            
-            if is_compatible:
-                lora_files.append({
-                    "name": lora_name,
-                    "size": file_path.stat().st_size,
-                    "modified": file_path.stat().st_mtime,
-                    "compatible": True
-                })
-        
-        # 按修改时间排序，最新的在前
-        lora_files.sort(key=lambda x: x["modified"], reverse=True)
-        
-        print(f"🎨 找到 {len(lora_files)} 个兼容的LoRA文件 (模型: {model_config.display_name})")
-        return {
-            "loras": lora_files,
-            "total": len(lora_files),
-            "directory": str(lora_dir),
-            "model": model,
-            "model_type": model_config.model_type.value
-        }
+        # 优先使用配置客户端获取LoRA
+        try:
+            loras = await get_loras_from_config(model)
+            return {
+                "loras": loras,
+                "config_source": "backend",
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as config_error:
+            import traceback
+            print(f"⚠️ 配置客户端获取LoRA失败，使用降级方法: {config_error}")
+            print(f"详细错误信息: {traceback.format_exc()}")
+            # 降级到空列表
+            return {
+                "loras": [],
+                "config_source": "error",
+                "error": str(config_error),
+                "timestamp": datetime.now().isoformat()
+            }
         
     except Exception as e:
         print(f"❌ 获取LoRA列表失败: {e}")
@@ -473,10 +461,20 @@ async def generate_image(
             except Exception as e:
                 print(f"❌ LoRA配置处理失败: {e}")
         
+        # 获取最优尺寸（使用配置客户端）
+        try:
+            from core.image_gen_config_manager import get_optimal_size
+            optimal_width, optimal_height = await get_optimal_size(size, model)
+            optimal_size = f"{optimal_width}x{optimal_height}"
+            print(f"🎯 使用最优尺寸: {optimal_size} (原始: {size})")
+        except Exception as config_error:
+            print(f"⚠️ 获取最优尺寸失败，使用原始尺寸: {config_error}")
+            optimal_size = size
+        
         # 准备参数
         parameters = {
             "count": count,
-            "size": size,
+            "size": optimal_size,  # 使用最优尺寸
             "steps": steps,
             "seed": seed,
             "model": model,  # 添加模型参数
@@ -1320,6 +1318,75 @@ async def health_check():
         "redis_cache": cache_stats,
         "timestamp": datetime.now().isoformat()
     }
+
+
+@app.get("/api/config/status")
+async def config_status():
+    """配置状态检查"""
+    try:
+        # 导入配置客户端
+        from core.config_client import get_config_client
+        
+        config_client = get_config_client()
+        
+        # 检查后台服务健康状态
+        backend_healthy = await config_client.check_backend_health()
+        
+        # 获取缓存状态
+        cache_status = config_client.get_cache_status()
+        
+        # 获取配置信息
+        try:
+            all_configs = await config_client.get_all_configs()
+            config_source = all_configs.get("config_source", "unknown")
+            last_updated = all_configs.get("last_updated", "unknown")
+        except Exception as e:
+            config_source = "error"
+            last_updated = "unknown"
+        
+        return {
+            "status": "healthy" if backend_healthy else "degraded",
+            "backend_connected": backend_healthy,
+            "config_source": config_source,
+            "last_config_update": last_updated,
+            "cache_status": cache_status,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "backend_connected": False,
+            "config_source": "error",
+            "last_config_update": "unknown",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.get("/api/config/image-gen")
+async def get_image_gen_config():
+    """获取生图配置"""
+    try:
+        from core.image_gen_config_manager import get_image_gen_config_summary
+        
+        config_summary = await get_image_gen_config_summary()
+        return config_summary
+    except Exception as e:
+        return {
+            "default_size": {"width": 1024, "height": 1024, "string": "1024x1024"},
+            "default_steps": 20,
+            "default_count": 1,
+            "supported_ratios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+            "supported_formats": ["png", "jpg", "jpeg", "webp"],
+            "quality_settings": {
+                "low": {"steps": 10, "cfg": 7.0},
+                "medium": {"steps": 20, "cfg": 8.0},
+                "high": {"steps": 30, "cfg": 9.0}
+            },
+            "config_source": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     import uvicorn

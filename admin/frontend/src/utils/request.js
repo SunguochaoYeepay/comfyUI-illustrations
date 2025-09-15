@@ -3,8 +3,8 @@ import { message } from 'ant-design-vue';
 
 // 创建 axios 实例
 const service = axios.create({
-  baseURL: import.meta.env.VITE_APP_BASE_API, // api 的 base_url
-  timeout: 5000, // 请求超时时间
+  baseURL: import.meta.env.VITE_APP_BASE_API || '/api', // api 的 base_url
+  timeout: 10000, // 请求超时时间
 });
 
 // 请求拦截器
@@ -26,18 +26,29 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   (response) => {
-    const res = response.data;
-    // 如果自定义代码不是 20000，则判断为错误。
-    if (res.code !== 20000 && response.status !== 200) {
-      message.error(res.message || 'Error');
-      return Promise.reject(new Error(res.message || 'Error'));
-    } else {
-      return res;
+    const data = response.data;
+    
+    // 如果响应有code字段，说明是自定义格式，直接返回
+    if (data && typeof data === 'object' && 'code' in data) {
+      return data;
     }
+    
+    // 否则直接返回数据
+    return data;
   },
   (error) => {
-    console.log('err' + error); // for debug
-    message.error(error.message);
+    console.log('API Error:', error); // for debug
+    if (error.response) {
+      // 服务器返回了错误状态码
+      const errorMessage = error.response.data?.detail || error.response.data?.message || '请求失败';
+      message.error(errorMessage);
+    } else if (error.request) {
+      // 请求已发出但没有收到响应
+      message.error('网络错误，请检查网络连接');
+    } else {
+      // 其他错误
+      message.error(error.message || '请求失败');
+    }
     return Promise.reject(error);
   }
 );

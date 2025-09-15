@@ -35,7 +35,9 @@
             <a-breadcrumb-item>Bill</a-breadcrumb-item>
           </a-breadcrumb>
           <div :style="{ padding: '24px', background: '#141414', minHeight: '360px' }">
-            <router-view />
+            <router-view v-slot="{ Component }">
+              <component :is="Component" v-if="Component" />
+            </router-view>
           </div>
         </a-layout-content>
         <a-layout-footer style="text-align: center">

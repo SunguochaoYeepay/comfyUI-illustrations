@@ -1,18 +1,37 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import datetime
 
 class BaseModelBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    model_file_path: str
-    preview_image_path: Optional[str] = None
+    name: str = Field(..., description="模型名称（唯一标识）")
+    display_name: str = Field(..., description="显示名称")
+    model_type: str = Field(..., description="模型类型：flux, qwen, wan, flux1, gemini")
+    description: Optional[str] = Field(None, description="模型描述")
+    unet_file: Optional[str] = Field(None, description="UNet文件名")
+    clip_file: Optional[str] = Field(None, description="CLIP文件名")
+    vae_file: Optional[str] = Field(None, description="VAE文件名")
+    template_path: Optional[str] = Field(None, description="默认工作流模板路径（可选，工作流可独立管理）")
+    preview_image_path: Optional[str] = Field(None, description="预览图路径")
+    is_available: bool = Field(False, description="是否可用")
+    is_default: bool = Field(False, description="是否为默认模型")
+    sort_order: int = Field(0, description="排序顺序")
 
 class BaseModelCreate(BaseModelBase):
     pass
 
-class BaseModelUpdate(BaseModelBase):
-    pass
+class BaseModelUpdate(BaseModel):
+    name: Optional[str] = Field(None, description="模型名称（唯一标识）")
+    display_name: Optional[str] = Field(None, description="显示名称")
+    model_type: Optional[str] = Field(None, description="模型类型：flux, qwen, wan, flux1, gemini")
+    description: Optional[str] = Field(None, description="模型描述")
+    unet_file: Optional[str] = Field(None, description="UNet文件名")
+    clip_file: Optional[str] = Field(None, description="CLIP文件名")
+    vae_file: Optional[str] = Field(None, description="VAE文件名")
+    template_path: Optional[str] = Field(None, description="默认工作流模板路径（可选，工作流可独立管理）")
+    preview_image_path: Optional[str] = Field(None, description="预览图路径")
+    is_available: Optional[bool] = Field(None, description="是否可用")
+    is_default: Optional[bool] = Field(None, description="是否为默认模型")
+    sort_order: Optional[int] = Field(None, description="排序顺序")
 
 class BaseModel(BaseModelBase):
     id: int
@@ -20,4 +39,4 @@ class BaseModel(BaseModelBase):
     updated_at: datetime.datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

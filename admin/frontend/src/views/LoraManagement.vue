@@ -1,23 +1,38 @@
 <template>
   <div>
     <div class="header-bar">
-      <h1>LoRA Model Management</h1>
+      <h1>LoRA模型管理</h1>
       <div class="header-actions">
         <a-input-search
           v-model:value="searchQuery"
-          placeholder="Search by name"
-          style="width: 250px;"
+          placeholder="按名称搜索"
+          style="width: 200px;"
           @search="onSearch"
           allow-clear
         />
+        <a-select
+          v-model:value="baseModelFilter"
+          placeholder="选择基础模型"
+          style="width: 200px; margin-left: 8px;"
+          @change="onBaseModelFilter"
+          allow-clear
+        >
+          <a-select-option 
+            v-for="model in baseModels" 
+            :key="model.name" 
+            :value="model.name"
+          >
+            {{ model.display_name }}
+          </a-select-option>
+        </a-select>
         <a-button type="primary" @click="showCreateModal" style="margin-left: 8px;">
-          <plus-outlined /> Create New LoRA
+          <plus-outlined /> 创建新LoRA
         </a-button>
       </div>
     </div>
     <a-table
       :columns="columns"
-      :data-source="data"
+      :data-source="tableData"
       row-key="name"
       :pagination="false"
       :loading="loading"
@@ -32,19 +47,23 @@
           />
           <span v-else>N/A</span>
         </template>
-        <template v-else-if="column.key === 'is_managed'">
-          <a-tag :color="record.is_managed ? 'green' : 'orange'">
-            {{ record.is_managed ? 'Managed' : 'Unmanaged' }}
+        <template v-else-if="column.key === 'is_available'">
+          <a-tag :color="record.is_available ? 'green' : 'red'">
+            {{ record.is_available ? '启用' : '禁用' }}
           </a-tag>
         </template>
         <template v-else-if="column.key === 'action'">
           <a-space>
-            <a-button type="primary" @click="handleUniversalEdit(record)">Edit</a-button>
+            <a @click="handleUniversalEdit(record)">编辑</a>
+            <a @click="toggleAvailability(record)">
+              {{ record.is_available ? '禁用' : '启用' }}
+            </a>
             <a-popconfirm
-              title="Delete metadata only (.json/.png)? The model file will NOT be deleted."
-              @confirm="handleDelete(record.name, record.is_managed)"
+              v-if="!record.is_available"
+              title="仅删除元数据(.json/.png)？模型文件不会被删除。"
+              @confirm="handleDelete(record.id, record.is_managed)"
             >
-              <a-button type="danger">Delete Meta</a-button>
+              <a style="color: #ff4d4f;">删除</a>
             </a-popconfirm>
           </a-space>
         </template>
@@ -61,25 +80,39 @@
     <!-- Edit Modal -->
     <a-modal
       v-model:open="editModalOpen"
-      title="Edit LoRA Meta"
+      title="编辑LoRA元数据"
       @ok="handleEdit"
       :confirm-loading="editModalLoading"
     >
       <a-form :model="editForm" layout="vertical">
-        <a-form-item label="Display Name">
+        <a-form-item label="显示名称">
           <a-input v-model:value="editForm.display_name" />
         </a-form-item>
-        <a-form-item label="Filename">
+        <a-form-item label="文件名">
           <a-auto-complete
             v-model:value="editForm.new_name"
             :options="filenameOptions"
-            placeholder="Enter new filename or select an unmanaged model"
+            placeholder="输入新文件名或选择未管理的模型"
           />
         </a-form-item>
-        <a-form-item label="Base Model">
-          <a-input v-model:value="editForm.base_model" />
+        <a-form-item label="基础模型">
+          <a-select 
+            v-model:value="editForm.base_model" 
+            placeholder="选择基础模型"
+            :loading="baseModelsLoading"
+            show-search
+            :filter-option="(input, option) => option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
+          >
+            <a-select-option 
+              v-for="model in baseModels" 
+              :key="model.name" 
+              :value="model.name"
+            >
+              {{ model.display_name }} ({{ model.name }})
+            </a-select-option>
+          </a-select>
         </a-form-item>
-        <a-form-item label="Description">
+        <a-form-item label="描述">
           <a-textarea v-model:value="editForm.description" :rows="4" />
         </a-form-item>
         <a-form-item label="Upload Preview">
@@ -100,15 +133,15 @@
     <!-- Create Modal -->
     <a-modal
       v-model:open="createModalOpen"
-      title="Create New LoRA Record"
+      title="创建新LoRA记录"
       @ok="handleCreate"
       :confirm-loading="createModalLoading"
     >
       <a-form :model="createForm" layout="vertical">
-        <a-form-item label="Model File" required>
+        <a-form-item label="模型文件" required>
           <a-select
             v-model:value="createForm.filename"
-            placeholder="Select an unassociated model file"
+            placeholder="选择模型文件"
             :loading="unassociatedLoading"
           >
             <a-select-option v-for="filename in unassociatedLoras" :key="filename" :value="filename">
@@ -116,13 +149,27 @@
             </a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="Display Name" required>
+        <a-form-item label="显示名称" required>
           <a-input v-model:value="createForm.display_name" />
         </a-form-item>
-        <a-form-item label="Base Model">
-          <a-input v-model:value="createForm.base_model" />
+        <a-form-item label="基础模型">
+          <a-select 
+            v-model:value="createForm.base_model" 
+            placeholder="选择基础模型"
+            :loading="baseModelsLoading"
+            show-search
+            :filter-option="(input, option) => option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
+          >
+            <a-select-option 
+              v-for="model in baseModels" 
+              :key="model.name" 
+              :value="model.name"
+            >
+              {{ model.display_name }} ({{ model.name }})
+            </a-select-option>
+          </a-select>
         </a-form-item>
-        <a-form-item label="Description">
+        <a-form-item label="描述">
           <a-textarea v-model:value="createForm.description" :rows="4" />
         </a-form-item>
       </a-form>
@@ -131,8 +178,9 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue';
-import { getLoras, deleteLora, updateLoraMeta, uploadLoraPreview, getUnassociatedLoras, createLoraRecord } from '@/api/lora';
+import { ref, reactive, onMounted, computed } from 'vue';
+    import { getLoras, deleteLora, updateLoraMeta, uploadLoraPreview, getUnassociatedLoras, createLoraRecord } from '@/api/lora';
+    import { getBaseModels } from '@/api/baseModel';
 import { message, Image as AImage, Space as ASpace, Upload, Popconfirm, Modal, Form, Input, Textarea, Button, Select, Tag, AutoComplete as AAutoComplete } from 'ant-design-vue';
 import { UploadOutlined, PlusOutlined } from '@ant-design/icons-vue';
 
@@ -160,29 +208,48 @@ export default {
     const loading = ref(false);
 
     const columns = [
-      { title: 'Preview', key: 'preview', width: 100 },
-      { title: 'Display Name', dataIndex: 'display_name', key: 'display_name', ellipsis: true },
-      { title: 'Filename', dataIndex: 'name', key: 'name', ellipsis: true },
-      { title: 'Status', key: 'is_managed', width: 120 },
-      { title: 'Size (MB)', dataIndex: 'size', key: 'size', customRender: ({ text }) => `${(text / 1024 / 1024).toFixed(2)} MB` },
-      { title: 'Base Model', dataIndex: 'base_model', key: 'base_model' },
+      { title: '预览', key: 'preview', width: 100 },
+      { title: '显示名称', dataIndex: 'display_name', key: 'display_name', ellipsis: true },
+      { title: '文件名', dataIndex: 'name', key: 'name', ellipsis: true },
+      { title: '状态', key: 'is_available', width: 120 },
+      { title: '大小 (MB)', dataIndex: 'size', key: 'size', customRender: ({ text }) => `${(text / 1024 / 1024).toFixed(2)} MB` },
+      { title: '基础模型', dataIndex: 'base_model', key: 'base_model' },
       { 
-        title: 'Created',
+        title: '创建时间',
         dataIndex: 'created',
         key: 'created',
         width: 180 
       },
       { 
-        title: 'Modified',
+        title: '修改时间',
         dataIndex: 'modified',
         key: 'modified',
         width: 180 
       },
-      { title: 'Action', key: 'action', width: 220 },
+      { title: '操作', key: 'action', width: 220 },
     ];
 
     const data = ref([]);
     const pagination = reactive({ current: 1, pageSize: 10, total: 0 });
+
+    // 计算属性确保数据始终是数组
+    const tableData = computed(() => {
+      return Array.isArray(data.value) ? data.value : [];
+    });
+
+    // 确保数据始终是数组的防护函数
+    const ensureArray = (value) => {
+      if (Array.isArray(value)) {
+        return value;
+      }
+      if (value && Array.isArray(value.data)) {
+        return value.data;
+      }
+      if (value && value.data && Array.isArray(value.data.items)) {
+        return value.data.items;
+      }
+      return [];
+    };
 
     // Edit Modal State
     const editModalOpen = ref(false);
@@ -199,21 +266,38 @@ export default {
     const createForm = reactive({ filename: null, display_name: '', base_model: '', description: '' });
 
     const searchQuery = ref('');
+    const baseModelFilter = ref('');
+    
+    // Base models for selection
+    const baseModels = ref([]);
+    const baseModelsLoading = ref(false);
 
-    const fetchLoras = async (page = 1, pageSize = 10, name = null) => {
+    const fetchLoras = async (page = 1, pageSize = 10, name = null, baseModel = null) => {
       loading.value = true;
       try {
-        const response = await getLoras(page, pageSize, name);
-        if (response.code === 200) {
-          data.value = response.data.items;
-          pagination.total = response.data.total;
-          pagination.current = response.data.page;
-          pagination.pageSize = response.data.pageSize;
+        const response = await getLoras(page, pageSize, name, baseModel);
+        console.log('LoRA API Response:', response); // 调试日志
+        
+        if (response && response.code === 200) {
+          // 使用防护函数确保数据是数组，并映射字段
+          const rawData = ensureArray(response.data?.items || response.data || response);
+          data.value = rawData.map(item => ({
+            ...item,
+            size: item.file_size, // 映射file_size到size
+            created: item.created_at, // 映射created_at到created
+            modified: item.updated_at, // 映射updated_at到modified
+          }));
+          pagination.total = response.data?.total || 0;
+          pagination.current = response.data?.page || 1;
+          pagination.pageSize = response.data?.pageSize || 10;
         } else {
-          message.error(response.message || 'Failed to fetch LoRA models');
+          data.value = [];
+          console.warn('LoRA API返回错误或非标准格式:', response);
+          message.error(response?.message || 'Failed to fetch LoRA models');
         }
       } catch (error) {
         console.error('Error fetching LoRA models:', error);
+        data.value = []; // 确保data是数组
         message.error('Error fetching LoRA models');
       } finally {
         loading.value = false;
@@ -222,7 +306,31 @@ export default {
 
     const onSearch = (searchValue) => {
       pagination.current = 1; // Reset to first page on new search
-      fetchLoras(pagination.current, pagination.pageSize, searchValue);
+      fetchLoras(pagination.current, pagination.pageSize, searchValue, baseModelFilter.value);
+    };
+
+    const onBaseModelFilter = (baseModel) => {
+      pagination.current = 1; // Reset to first page on new filter
+      fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModel);
+    };
+
+    // Fetch base models for selection
+    const fetchBaseModels = async () => {
+      baseModelsLoading.value = true;
+      try {
+        const response = await getBaseModels();
+        if (response && response.code === 200) {
+          baseModels.value = response.data.items || [];
+        } else {
+          baseModels.value = [];
+          console.warn('Failed to fetch base models:', response);
+        }
+      } catch (error) {
+        console.error('Error fetching base models:', error);
+        baseModels.value = [];
+      } finally {
+        baseModelsLoading.value = false;
+      }
     };
 
     // --- Edit Logic ---
@@ -234,6 +342,11 @@ export default {
       editForm.description = record.description;
       fileList.value = [];
       editModalOpen.value = true;
+
+      // Fetch base models if not already loaded
+      if (baseModels.value.length === 0) {
+        await fetchBaseModels();
+      }
 
       // Fetch unassociated models for the autocomplete
       try {
@@ -289,6 +402,12 @@ export default {
       createForm.filename = null; // Reset filename for fresh creation
       createModalOpen.value = true;
       unassociatedLoading.value = true;
+      
+      // Fetch base models if not already loaded
+      if (baseModels.value.length === 0) {
+        await fetchBaseModels();
+      }
+      
       try {
         const response = await getUnassociatedLoras();
         if (response.code === 200) {
@@ -329,7 +448,8 @@ export default {
     };
 
     const handleUniversalEdit = (record) => {
-      if (record.is_managed) {
+      // 如果记录在数据库中，就认为是已管理的，可以编辑
+      if (record.id) {
         showEditModal(record);
       } else {
         // For unmanaged, we pre-fill the create/manage modal
@@ -343,18 +463,30 @@ export default {
     };
 
     // --- Delete Logic ---
-    const handleDelete = async (name, is_managed) => {
+    const handleDelete = async (loraId, is_managed) => {
       if (!is_managed) {
         message.info('This LoRA has no metadata to delete.');
         return;
       }
       try {
-        await deleteLora(name);
+        await deleteLora(loraId);
         message.success('LoRA metadata deleted successfully');
         fetchLoras(pagination.current, pagination.pageSize);
       } catch (error) {
         console.error('Error deleting LoRA meta:', error);
         message.error(error.response?.data?.detail || 'Error deleting LoRA meta');
+      }
+    };
+
+    const toggleAvailability = async (record) => {
+      try {
+        const newStatus = !record.is_available;
+        await updateLoraMeta(record.id, { is_available: newStatus });
+        message.success(`LoRA ${newStatus ? '启用' : '禁用'}成功`);
+        fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModelFilter.value);
+      } catch (error) {
+        console.error('Error toggling LoRA availability:', error);
+        message.error(error.response?.data?.detail || '切换状态失败');
       }
     };
 
@@ -378,6 +510,7 @@ export default {
 
     onMounted(() => {
       fetchLoras();
+      fetchBaseModels();
     });
 
     return {
@@ -385,6 +518,7 @@ export default {
       loading,
       columns,
       data,
+      tableData,
       pagination,
       searchQuery,
       onSearch,
@@ -406,7 +540,13 @@ export default {
       unassociatedLoading,
       showCreateModal,
       handleCreate,
-      handleUniversalEdit, // Add this line
+      handleUniversalEdit,
+      toggleAvailability,
+      baseModels,
+      baseModelsLoading,
+      fetchBaseModels,
+      baseModelFilter,
+      onBaseModelFilter,
     };
   },
 };

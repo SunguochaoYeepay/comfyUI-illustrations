@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 
 import crud
-import schemas
+import schemas_legacy as schemas
 from database import SessionLocal
 from config import settings
 

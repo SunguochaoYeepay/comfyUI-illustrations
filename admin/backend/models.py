@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -57,8 +57,42 @@ class BaseModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, index=True, nullable=False)
+    display_name = Column(String(200), nullable=False)  # 显示名称
+    model_type = Column(String(50), nullable=False)     # 模型类型：flux, qwen, wan, flux1, gemini
     description = Column(Text, nullable=True)
-    model_file_path = Column(String(255), nullable=False)
+    unet_file = Column(String(255), nullable=True)      # 文件名而非路径
+    clip_file = Column(String(255), nullable=True)      # 文件名而非路径
+    vae_file = Column(String(255), nullable=True)       # 文件名而非路径
+    template_path = Column(String(500), nullable=True)  # 工作流模板路径
     preview_image_path = Column(String(255), nullable=True)
+    is_available = Column(Boolean, default=False)       # 可用性状态
+    is_default = Column(Boolean, default=False)         # 是否为默认模型
+    sort_order = Column(Integer, default=0)             # 排序顺序
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class SystemConfig(Base):
+    __tablename__ = "system_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, index=True, nullable=False)
+    value = Column(Text, nullable=True)
+    description = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class Lora(Base):
+    __tablename__ = "loras"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, index=True, nullable=False)
+    display_name = Column(String(255), nullable=False)
+    base_model = Column(String(100), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    file_path = Column(String(500), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    is_available = Column(Boolean, default=True)
+    is_managed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

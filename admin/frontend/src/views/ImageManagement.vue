@@ -1,7 +1,7 @@
 <template>
   <div>
     <a-card title="图片管理">
-      <a-table :columns="columns" :data-source="data" :loading="loading" row-key="image_id">
+      <a-table :columns="columns" :data-source="tableData" :loading="loading" row-key="image_id">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'url'">
             <a-image :width="100" :src="record.url" />
@@ -23,12 +23,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { getImages, deleteImage } from '@/api/images';
 import { message } from 'ant-design-vue';
 
 const loading = ref(false);
 const data = ref([]);
+
+// 计算属性确保数据始终是数组
+const tableData = computed(() => {
+  return Array.isArray(data.value) ? data.value : [];
+});
+
+// 确保数据始终是数组的防护函数
+const ensureArray = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value && Array.isArray(value.data)) {
+    return value.data;
+  }
+  if (value && value.data && Array.isArray(value.data.items)) {
+    return value.data.items;
+  }
+  return [];
+};
 
 const columns = [
   {
@@ -65,18 +84,18 @@ const fetchImages = async () => {
   loading.value = true;
   try {
     const res = await getImages();
-    if (res && Array.isArray(res)) {
-      data.value = res;
-    } else {
-      // If the response is not an array (e.g., an error object), set data to an empty array
-      data.value = [];
-      message.error('获取图片列表失败：无效的响应格式');
-      console.error('Invalid response format:', res);
+    console.log('API Response:', res); // 调试日志
+    
+    // 使用防护函数确保数据是数组
+    data.value = ensureArray(res);
+    
+    if (data.value.length === 0 && res) {
+      console.warn('API返回的数据不是数组格式:', res);
     }
   } catch (error) {
-    message.error('获取图片列表失败');
-    console.error(error);
-    data.value = []; // Also clear data on catch
+    console.error('获取图片列表失败:', error);
+    data.value = []; // 确保data是数组
+    // 错误消息已经在request拦截器中处理了
   } finally {
     loading.value = false;
   }

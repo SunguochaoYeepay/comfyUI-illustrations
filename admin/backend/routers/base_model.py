@@ -24,11 +24,33 @@ def read_base_models(page: int = 1, size: int = 10, db: Session = Depends(get_db
     skip = (page - 1) * size
     base_models = crud.get_base_models(db, skip=skip, limit=size)
     total = db.query(models.BaseModel).count()
+    # 将SQLAlchemy对象转换为字典
+    base_models_data = []
+    for model in base_models:
+        model_dict = {
+            "id": model.id,
+            "name": model.name,
+            "display_name": model.display_name,
+            "model_type": model.model_type,
+            "description": model.description,
+            "unet_file": model.unet_file,
+            "clip_file": model.clip_file,
+            "vae_file": model.vae_file,
+            "template_path": model.template_path,
+            "preview_image_path": model.preview_image_path,
+            "is_available": model.is_available,
+            "is_default": model.is_default,
+            "sort_order": model.sort_order,
+            "created_at": model.created_at.isoformat() if model.created_at else None,
+            "updated_at": model.updated_at.isoformat() if model.updated_at else None
+        }
+        base_models_data.append(model_dict)
+    
     return {
         "code": 200,
         "message": "Success",
         "data": {
-            "items": base_models,
+            "items": base_models_data,
             "total": total,
             "page": page,
             "size": size

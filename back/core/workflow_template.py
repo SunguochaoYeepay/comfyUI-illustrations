@@ -177,7 +177,7 @@ class WorkflowTemplate:
             return None
     
     def _convert_dict_to_model_config(self, model_dict: Dict[str, Any]):
-        """将字典转换为ModelConfig对象"""
+        """将字典转换为ModelConfig对象 - 移除template_path依赖"""
         from core.model_manager import ModelConfig, ModelType
         
         # 模型类型映射
@@ -192,8 +192,6 @@ class WorkflowTemplate:
         model_type = type_mapping.get(model_dict.get("model_type", "unknown"), ModelType.FLUX)
         model_name = model_dict.get("name", "unknown")
         
-        # 现在配置同步API已经返回了正确的文件路径，直接使用配置中的值
-        
         return ModelConfig(
             model_type=model_type,
             name=model_name,
@@ -201,7 +199,7 @@ class WorkflowTemplate:
             unet_file=self._extract_filename(model_dict.get("unet_file", "")),
             clip_file=self._extract_filename(model_dict.get("clip_file", "")),
             vae_file=self._extract_filename(model_dict.get("vae_file", "")),
-            template_path=model_dict.get("template_path", ""),
+            template_path="",  # 不再使用模板路径，完全数据库化
             description=model_dict.get("description", "")
         )
     
@@ -245,7 +243,7 @@ class WorkflowTemplate:
             return self._get_local_workflow_by_model(model_name, workflow_type)
     
     def _get_local_workflow_by_model(self, model_name: str, workflow_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """从本地配置获取工作流（降级方法）"""
+        """从本地配置获取工作流（降级方法）- 不再使用template_path"""
         # 获取模型配置
         model_config = get_model_config(model_name)
         if not model_config:
@@ -258,7 +256,7 @@ class WorkflowTemplate:
             "display_name": f"{model_config.display_name}工作流",
             "base_model_type": model_name,
             "workflow_type": workflow_type or "image_generation",
-            "template_path": model_config.template_path,
+            "workflow_json": {},  # 空的工作流JSON，需要从其他地方获取
             "available": True,
             "description": f"{model_config.display_name}的默认工作流"
         }
@@ -266,25 +264,13 @@ class WorkflowTemplate:
         return workflow_config
     
     async def apply_workflow_config(self, workflow_config: Dict[str, Any], parameters: Dict[str, Any], model_name: str = None) -> Dict[str, Any]:
-        """应用工作流配置"""
+        """应用工作流配置 - 完全数据库化，不再依赖文件系统"""
         try:
-            # 从模型配置中获取模板路径
-            template_path = None
-            if model_name:
-                model_config = await self._get_model_config_from_client(model_name)
-                if model_config:
-                    template_path = model_config.get("template_path")
+            # 直接从工作流配置中获取工作流JSON
+            workflow_template = workflow_config.get("workflow_json")
             
-            if not template_path:
-                raise ValueError("模型配置中缺少模板路径")
-            
-            # 加载工作流模板
-            template_file = Path(template_path)
-            if not template_file.exists():
-                raise FileNotFoundError(f"工作流模板文件不存在: {template_path}")
-            
-            with open(template_file, 'r', encoding='utf-8') as f:
-                workflow_template = json.load(f)
+            if not workflow_template:
+                raise ValueError("工作流配置中缺少工作流JSON数据")
             
             # 应用参数配置
             customized_workflow = self._apply_parameters_to_workflow(workflow_template, parameters)
@@ -329,7 +315,7 @@ class WorkflowTemplate:
                 class_type = node.get("class_type", "")
                 inputs = node.get("inputs", {})
                 
-                # 更新文本节点
+                # 更新文本节点 - 支持更多节点类型
                 if class_type in ["CLIPTextEncode", "CLIPTextEncodeAdvanced"]:
                     if "text" in inputs:
                         old_text = inputs["text"]
@@ -343,8 +329,8 @@ class WorkflowTemplate:
                     inputs["text"] = description
                     print(f"✅ 更新其他文本节点 {node_id} ({class_type}): '{old_text[:30]}...' -> '{description[:30]}...'")
                 
-                # 更新采样器节点
-                elif class_type in ["KSampler", "KSamplerAdvanced", "SamplerCustom"]:
+                # 更新采样器节点 - 支持更多节点类型
+                elif class_type in ["KSampler", "KSamplerAdvanced", "SamplerCustom", "ModelSamplingAuraFlow"]:
                     if "steps" in inputs:
                         inputs["steps"] = steps
                     if "seed" in inputs and seed is not None:
@@ -360,9 +346,25 @@ class WorkflowTemplate:
                     print(f"✅ 更新尺寸节点 {node_id}: {width}x{height}")
                 
                 # 更新模型加载器节点
-                elif class_type in ["CheckpointLoaderSimple", "UNETLoader", "CLIPLoader", "VAELoader"]:
+                elif class_type in ["CheckpointLoaderSimple", "UNETLoader", "CLIPLoader", "VAELoader", "DualCLIPLoader"]:
                     # 这里可以根据模型名称更新模型文件
                     print(f"✅ 保持模型节点 {node_id} 不变")
+                
+                # 特殊处理：Google-Gemini节点
+                elif class_type == "Google-Gemini":
+                    # Gemini节点可能有不同的参数结构
+                    if "prompt" in inputs:
+                        inputs["prompt"] = description
+                        print(f"✅ 更新Gemini节点 {node_id} prompt: '{description[:30]}...'")
+                    elif "text" in inputs:
+                        inputs["text"] = description
+                        print(f"✅ 更新Gemini节点 {node_id} text: '{description[:30]}...'")
+                    if "seed" in inputs and seed is not None:
+                        inputs["seed"] = seed
+                        print(f"✅ 更新Gemini节点 {node_id} seed: {seed}")
+                    if "steps" in inputs:
+                        inputs["steps"] = steps
+                        print(f"✅ 更新Gemini节点 {node_id} steps: {steps}")
             
             print(f"✅ 参数应用完成")
             return workflow
@@ -430,7 +432,7 @@ class WorkflowTemplate:
     
     def _get_default_workflows(self, base_model_type: Optional[str] = None, 
                              workflow_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """获取默认工作流列表（降级方法）"""
+        """获取默认工作流列表（降级方法）- 不再使用template_path"""
         default_workflows = [
             {
                 "id": 1,
@@ -438,7 +440,7 @@ class WorkflowTemplate:
                 "display_name": "Qwen图像生成",
                 "base_model_type": "qwen",
                 "workflow_type": "image_generation",
-                "template_path": "workflows/qwen_image_generation_workflow.json",
+                "workflow_json": {},  # 空的工作流JSON，需要从数据库获取
                 "available": True,
                 "description": "Qwen单图生成工作流"
             },
@@ -448,7 +450,7 @@ class WorkflowTemplate:
                 "display_name": "Flux1工作流",
                 "base_model_type": "flux1",
                 "workflow_type": "image_generation",
-                "template_path": "workflows/flux1_vector_workflow.json",
+                "workflow_json": {},  # 空的工作流JSON，需要从数据库获取
                 "available": True,
                 "description": "Flux1基础模型工作流"
             }

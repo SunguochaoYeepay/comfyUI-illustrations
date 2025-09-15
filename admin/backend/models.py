@@ -69,7 +69,7 @@ class BaseModel(Base):
     unet_file = Column(String(255), nullable=True)      # 文件名而非路径
     clip_file = Column(String(255), nullable=True)      # 文件名而非路径
     vae_file = Column(String(255), nullable=True)       # 文件名而非路径
-    template_path = Column(String(500), nullable=True)  # 工作流模板路径
+    # template_path 字段已移除，完全数据库化
     workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=True)  # 关联的工作流ID
     preview_image_path = Column(String(255), nullable=True)
     is_available = Column(Boolean, default=False)       # 可用性状态

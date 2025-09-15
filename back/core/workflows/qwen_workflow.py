@@ -126,19 +126,38 @@ class QwenWorkflow(BaseWorkflow):
         return workflow
     
     def _load_workflow_template(self) -> Dict[str, Any]:
-        """加载工作流模板"""
+        """从数据库加载工作流模板"""
+        import sqlite3
+        from pathlib import Path
+        
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            print(f"⚠️ 数据库文件不存在，使用内置模板: {db_path}")
+            return self._get_builtin_template()
+        
+        # 从数据库加载工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
         try:
-            workflow_path = "workflows/qwen_image_generation_workflow.json"
-            with open(workflow_path, 'r', encoding='utf-8') as f:
-                workflow = json.load(f)
-            print(f"✅ 加载Qwen工作流模板: {workflow_path}")
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("qwen_image_generation_workflow",))
+            result = cursor.fetchone()
+            
+            if not result:
+                print(f"⚠️ 数据库中未找到Qwen工作流，使用内置模板")
+                return self._get_builtin_template()
+            
+            workflow = json.loads(result[0])
+            print(f"✅ 从数据库加载Qwen工作流模板: qwen_image_generation_workflow")
             return workflow
-        except FileNotFoundError:
-            print(f"⚠️ Qwen工作流模板文件不存在，使用内置模板")
+            
+        except Exception as e:
+            print(f"❌ 从数据库加载Qwen工作流失败: {e}，使用内置模板")
             return self._get_builtin_template()
-        except json.JSONDecodeError as e:
-            print(f"❌ Qwen工作流模板文件格式错误: {str(e)}")
-            return self._get_builtin_template()
+        finally:
+            conn.close()
     
     def _get_builtin_template(self) -> Dict[str, Any]:
         """获取内置模板"""

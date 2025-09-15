@@ -36,7 +36,7 @@ def read_base_models(page: int = 1, size: int = 10, db: Session = Depends(get_db
             "unet_file": model.unet_file,
             "clip_file": model.clip_file,
             "vae_file": model.vae_file,
-            "template_path": model.template_path,
+            # "template_path": model.template_path,  # 已移除，完全数据库化
             "preview_image_path": model.preview_image_path,
             "is_available": model.is_available,
             "is_default": model.is_default,

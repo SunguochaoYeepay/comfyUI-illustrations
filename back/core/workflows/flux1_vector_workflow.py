@@ -71,37 +71,55 @@ class Flux1VectorWorkflow(BaseWorkflow):
         return workflow
     
     def _load_workflow_template(self, reference_image_path) -> Dict[str, Any]:
-        """根据参考图数量选择工作流模板"""
-        from config.settings import WORKFLOWS_DIR
+        """从数据库加载工作流模板"""
+        import sqlite3
+        from pathlib import Path
         
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
+        
+        # 根据参考图数量选择工作流名称
         if reference_image_path:
             if isinstance(reference_image_path, list):
                 if len(reference_image_path) == 1:
                     # 1张参考图 - 风格迁移
-                    template_path = WORKFLOWS_DIR / "flux1" / "flux_redux_model_1.json"
-                    print(f"📁 加载单图风格迁移工作流: {template_path}")
+                    workflow_name = "flux1_flux_redux_model_1"
+                    print(f"📁 从数据库加载单图风格迁移工作流: {workflow_name}")
                 elif len(reference_image_path) == 2:
                     # 2张参考图 - 风格融合
-                    template_path = WORKFLOWS_DIR / "flux1" / "flux_redux_model_2.json"
-                    print(f"📁 加载多图风格融合工作流: {template_path}")
+                    workflow_name = "flux1_flux_redux_model_2"
+                    print(f"📁 从数据库加载多图风格融合工作流: {workflow_name}")
                 else:
                     raise ValueError("Flux1 Redux最多支持2张参考图")
             else:
                 # 单张参考图 - 风格迁移
-                template_path = WORKFLOWS_DIR / "flux1" / "flux_redux_model_1.json"
-                print(f"📁 加载单图风格迁移工作流: {template_path}")
+                workflow_name = "flux1_flux_redux_model_1"
+                print(f"📁 从数据库加载单图风格迁移工作流: {workflow_name}")
         else:
             # 无参考图 - 纯文本生成
-            template_path = WORKFLOWS_DIR / "flux1" / "flux1_vector_workflow.json"
-            print(f"📁 加载纯文本生成工作流: {template_path}")
+            workflow_name = "flux1_flux1_vector_workflow"
+            print(f"📁 从数据库加载纯文本生成工作流: {workflow_name}")
         
-        if not template_path.exists():
-            raise FileNotFoundError(f"工作流模板文件不存在: {template_path}")
+        # 从数据库加载工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
         
-        with open(template_path, 'r', encoding='utf-8') as f:
-            workflow = json.load(f)
-        
-        return workflow
+        try:
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", (workflow_name,))
+            result = cursor.fetchone()
+            
+            if not result:
+                raise FileNotFoundError(f"数据库中未找到工作流: {workflow_name}")
+            
+            workflow = json.loads(result[0])
+            print(f"✅ 成功从数据库加载工作流: {workflow_name}")
+            return workflow
+            
+        finally:
+            conn.close()
     
     def _update_reference_images(self, workflow: Dict[str, Any], reference_image_path) -> Dict[str, Any]:
         """更新参考图像路径"""

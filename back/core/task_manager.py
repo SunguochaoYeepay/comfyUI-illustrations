@@ -167,7 +167,7 @@ class TaskManager:
                     
                     # 准备工作流
                     print(f"🔧 准备工作流...")
-                    workflow = self.workflow_template.customize_workflow(
+                    workflow = await self.workflow_template.customize_workflow(
                         reference_image_path, translated_description, current_params, model_name
                     )
                     print(f"✅ 工作流准备完成")
@@ -310,7 +310,7 @@ class TaskManager:
                     reference_image_paths, translated_description, fusion_parameters
                 )
             else:
-                workflow = self.workflow_template.customize_workflow(
+                workflow = await self.workflow_template.customize_workflow(
                     reference_image_paths[0], translated_description, fusion_parameters, model_name
                 )
             print(f"✅ 多图融合工作流准备完成")

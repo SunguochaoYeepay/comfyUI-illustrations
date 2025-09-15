@@ -83,24 +83,43 @@ class QwenFusionWorkflow(BaseWorkflow):
         return workflow
     
     def _load_fusion_template(self, image_count: int) -> Dict[str, Any]:
-        """根据图片数量加载对应的工作流模板"""
-        # 根据图片数量选择对应的工作流模板
+        """从数据库加载对应的工作流模板"""
+        import sqlite3
+        from pathlib import Path
+        
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
+        
+        # 根据图片数量选择对应的工作流名称
         if image_count == 2:
-            template_name = "2image_fusion.json"
+            workflow_name = "qwen_fusion_2image_fusion"
         elif image_count == 3:
-            template_name = "3image_fusion.json"
+            workflow_name = "qwen_fusion_3image_fusion"
         else:
             raise ValueError(f"不支持 {image_count} 张图片的融合，目前只支持2-3张图片")
         
-        # 使用配置文件中的工作流目录
-        from config.settings import WORKFLOWS_DIR
-        workflow_path = WORKFLOWS_DIR / "qwen" / "fusion" / template_name
-        print(f"🔍 加载工作流模板: {workflow_path}")
+        print(f"🔍 从数据库加载工作流模板: {workflow_name}")
         
-        with open(workflow_path, 'r', encoding='utf-8') as f:
-            workflow = json.load(f)
-        print(f"✅ 加载Qwen多图融合工作流模板: {template_name} (支持{image_count}张图片)")
-        return workflow
+        # 从数据库加载工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", (workflow_name,))
+            result = cursor.fetchone()
+            
+            if not result:
+                raise FileNotFoundError(f"数据库中未找到工作流: {workflow_name}")
+            
+            workflow = json.loads(result[0])
+            print(f"✅ 从数据库加载Qwen多图融合工作流模板: {workflow_name} (支持{image_count}张图片)")
+            return workflow
+            
+        finally:
+            conn.close()
     
     
     def _add_multi_image_nodes(self, workflow: Dict[str, Any], image_paths: List[str]) -> Dict[str, Any]:

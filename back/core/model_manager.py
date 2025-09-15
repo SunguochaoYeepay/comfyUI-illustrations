@@ -26,18 +26,18 @@ class ModelType(Enum):
 
 
 class ModelConfig:
-    """模型配置类"""
+    """模型配置类 - 移除template_path依赖，完全数据库化"""
     
     def __init__(self, model_type: ModelType, name: str, display_name: str, 
                  unet_file: str, clip_file: str, vae_file: str, 
-                 template_path: str, description: str = ""):
+                 template_path: str = "", description: str = ""):
         self.model_type = model_type
         self.name = name
         self.display_name = display_name
         self.unet_file = unet_file
         self.clip_file = clip_file
         self.vae_file = vae_file
-        self.template_path = template_path
+        self.template_path = template_path  # 保留参数以兼容现有代码，但不再使用
         self.description = description
         self.available = self._check_availability()
     
@@ -195,9 +195,43 @@ class ModelManager:
     
     def get_model_config(self, model_name: str) -> Optional[ModelConfig]:
         """获取指定模型的配置 - 完全依赖配置客户端"""
-        # 不再从硬编码的models字典获取
-        # 所有模型配置都通过配置客户端动态获取
-        return None
+        try:
+            # 确保配置客户端已初始化
+            config_client = self._get_config_client()
+            if config_client is None:
+                print(f"❌ 配置客户端不可用")
+                return None
+            
+            # 通过配置客户端获取模型配置
+            models_response = asyncio.run(config_client.get_models_config())
+            
+            # 从响应中提取模型列表
+            models_config = models_response.get("models", [])
+            
+            # 查找指定名称的模型
+            for model_data in models_config:
+                if model_data.get("name") == model_name:
+                    return self._convert_dict_to_model_config(model_data)
+            
+            print(f"⚠️ 未找到模型配置: {model_name}")
+            return None
+            
+        except Exception as e:
+            print(f"❌ 获取模型配置失败: {e}")
+            return None
+    
+    def _convert_dict_to_model_config(self, model_data: Dict[str, Any]) -> ModelConfig:
+        """将字典转换为ModelConfig对象"""
+        return ModelConfig(
+            model_type=ModelType(model_data.get("model_type", "unknown")),
+            name=model_data.get("name", ""),
+            display_name=model_data.get("display_name", ""),
+            unet_file=model_data.get("unet_file", ""),
+            clip_file=model_data.get("clip_file", ""),
+            vae_file=model_data.get("vae_file", ""),
+            template_path="",  # 已移除，完全数据库化
+            description=model_data.get("description", "")
+        )
     
     def get_default_model(self) -> Optional[ModelConfig]:
         """获取默认模型 - 完全依赖配置客户端"""

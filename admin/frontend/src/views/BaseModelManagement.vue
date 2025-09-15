@@ -99,9 +99,7 @@
           </div>
         </a-form-item>
         
-        <a-form-item label="工作流模板路径">
-          <a-input v-model:value="formState.template_path" placeholder="工作流模板文件路径（自动生成）" readonly />
-        </a-form-item>
+        <!-- 工作流模板路径已移除，完全数据库化 -->
         
         <a-divider>模型文件配置</a-divider>
         
@@ -229,7 +227,7 @@ const formState = reactive({
   unet_file: '',
   clip_file: '',
   vae_file: '',
-  template_path: '',
+  // template_path 已移除，完全数据库化
   workflow_id: null, // 新增：关联的工作流ID
   preview_image_path: '',
   is_available: false,
@@ -368,13 +366,9 @@ const convertToFullPath = (filename, type) => {
   return prefix + filename;
 };
 
-// 监听工作流选择变化，自动更新模板路径和模型文件
+// 监听工作流选择变化，自动更新模型文件（不再需要模板路径）
 watch(() => formState.workflow_id, (newWorkflowId) => {
   if (newWorkflowId && selectedWorkflow.value) {
-    // 根据工作流名称生成模板路径
-    const workflowName = selectedWorkflow.value.name;
-    formState.template_path = `workflows/${workflowName.toLowerCase().replace(/\s+/g, '_')}.json`;
-    
     // 从工作流JSON中提取模型文件配置
     const modelFiles = extractModelFilesFromWorkflow(selectedWorkflow.value.workflow_json);
     
@@ -382,7 +376,6 @@ watch(() => formState.workflow_id, (newWorkflowId) => {
     formState.clip_file = modelFiles.clip_file;
     formState.vae_file = modelFiles.vae_file;
   } else {
-    formState.template_path = '';
     formState.unet_file = '';
     formState.clip_file = '';
     formState.vae_file = '';
@@ -405,7 +398,7 @@ const showCreateModel = () => {
     unet_file: '',
     clip_file: '',
     vae_file: '',
-    template_path: '',
+    // template_path 已移除，完全数据库化
     workflow_id: null,
     preview_image_path: '',
     is_available: false,
@@ -434,7 +427,7 @@ const handleDrawerClose = () => {
     unet_file: '',
     clip_file: '',
     vae_file: '',
-    template_path: '',
+    // template_path 已移除，完全数据库化
     workflow_id: null,
     preview_image_path: '',
     is_available: false,

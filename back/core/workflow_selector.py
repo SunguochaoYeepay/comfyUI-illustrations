@@ -333,16 +333,10 @@ class WorkflowSelector:
             自定义后的工作流
         """
         try:
-            template_path = workflow_config.get("template_path")
-            if not template_path:
-                raise ValueError("工作流配置中缺少模板路径")
-            
-            template_file = Path(template_path)
-            if not template_file.exists():
-                raise FileNotFoundError(f"工作流模板文件不存在: {template_path}")
-            
-            with open(template_file, 'r', encoding='utf-8') as f:
-                workflow_template = json.load(f)
+            # 直接从工作流配置中获取工作流JSON，不再依赖文件系统
+            workflow_template = workflow_config.get("workflow_json")
+            if not workflow_template:
+                raise ValueError("工作流配置中缺少工作流JSON数据")
             
             # 应用用户参数
             customized_workflow = self._apply_user_parameters(workflow_template, user_parameters)

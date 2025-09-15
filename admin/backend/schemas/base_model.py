@@ -10,7 +10,7 @@ class BaseModelBase(BaseModel):
     unet_file: Optional[str] = Field(None, description="UNet文件名")
     clip_file: Optional[str] = Field(None, description="CLIP文件名")
     vae_file: Optional[str] = Field(None, description="VAE文件名")
-    template_path: Optional[str] = Field(None, description="默认工作流模板路径（可选，工作流可独立管理）")
+    # template_path 已移除，完全数据库化
     workflow_id: Optional[int] = Field(None, description="关联的工作流ID")
     preview_image_path: Optional[str] = Field(None, description="预览图路径")
     is_available: bool = Field(False, description="是否可用")
@@ -28,7 +28,7 @@ class BaseModelUpdate(BaseModel):
     unet_file: Optional[str] = Field(None, description="UNet文件名")
     clip_file: Optional[str] = Field(None, description="CLIP文件名")
     vae_file: Optional[str] = Field(None, description="VAE文件名")
-    template_path: Optional[str] = Field(None, description="默认工作流模板路径（可选，工作流可独立管理）")
+    # template_path 已移除，完全数据库化
     workflow_id: Optional[int] = Field(None, description="关联的工作流ID")
     preview_image_path: Optional[str] = Field(None, description="预览图路径")
     is_available: Optional[bool] = Field(None, description="是否可用")

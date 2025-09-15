@@ -3,7 +3,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     app_name: str = "YeePay Admin"
-    DATABASE_URL: str = "sqlite:///E:/AI-Image/YeePay/admin/admin.db"
+    DATABASE_URL: str = "sqlite:///../admin.db"
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

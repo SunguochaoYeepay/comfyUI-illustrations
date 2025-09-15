@@ -53,7 +53,7 @@ async def get_models_config(db: Session = Depends(get_db)):
                 "unet_file": model.unet_file,
                 "clip_file": model.clip_file,
                 "vae_file": model.vae_file,
-                "template_path": model.template_path,
+                # template_path 已移除，完全数据库化
                 "created_at": model.created_at.isoformat() if model.created_at else None,
                 "updated_at": model.updated_at.isoformat() if model.updated_at else None
             })

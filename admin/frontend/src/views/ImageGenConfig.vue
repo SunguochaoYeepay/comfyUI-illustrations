@@ -579,11 +579,12 @@ export default {
 .preview-name {
   flex: 1;
   font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .more-items {
   text-align: center;
-  color: #999;
+  color: rgba(255, 255, 255, 0.45);
   font-size: 12px;
   padding: 8px 0;
 }
@@ -591,7 +592,7 @@ export default {
 /* 尺寸配置样式 */
 .switch-label {
   margin-left: 8px;
-  color: #666;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .ratio-tags {
@@ -612,7 +613,7 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  color: #999;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .loading-placeholder p {
@@ -623,10 +624,10 @@ export default {
 /* LoRA分组样式 */
 .lora-group {
   margin-bottom: 24px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   padding: 16px;
-  background: #fafafa;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .group-title {
@@ -639,7 +640,7 @@ export default {
 }
 
 .group-count {
-  color: #666;
+  color: rgba(255, 255, 255, 0.65);
   font-size: 14px;
   font-weight: normal;
 }
@@ -649,8 +650,8 @@ export default {
 }
 
 .lora-draggable-item {
-  background: white;
-  border: 1px solid #d9d9d9;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   margin-bottom: 8px;
   cursor: move;
@@ -659,7 +660,8 @@ export default {
 
 .lora-draggable-item:hover {
   border-color: #40a9ff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .lora-item-content {
@@ -685,5 +687,6 @@ export default {
 .lora-name {
   flex: 1;
   font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
 }
 </style>

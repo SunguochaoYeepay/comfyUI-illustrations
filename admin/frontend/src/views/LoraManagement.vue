@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="header-bar">
-      <h1>LoRA模型管理</h1>
+      <h1>LoRA管理</h1>
       <div class="header-actions">
         <a-input-search
           v-model:value="searchQuery"

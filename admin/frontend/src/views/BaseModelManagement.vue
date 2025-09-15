@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="header-bar">
-      <h1>基础模型管理</h1>
+      <h1>模型管理</h1>
       <div class="header-actions">
         <a-input-search
           v-model:value="searchQuery"
@@ -62,57 +62,80 @@
           <a-input v-model:value="formState.display_name" placeholder="用户看到的名称" />
         </a-form-item>
         
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="模型类型" required>
-              <a-select v-model:value="formState.model_type" placeholder="选择模型类型">
-                <a-select-option value="flux">Flux</a-select-option>
-                <a-select-option value="qwen">Qwen</a-select-option>
-                <a-select-option value="wan">Wan</a-select-option>
-                <a-select-option value="flux1">Flux1</a-select-option>
-                <a-select-option value="gemini">Gemini</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="排序顺序">
-              <a-input-number v-model:value="formState.sort_order" :min="0" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="模型类型" required>
+          <a-select v-model:value="formState.model_type" placeholder="选择模型类型">
+            <a-select-option value="flux">Flux</a-select-option>
+            <a-select-option value="qwen">Qwen</a-select-option>
+            <a-select-option value="wan">Wan</a-select-option>
+            <a-select-option value="flux1">Flux1</a-select-option>
+            <a-select-option value="gemini">Gemini</a-select-option>
+          </a-select>
+        </a-form-item>
         
         <a-form-item label="描述">
           <a-textarea v-model:value="formState.description" :rows="3" placeholder="模型描述信息" />
         </a-form-item>
         
+        <a-divider>工作流关联</a-divider>
+        
+        <a-form-item label="关联工作流" required>
+          <a-select 
+            v-model:value="formState.workflow_id" 
+            placeholder="选择关联的工作流"
+            :loading="workflowsLoading"
+            show-search
+            :filter-option="(input, option) => option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
+          >
+            <a-select-option 
+              v-for="workflow in workflows" 
+              :key="workflow.id" 
+              :value="workflow.id"
+            >
+              {{ workflow.name }} - {{ workflow.description || '无描述' }}
+            </a-select-option>
+          </a-select>
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            基础模型必须关联至少一个工作流
+          </div>
+        </a-form-item>
+        
+        <a-form-item label="工作流模板路径">
+          <a-input v-model:value="formState.template_path" placeholder="工作流模板文件路径（自动生成）" readonly />
+        </a-form-item>
+        
         <a-divider>模型文件配置</a-divider>
         
         <a-form-item label="UNet文件">
-          <a-input-group compact>
-            <a-input v-model:value="formState.unet_file" placeholder="选择UNet文件" style="width: calc(100% - 80px)" />
-            <a-button type="primary" @click="selectFile('unet_file')" style="width: 80px">选择</a-button>
-          </a-input-group>
+          <a-input 
+            v-model:value="formState.unet_file" 
+            placeholder="从关联工作流中自动加载" 
+            readonly 
+          />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            从关联工作流的UNet/模型加载器节点中自动提取
+          </div>
         </a-form-item>
         
         <a-form-item label="CLIP文件">
-          <a-input-group compact>
-            <a-input v-model:value="formState.clip_file" placeholder="选择CLIP文件" style="width: calc(100% - 80px)" />
-            <a-button type="primary" @click="selectFile('clip_file')" style="width: 80px">选择</a-button>
-          </a-input-group>
+          <a-input 
+            v-model:value="formState.clip_file" 
+            placeholder="从关联工作流中自动加载" 
+            readonly 
+          />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            从关联工作流的CLIP加载器节点中自动提取
+          </div>
         </a-form-item>
         
         <a-form-item label="VAE文件">
-          <a-input-group compact>
-            <a-input v-model:value="formState.vae_file" placeholder="选择VAE文件" style="width: calc(100% - 80px)" />
-            <a-button type="primary" @click="selectFile('vae_file')" style="width: 80px">选择</a-button>
-          </a-input-group>
-        </a-form-item>
-        
-        <a-form-item label="工作流模板">
-          <a-input-group compact>
-            <a-input v-model:value="formState.template_path" placeholder="选择工作流模板" style="width: calc(100% - 80px)" />
-            <a-button type="primary" @click="selectFile('template_path')" style="width: 80px">选择</a-button>
-          </a-input-group>
+          <a-input 
+            v-model:value="formState.vae_file" 
+            placeholder="从关联工作流中自动加载" 
+            readonly 
+          />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            从关联工作流的VAE加载器节点中自动提取
+          </div>
         </a-form-item>
         
         <a-form-item label="预览图">
@@ -147,8 +170,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { getBaseModels, createBaseModel, updateBaseModel, deleteBaseModel } from '@/api/baseModel';
+import { getWorkflows } from '@/api/workflow';
 import { message } from 'ant-design-vue';
 import { PlusOutlined } from '@ant-design/icons-vue';
 
@@ -165,10 +189,18 @@ const columns = [
 const data = ref([]);
 const loading = ref(false);
 const searchQuery = ref('');
+const workflows = ref([]);
+const workflowsLoading = ref(false);
 
 // 计算属性确保数据始终是数组
 const tableData = computed(() => {
   return Array.isArray(data.value) ? data.value : [];
+});
+
+// 计算属性：根据选择的工作流自动生成模板路径
+const selectedWorkflow = computed(() => {
+  if (!formState.workflow_id || !workflows.value.length) return null;
+  return workflows.value.find(w => w.id === formState.workflow_id);
 });
 
 // 确保数据始终是数组的防护函数
@@ -198,10 +230,10 @@ const formState = reactive({
   clip_file: '',
   vae_file: '',
   template_path: '',
+  workflow_id: null, // 新增：关联的工作流ID
   preview_image_path: '',
   is_available: false,
   is_default: false,
-  sort_order: 0,
 });
 
 const fetchBaseModels = async () => {
@@ -223,6 +255,19 @@ const fetchBaseModels = async () => {
   loading.value = false;
 };
 
+// 获取工作流列表
+const fetchWorkflows = async () => {
+  workflowsLoading.value = true;
+  try {
+    const response = await getWorkflows({ page: 1, pageSize: 1000 }); // 获取所有工作流
+    workflows.value = response.data || response || [];
+  } catch (error) {
+    console.error('获取工作流列表失败:', error);
+    workflows.value = [];
+  }
+  workflowsLoading.value = false;
+};
+
 // 搜索功能
 const onSearch = (searchValue) => {
   if (!searchValue) {
@@ -238,8 +283,86 @@ const onSearch = (searchValue) => {
   data.value = filteredData;
 };
 
+// 从工作流JSON中提取模型文件配置
+const extractModelFilesFromWorkflow = (workflowJson) => {
+  const modelFiles = {
+    unet_file: '',
+    clip_file: '',
+    vae_file: ''
+  };
+  
+  if (!workflowJson) {
+    return modelFiles;
+  }
+  
+  // 检查工作流JSON的结构
+  let nodes = null;
+  if (workflowJson.nodes) {
+    nodes = workflowJson.nodes;
+  } else if (typeof workflowJson === 'object' && !workflowJson.nodes) {
+    // 可能是直接的节点字典格式
+    nodes = workflowJson;
+  } else {
+    return modelFiles;
+  }
+  
+  // 查找UNet/模型加载器节点
+  for (const [nodeId, node] of Object.entries(nodes)) {
+    const classType = node.class_type;
+    const inputs = node.inputs || {};
+    
+    // 识别不同类型的模型加载器
+    if (classType === 'CheckpointLoaderSimple' || classType === 'UNETLoader') {
+      if (inputs.ckpt_name) {
+        modelFiles.unet_file = inputs.ckpt_name;
+      }
+      if (inputs.unet_name) {
+        modelFiles.unet_file = inputs.unet_name;
+      }
+    }
+    
+    // 识别CLIP加载器
+    if (classType === 'CLIPLoader' || classType === 'CLIPTextEncode') {
+      if (inputs.clip_name) {
+        modelFiles.clip_file = inputs.clip_name;
+      }
+    }
+    
+    // 识别VAE加载器
+    if (classType === 'VAELoader') {
+      if (inputs.vae_name) {
+        modelFiles.vae_file = inputs.vae_name;
+      }
+    }
+  }
+  
+  return modelFiles;
+};
+
+// 监听工作流选择变化，自动更新模板路径和模型文件
+watch(() => formState.workflow_id, (newWorkflowId) => {
+  if (newWorkflowId && selectedWorkflow.value) {
+    // 根据工作流名称生成模板路径
+    const workflowName = selectedWorkflow.value.name;
+    formState.template_path = `workflows/${workflowName.toLowerCase().replace(/\s+/g, '_')}.json`;
+    
+    // 从工作流JSON中提取模型文件配置
+    const modelFiles = extractModelFilesFromWorkflow(selectedWorkflow.value.workflow_json);
+    
+    formState.unet_file = modelFiles.unet_file;
+    formState.clip_file = modelFiles.clip_file;
+    formState.vae_file = modelFiles.vae_file;
+  } else {
+    formState.template_path = '';
+    formState.unet_file = '';
+    formState.clip_file = '';
+    formState.vae_file = '';
+  }
+});
+
 onMounted(() => {
   fetchBaseModels();
+  fetchWorkflows();
 });
 
 const showCreateModel = () => {
@@ -254,10 +377,10 @@ const showCreateModel = () => {
     clip_file: '',
     vae_file: '',
     template_path: '',
+    workflow_id: null,
     preview_image_path: '',
     is_available: false,
     is_default: false,
-    sort_order: 0,
   });
   modelVisible.value = true;
 };
@@ -283,28 +406,24 @@ const handleDrawerClose = () => {
     clip_file: '',
     vae_file: '',
     template_path: '',
+    workflow_id: null,
     preview_image_path: '',
     is_available: false,
     is_default: false,
-    sort_order: 0,
   });
 };
 
-// 文件选择功能
+// 文件选择功能（仅用于预览图）
 const selectFile = (fieldName) => {
+  // 只允许选择预览图文件
+  if (fieldName !== 'preview_image_path') {
+    return;
+  }
+  
   // 创建文件选择对话框
   const input = document.createElement('input');
   input.type = 'file';
-  
-  // 根据字段类型设置文件过滤器
-  if (fieldName === 'preview_image_path') {
-    input.accept = 'image/*';
-  } else if (fieldName === 'template_path') {
-    input.accept = '.json';
-  } else {
-    // UNet, CLIP, VAE文件
-    input.accept = '.safetensors,.ckpt,.pt';
-  }
+  input.accept = 'image/*';
   
   input.onchange = (event) => {
     const file = event.target.files[0];
@@ -319,6 +438,17 @@ const selectFile = (fieldName) => {
 };
 
 const handleModelOk = async () => {
+  // 表单验证
+  if (!formState.name || !formState.display_name || !formState.model_type) {
+    message.error('请填写必填字段：模型名称、显示名称、模型类型');
+    return;
+  }
+  
+  if (!formState.workflow_id) {
+    message.error('基础模型必须关联至少一个工作流');
+    return;
+  }
+  
   try {
     if (isEdit.value) {
       await updateBaseModel(currentModelId.value, formState);

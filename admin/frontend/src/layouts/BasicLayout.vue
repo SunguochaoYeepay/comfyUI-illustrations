@@ -11,16 +11,16 @@
         <a-menu v-model:selectedKeys="selectedKeys" theme="dark" mode="inline" @click="handleMenuClick">
           <a-menu-item key="/dashboard">
             <pie-chart-outlined />
-            <span>Dashboard</span>
+            <span>首页</span>
           </a-menu-item>
 
           <a-menu-item key="/lora-management">
             <cloud-upload-outlined />
-            <span>LoRA模型管理</span>
+            <span>LoRA管理</span>
           </a-menu-item>
           <a-menu-item key="/base-model-management">
             <database-outlined />
-            <span>基础模型管理</span>
+            <span>模型管理</span>
           </a-menu-item>
           <a-menu-item key="/workflow-management">
             <setting-outlined />

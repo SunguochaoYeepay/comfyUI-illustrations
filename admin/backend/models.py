@@ -44,6 +44,9 @@ class Workflow(Base):
     status = Column(String(20), default="enabled", nullable=False)  # enabled, disabled
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # 关联关系
+    base_models = relationship("BaseModel", back_populates="workflow")
 
 class Prompt(Base):
     __tablename__ = "prompts"
@@ -66,12 +69,16 @@ class BaseModel(Base):
     clip_file = Column(String(255), nullable=True)      # 文件名而非路径
     vae_file = Column(String(255), nullable=True)       # 文件名而非路径
     template_path = Column(String(500), nullable=True)  # 工作流模板路径
+    workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=True)  # 关联的工作流ID
     preview_image_path = Column(String(255), nullable=True)
     is_available = Column(Boolean, default=False)       # 可用性状态
     is_default = Column(Boolean, default=False)         # 是否为默认模型
     sort_order = Column(Integer, default=0)             # 排序顺序
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # 关联关系
+    workflow = relationship("Workflow", back_populates="base_models")
 
 
 class SystemConfig(Base):

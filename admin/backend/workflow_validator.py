@@ -219,21 +219,41 @@ class WorkflowValidator:
         """识别核心配置项"""
         core_config = {}
         
-        # 识别提示词配置
-        text_encoder_info = node_analysis["key_nodes"].get("text_encoder")
-        if text_encoder_info:
-            node_id = text_encoder_info["node_id"]
-            if node_id in nodes:
-                text_node = nodes[node_id]
-                if "text" in text_node.get("inputs", {}):
-                    text_value = text_node["inputs"]["text"]
-                    core_config["positive_prompt"] = {
-                        "node_id": node_id,
-                        "parameter": "text",
-                        "current_value": text_value,
-                        "is_template": "{{" in str(text_value),
-                        "node_type": text_node.get("class_type", "")
-                    }
+        # 识别提示词配置 - 遍历所有文本编码器
+        text_encoders = []
+        for node_id, node in nodes.items():
+            if node.get("class_type") == "CLIPTextEncode":
+                text_value = node.get("inputs", {}).get("text", "")
+                text_encoders.append({
+                    "node_id": node_id,
+                    "text_value": text_value,
+                    "node": node
+                })
+        
+        # 按文本长度排序，有内容的在前
+        text_encoders.sort(key=lambda x: len(x["text_value"]), reverse=True)
+        
+        # 第一个（最长的）作为正面提示词
+        if text_encoders and text_encoders[0]["text_value"].strip():
+            encoder = text_encoders[0]
+            core_config["positive_prompt"] = {
+                "node_id": encoder["node_id"],
+                "parameter": "text",
+                "current_value": encoder["text_value"],
+                "is_template": "{{" in str(encoder["text_value"]),
+                "node_type": encoder["node"].get("class_type", "")
+            }
+        
+        # 第二个（较短的）作为负面提示词
+        if len(text_encoders) > 1:
+            encoder = text_encoders[1]
+            core_config["negative_prompt"] = {
+                "node_id": encoder["node_id"],
+                "parameter": "text",
+                "current_value": encoder["text_value"],
+                "is_template": "{{" in str(encoder["text_value"]),
+                "node_type": encoder["node"].get("class_type", "")
+            }
         
         # 识别图像尺寸配置
         latent_processor_info = node_analysis["key_nodes"].get("latent_processor")
@@ -255,6 +275,13 @@ class WorkflowValidator:
                         "current_value": latent_node["inputs"]["height"],
                         "node_type": latent_node.get("class_type", "")
                     }
+                if "batch_size" in latent_node.get("inputs", {}):
+                    core_config["batch_size"] = {
+                        "node_id": node_id,
+                        "parameter": "batch_size",
+                        "current_value": latent_node["inputs"]["batch_size"],
+                        "node_type": latent_node.get("class_type", "")
+                    }
         
         # 识别基础模型配置
         model_loader_info = node_analysis["key_nodes"].get("model_loader")
@@ -270,6 +297,34 @@ class WorkflowValidator:
                         "current_value": model_param["value"],
                         "node_type": model_node.get("class_type", ""),
                         "model_type": self._infer_model_type(model_param["value"])
+                    }
+        
+        # 识别VAE配置
+        vae_loader_info = node_analysis["key_nodes"].get("vae_loader")
+        if vae_loader_info:
+            node_id = vae_loader_info["node_id"]
+            if node_id in nodes:
+                vae_node = nodes[node_id]
+                if "vae_name" in vae_node.get("inputs", {}):
+                    core_config["vae_model"] = {
+                        "node_id": node_id,
+                        "parameter": "vae_name",
+                        "current_value": vae_node["inputs"]["vae_name"],
+                        "node_type": vae_node.get("class_type", "")
+                    }
+        
+        # 识别CLIP配置
+        clip_loader_info = node_analysis["key_nodes"].get("clip_loader")
+        if clip_loader_info:
+            node_id = clip_loader_info["node_id"]
+            if node_id in nodes:
+                clip_node = nodes[node_id]
+                if "clip_name" in clip_node.get("inputs", {}):
+                    core_config["clip_model"] = {
+                        "node_id": node_id,
+                        "parameter": "clip_name",
+                        "current_value": clip_node["inputs"]["clip_name"],
+                        "node_type": clip_node.get("class_type", "")
                     }
         
         return core_config
@@ -313,6 +368,18 @@ class WorkflowValidator:
                     "class_type": image_node.get("class_type", ""),
                     "parameters": self._extract_image_parameters(image_node)
                 }
+        
+        # 识别模型采样算法配置
+        for node_id, node in nodes.items():
+            if node.get("class_type") == "ModelSamplingAuraFlow":
+                advanced_config["model_sampling"] = {
+                    "node_id": node_id,
+                    "class_type": node.get("class_type", ""),
+                    "parameters": {
+                        "shift": node.get("inputs", {}).get("shift", 0)
+                    }
+                }
+                break
         
         return advanced_config
     
@@ -408,10 +475,14 @@ class WorkflowValidator:
             "text_encoder": ["CLIPTextEncode", "CLIPTextEncodeAdvanced"],
             "sampler": ["KSampler", "KSamplerAdvanced"],
             "model_loader": ["UNETLoader", "CheckpointLoader"],
-            "lora_loader": ["LoraLoader", "LoraLoaderStack"],
+            "lora_loader": ["LoraLoader", "LoraLoaderStack", "LoraLoaderModelOnly"],
             "image_loader": ["LoadImage", "LoadImageBatch"],
-            "latent_processor": ["EmptyLatentImage", "LatentUpscale"],
-            "negative_prompt": ["CLIPTextEncode", "CLIPTextEncodeAdvanced"]
+            "latent_processor": ["EmptyLatentImage", "LatentUpscale", "EmptySD3LatentImage"],
+            "negative_prompt": ["CLIPTextEncode", "CLIPTextEncodeAdvanced"],
+            "vae_loader": ["VAELoader"],
+            "clip_loader": ["CLIPLoader"],
+            "vae_decode": ["VAEDecode"],
+            "save_image": ["SaveImage"]
         }
     
     def _is_valid_node_id(self, node_id: str) -> bool:

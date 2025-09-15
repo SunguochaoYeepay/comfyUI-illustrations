@@ -16,11 +16,7 @@ const routes = [
         name: 'Dashboard',
         component: () => import('../views/Dashboard.vue')
       },
-      {
-        path: '/image-management',
-        name: 'ImageManagement',
-        component: () => import('../views/ImageManagement.vue')
-      },
+
       {
         path: '/lora-management',
         name: 'LoraManagement',

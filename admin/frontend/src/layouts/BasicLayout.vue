@@ -13,10 +13,7 @@
             <pie-chart-outlined />
             <span>Dashboard</span>
           </a-menu-item>
-          <a-menu-item key="/image-management">
-            <picture-outlined />
-            <span>图片管理</span>
-          </a-menu-item>
+
           <a-menu-item key="/lora-management">
             <cloud-upload-outlined />
             <span>LoRA模型管理</span>

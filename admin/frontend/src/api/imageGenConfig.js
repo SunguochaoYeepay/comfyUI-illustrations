@@ -32,3 +32,10 @@ export function getLorasForConfig() {
     method: 'get'
   })
 }
+
+export function getWorkflowSizesForConfig() {
+  return request({
+    url: '/admin/image-gen-config/workflow-sizes',
+    method: 'get'
+  })
+}

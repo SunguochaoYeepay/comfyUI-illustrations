@@ -149,6 +149,8 @@ const generateNodeConfigs = async (workflowJson) => {
             width: configItems.core_config.image_width?.current_value || 512,
             height: configItems.core_config.image_height?.current_value || 512,
             batch_size: configItems.core_config.batch_size?.current_value || 1,
+            sizeMode: 'custom', // 默认使用自定义尺寸
+            selectedRatio: null, // 默认未选择比例
             node_id: configItems.core_config.image_width?.node_id || configItems.core_config.image_height?.node_id
           })
         }

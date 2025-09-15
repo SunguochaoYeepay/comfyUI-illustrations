@@ -29,6 +29,12 @@
             {{ record.status === 'enabled' ? '启用' : '禁用' }}
           </a-tag>
         </template>
+        <template v-else-if="column.key === 'base_model_type'">
+          <a-tag v-if="record.base_model_type" color="purple">
+            {{ record.base_model_type }}
+          </a-tag>
+          <span v-else style="color: #999;">未设置</span>
+        </template>
         <template v-else-if="column.key === 'workflow_json'">
           <a-tag color="blue">
             {{ Object.keys(record.workflow_json || {}).length }} 个节点
@@ -121,6 +127,7 @@ const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
   { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
   { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  { title: '基础模型', dataIndex: 'base_model_type', key: 'base_model_type', width: 120 },
   { title: '状态', key: 'status', width: 80 },
   { title: '节点数', key: 'workflow_json', width: 100 },
   { title: '创建时间', key: 'created_at', width: 180 },

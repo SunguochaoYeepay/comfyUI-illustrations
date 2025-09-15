@@ -41,6 +41,7 @@ class Workflow(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     workflow_json = Column(JSON, nullable=False)
+    base_model_type = Column(String(50), nullable=True)  # 主要关联的基础模型类型
     status = Column(String(20), default="enabled", nullable=False)  # enabled, disabled
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

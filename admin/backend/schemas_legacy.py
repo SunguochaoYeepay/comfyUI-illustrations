@@ -75,6 +75,7 @@ class WorkflowBase(BaseModel):
     name: str
     description: Optional[str] = None
     workflow_json: dict
+    base_model_type: Optional[str] = None
 
 class WorkflowCreate(WorkflowBase):
     pass
@@ -83,6 +84,7 @@ class WorkflowUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     workflow_json: Optional[dict] = None
+    base_model_type: Optional[str] = None
 
 class Workflow(WorkflowBase):
     id: int

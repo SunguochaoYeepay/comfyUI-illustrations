@@ -168,3 +168,63 @@ async def get_loras_for_config(db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取LoRA列表失败: {str(e)}")
+
+@router.get("/image-gen-config/workflow-sizes", summary="获取工作流图片尺寸配置")
+async def get_workflow_sizes_for_config(db: Session = Depends(get_db)):
+    """获取所有工作流中的图片尺寸配置"""
+    try:
+        from workflow_validator import WorkflowValidator
+        
+        # 获取所有工作流
+        workflows = crud.get_workflows(db, skip=0, limit=1000)
+        
+        # 初始化工作流验证器
+        validator = WorkflowValidator()
+        
+        # 构建工作流尺寸配置列表
+        workflow_sizes = []
+        for workflow in workflows:
+            if workflow.workflow_json:
+                try:
+                    # 验证和分析工作流
+                    result = validator.validate_and_analyze_workflow(workflow.workflow_json)
+                    
+                    if result.valid and result.config_items:
+                        core_config = result.config_items.get("core_config", {})
+                        
+                        # 提取图片尺寸配置
+                        image_width = core_config.get("image_width", {})
+                        image_height = core_config.get("image_height", {})
+                        
+                        if image_width and image_height:
+                            width = image_width.get("current_value", 1024)
+                            height = image_height.get("current_value", 1024)
+                            
+                            # 计算宽高比
+                            def gcd(a, b):
+                                while b:
+                                    a, b = b, a % b
+                                return a
+                            
+                            divisor = gcd(width, height)
+                            aspect_ratio = f"{width // divisor}:{height // divisor}"
+                            
+                            workflow_sizes.append({
+                                "workflow_id": workflow.id,
+                                "workflow_name": workflow.name,
+                                "workflow_description": workflow.description,
+                                "width": width,
+                                "height": height,
+                                "aspect_ratio": aspect_ratio,
+                                "node_type": image_width.get("node_type", ""),
+                                "is_available": workflow.status == "enabled"
+                            })
+                except Exception as e:
+                    print(f"解析工作流 {workflow.name} 失败: {e}")
+                    continue
+        
+        return {
+            "workflow_sizes": workflow_sizes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取工作流尺寸配置失败: {str(e)}")

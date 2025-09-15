@@ -270,7 +270,8 @@ const handleCreate = async () => {
     const workflowData = {
       name: createForm.name,
       description: createForm.description,
-      workflow_json: configuredWorkflow
+      workflow_json: configuredWorkflow,
+      base_model_type: workflowConfig.core_config?.base_model || null
     }
     
     await createWorkflow(workflowData)

@@ -16,12 +16,22 @@
           :value="workflowConfig.core_config.base_model" 
           @update:value="updateCoreConfig('base_model', $event)"
           style="width: 100%"
+          placeholder="选择基础模型"
+          :loading="baseModelsLoading"
+          show-search
+          :filter-option="(input, option) => option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0"
         >
-          <a-select-option value="qwen-image">Qwen图像生成模型</a-select-option>
-          <a-select-option value="flux-dev">Flux开发版</a-select-option>
-          <a-select-option value="flux1-standard">Flux1标准版</a-select-option>
-          <a-select-option value="wan-video">WAN视频生成模型</a-select-option>
+          <a-select-option 
+            v-for="model in baseModels" 
+            :key="model.name" 
+            :value="model.name"
+          >
+            {{ model.display_name }} ({{ model.name }})
+          </a-select-option>
         </a-select>
+        <div style="margin-top: 4px; font-size: 12px; color: #666;">
+          选择此工作流主要关联的基础模型类型
+        </div>
       </a-form-item>
     </a-form>
     
@@ -68,6 +78,9 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
+import { getBaseModels } from '@/api/baseModel'
+
 const props = defineProps({
   workflowConfig: {
     type: Object,
@@ -80,6 +93,28 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:workflowConfig'])
+
+// 基础模型数据
+const baseModels = ref([])
+const baseModelsLoading = ref(false)
+
+// 加载基础模型列表
+const loadBaseModels = async () => {
+  try {
+    baseModelsLoading.value = true
+    const response = await getBaseModels({ page: 1, pageSize: 1000 })
+    baseModels.value = response.models || []
+  } catch (error) {
+    console.error('加载基础模型失败:', error)
+  } finally {
+    baseModelsLoading.value = false
+  }
+}
+
+// 组件挂载时加载基础模型
+onMounted(() => {
+  loadBaseModels()
+})
 
 // 更新核心配置
 const updateCoreConfig = (key, value) => {

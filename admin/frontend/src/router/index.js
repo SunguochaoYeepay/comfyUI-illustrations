@@ -26,6 +26,16 @@ const routes = [
         path: '/base-model-management',
         name: 'BaseModelManagement',
         component: () => import('../views/BaseModelManagement.vue')
+      },
+      {
+        path: '/workflow-management',
+        name: 'WorkflowManagement',
+        component: () => import('../views/WorkflowManagement.vue')
+      },
+      {
+        path: '/workflow-upload',
+        name: 'WorkflowUpload',
+        component: () => import('../views/WorkflowUpload.vue')
       }
     ]
   }

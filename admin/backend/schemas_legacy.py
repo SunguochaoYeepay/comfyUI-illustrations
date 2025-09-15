@@ -79,6 +79,11 @@ class WorkflowBase(BaseModel):
 class WorkflowCreate(WorkflowBase):
     pass
 
+class WorkflowUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    workflow_json: Optional[dict] = None
+
 class Workflow(WorkflowBase):
     id: int
     created_at: datetime.datetime

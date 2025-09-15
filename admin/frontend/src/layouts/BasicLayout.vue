@@ -22,6 +22,10 @@
             <database-outlined />
             <span>基础模型管理</span>
           </a-menu-item>
+          <a-menu-item key="/workflow-management">
+            <setting-outlined />
+            <span>工作流管理</span>
+          </a-menu-item>
         </a-menu>
       </a-layout-sider>
       <a-layout>
@@ -52,6 +56,7 @@ import {
   PictureOutlined,
   CloudUploadOutlined,
   DatabaseOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue';
 import { theme, ConfigProvider, Layout, Breadcrumb, Menu } from 'ant-design-vue';
 
@@ -61,7 +66,7 @@ const selectedKeys = ref(['/dashboard']);
 const router = useRouter();
 const route = useRoute();
 
-const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management'];
+const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management', '/workflow-management'];
 
 watch(
   () => route.path,

@@ -1,0 +1,120 @@
+{
+  "nodes": {
+    "1": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "{{description}}",
+        "clip": ["2", 0]
+      }
+    },
+    "2": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_fp8_e4m3fn.safetensors"
+      }
+    },
+    "3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "steps": 8,
+        "seed": "random",
+        "cfg": 2.5,
+        "model": ["2", 0],
+        "positive": ["1", 0],
+        "negative": ["4", 0],
+        "latent_image": ["5", 0]
+      }
+    },
+    "4": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "blurry, low quality, distorted",
+        "clip": ["2", 0]
+      }
+    },
+    "5": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 1024,
+        "height": 1024,
+        "batch_size": 1
+      }
+    },
+    "6": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": ["3", 0],
+        "vae": ["7", 0]
+      }
+    },
+    "7": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_vae_fp8_e4m3fn.safetensors"
+      }
+    },
+    "8": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "yeepay/yeepay",
+        "images": ["6", 0]
+      }
+    }
+  },
+  "connections": [
+    {
+      "from": "2",
+      "to": "1",
+      "fromOutput": 0,
+      "toInput": "clip"
+    },
+    {
+      "from": "2",
+      "to": "4",
+      "fromOutput": 0,
+      "toInput": "clip"
+    },
+    {
+      "from": "2",
+      "to": "3",
+      "fromOutput": 0,
+      "toInput": "model"
+    },
+    {
+      "from": "1",
+      "to": "3",
+      "fromOutput": 0,
+      "toInput": "positive"
+    },
+    {
+      "from": "4",
+      "to": "3",
+      "fromOutput": 0,
+      "toInput": "negative"
+    },
+    {
+      "from": "5",
+      "to": "3",
+      "fromOutput": 0,
+      "toInput": "latent_image"
+    },
+    {
+      "from": "3",
+      "to": "6",
+      "fromOutput": 0,
+      "toInput": "samples"
+    },
+    {
+      "from": "7",
+      "to": "6",
+      "fromOutput": 0,
+      "toInput": "vae"
+    },
+    {
+      "from": "6",
+      "to": "8",
+      "fromOutput": 0,
+      "toInput": "images"
+    }
+  ]
+}

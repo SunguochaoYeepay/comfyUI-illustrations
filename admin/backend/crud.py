@@ -52,13 +52,33 @@ def get_audit_logs(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.AdminAuditLog).order_by(models.AdminAuditLog.timestamp.desc()).offset(skip).limit(limit).all()
 
 def get_workflows(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Workflow).offset(skip).limit(limit).all()
+    return db.query(models.Workflow).order_by(models.Workflow.created_at.desc()).offset(skip).limit(limit).all()
+
+def get_workflow(db: Session, workflow_id: int):
+    return db.query(models.Workflow).filter(models.Workflow.id == workflow_id).first()
 
 def create_workflow(db: Session, workflow: schemas.WorkflowCreate):
     db_workflow = models.Workflow(**workflow.dict())
     db.add(db_workflow)
     db.commit()
     db.refresh(db_workflow)
+    return db_workflow
+
+def update_workflow(db: Session, workflow_id: int, workflow: schemas.WorkflowUpdate):
+    db_workflow = db.query(models.Workflow).filter(models.Workflow.id == workflow_id).first()
+    if db_workflow:
+        update_data = workflow.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_workflow, key, value)
+        db.commit()
+        db.refresh(db_workflow)
+    return db_workflow
+
+def delete_workflow(db: Session, workflow_id: int):
+    db_workflow = db.query(models.Workflow).filter(models.Workflow.id == workflow_id).first()
+    if db_workflow:
+        db.delete(db_workflow)
+        db.commit()
     return db_workflow
 
 def get_prompts(db: Session, skip: int = 0, limit: int = 100):

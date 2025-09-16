@@ -545,9 +545,9 @@ class TaskManager:
                                                     filtered_files = []
                                                     for file_path in image_files:
                                                         file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                                                        # 放宽时间条件：允许文件时间比任务时间早5分钟
+                                                        # 放宽时间条件：允许文件时间比任务时间早30分钟
                                                         time_diff = (task_time - file_mtime).total_seconds()
-                                                        if time_diff <= 300:  # 5分钟 = 300秒
+                                                        if time_diff <= 1800:  # 30分钟 = 1800秒
                                                             filtered_files.append(file_path)
                                                             print(f"📅 文件 {file_path.name} 修改时间: {file_mtime} (任务时间: {task_time}, 时间差: {time_diff:.1f}秒)")
                                                     

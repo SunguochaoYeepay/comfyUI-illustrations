@@ -38,8 +38,11 @@ class FluxWorkflow(BaseWorkflow):
         # 处理参考图像
         processed_image_path = self._process_reference_image(reference_image_path)
         
-        # 创建基础工作流
-        workflow = self._create_base_workflow(description, validated_params)
+        # 从数据库加载基础工作流
+        workflow = self._load_workflow_template()
+        
+        # 清理无效的图像引用节点
+        workflow = self._clean_invalid_image_nodes(workflow)
         
         # 处理LoRA配置
         loras = validated_params.get("loras", [])
@@ -258,35 +261,44 @@ class FluxWorkflow(BaseWorkflow):
         return workflow
     
     def _update_final_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """更新最终参数"""
-        # 更新生成参数
-        if parameters.get("steps"):
-            workflow["31"]["inputs"]["steps"] = parameters["steps"]
+        """更新最终参数（安全更新，检查节点是否存在）"""
+        # 更新生成参数 - 检查节点31是否存在
+        if "31" in workflow:
+            if parameters.get("steps"):
+                workflow["31"]["inputs"]["steps"] = parameters["steps"]
+            
+            if parameters.get("cfg"):
+                workflow["31"]["inputs"]["cfg"] = parameters["cfg"]
+            
+            # 处理生成数量
+            count = parameters.get("count", 1)
+            workflow["31"]["inputs"]["batch_size"] = count
         
-        if parameters.get("cfg"):
-            workflow["31"]["inputs"]["cfg"] = parameters["cfg"]
-        
-        if parameters.get("guidance"):
+        # 更新引导参数 - 检查节点35是否存在
+        if "35" in workflow and parameters.get("guidance"):
             workflow["35"]["inputs"]["guidance"] = parameters["guidance"]
         
-        # 处理生成数量
+        # 处理生成数量 - 检查节点136是否存在
         count = parameters.get("count", 1)
-        workflow["31"]["inputs"]["batch_size"] = count
-        
-        if count > 1:
+        if count > 1 and "136" in workflow:
             workflow["136"]["inputs"]["save_all"] = True
             print(f"设置batch_size为: {count}")
         
-        # 设置种子
-        if parameters.get("seed"):
-            workflow["31"]["inputs"]["seed"] = parameters["seed"]
-            print(f"使用指定种子: {parameters['seed']}")
-        else:
-            seed = random.randint(1, 2**32 - 1)
-            workflow["31"]["inputs"]["seed"] = seed
-            print(f"使用随机种子: {seed}")
+        # 设置种子 - 检查节点31是否存在
+        if "31" in workflow:
+            if parameters.get("seed"):
+                workflow["31"]["inputs"]["seed"] = parameters["seed"]
+                print(f"使用指定种子: {parameters['seed']}")
+            else:
+                seed = random.randint(1, 2**32 - 1)
+                workflow["31"]["inputs"]["seed"] = seed
+                print(f"使用随机种子: {seed}")
         
-        print(f"工作流参数更新完成: 步数={workflow['31']['inputs']['steps']}, CFG={workflow['31']['inputs']['cfg']}, 引导={workflow['35']['inputs']['guidance']}")
+        # 安全地打印参数信息
+        steps_info = workflow["31"]["inputs"]["steps"] if "31" in workflow else "N/A"
+        cfg_info = workflow["31"]["inputs"]["cfg"] if "31" in workflow else "N/A"
+        guidance_info = workflow["35"]["inputs"]["guidance"] if "35" in workflow else "N/A"
+        print(f"工作流参数更新完成: 步数={steps_info}, CFG={cfg_info}, 引导={guidance_info}")
         return workflow
     
     def _convert_path_for_comfyui(self, image_path: str) -> str:
@@ -310,3 +322,70 @@ class FluxWorkflow(BaseWorkflow):
         print(f"🔄 路径转换: {image_path} -> {comfyui_path}")
         print(f"📁 ComfyUI输入目录: {COMFYUI_INPUT_DIR}")
         return comfyui_path
+    
+    def _load_workflow_template(self) -> Dict[str, Any]:
+        """从数据库加载工作流模板"""
+        import sqlite3
+        import json
+        from pathlib import Path
+        
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            print(f"⚠️ 数据库文件不存在，使用内置模板: {db_path}")
+            return self._create_base_workflow("", {})
+        
+        # 从数据库加载工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("flux1_flux_kontext_dev_basic_2",))
+            result = cursor.fetchone()
+            
+            if not result:
+                print(f"⚠️ 数据库中未找到Flux工作流，使用内置模板")
+                return self._create_base_workflow("", {})
+            
+            workflow = json.loads(result[0])
+            print(f"✅ 从数据库加载Flux工作流模板: flux1_flux_kontext_dev_basic_2")
+            return workflow
+            
+        except Exception as e:
+            print(f"❌ 从数据库加载Flux工作流失败: {e}，使用内置模板")
+            return self._create_base_workflow("", {})
+        finally:
+            conn.close()
+    
+    def _clean_invalid_image_nodes(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+        """清理无效的图像引用节点（保守清理策略）"""
+        # 需要清理的节点ID列表
+        invalid_nodes = ["142", "147"]  # 根据错误信息中的节点ID
+        
+        # 只删除无效的图像引用节点，不删除依赖节点
+        for node_id in invalid_nodes:
+            if node_id in workflow:
+                node = workflow[node_id]
+                # 检查是否是LoadImageOutput节点且引用了无效文件
+                if (node.get("class_type") == "LoadImageOutput" and 
+                    "image" in node.get("inputs", {})):
+                    image_path = node["inputs"]["image"]
+                    # 如果引用了不存在的输出文件，移除这个节点
+                    if "[output]" in image_path:
+                        print(f"🧹 清理无效的图像引用节点 {node_id}: {image_path}")
+                        del workflow[node_id]
+        
+        # 清理引用已删除节点的输入，但不删除节点本身
+        for node_id, node in workflow.items():
+            if "inputs" in node:
+                for input_name, input_value in node["inputs"].items():
+                    # 检查是否引用了已删除的节点
+                    if isinstance(input_value, list) and len(input_value) >= 1:
+                        referenced_node = str(input_value[0])
+                        if referenced_node in invalid_nodes:
+                            print(f"🧹 清理节点 {node_id} 中对已删除节点 {referenced_node} 的引用")
+                            # 将引用设置为None或空值，而不是删除整个节点
+                            node["inputs"][input_name] = None
+        
+        return workflow

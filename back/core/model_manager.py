@@ -193,8 +193,8 @@ class ModelManager:
             # 最后的保底：返回空列表，让前端显示错误
             return []
     
-    def get_model_config(self, model_name: str) -> Optional[ModelConfig]:
-        """获取指定模型的配置 - 完全依赖配置客户端"""
+    async def get_model_config(self, model_name: str) -> Optional[ModelConfig]:
+        """获取指定模型的配置 - 完全依赖配置客户端（异步版本）"""
         try:
             # 确保配置客户端已初始化
             config_client = self._get_config_client()
@@ -203,7 +203,7 @@ class ModelManager:
                 return None
             
             # 通过配置客户端获取模型配置
-            models_response = asyncio.run(config_client.get_models_config())
+            models_response = await config_client.get_models_config()
             
             # 从响应中提取模型列表
             models_config = models_response.get("models", [])
@@ -218,6 +218,65 @@ class ModelManager:
             
         except Exception as e:
             print(f"❌ 获取模型配置失败: {e}")
+            return None
+    
+    def get_model_config_sync(self, model_name: str) -> Optional[ModelConfig]:
+        """获取指定模型的配置 - 同步版本（兼容性）"""
+        try:
+            # 检查是否已经在事件循环中
+            try:
+                loop = asyncio.get_running_loop()
+                # 如果已经在事件循环中，使用同步方式获取
+                return self._get_model_config_sync_fallback(model_name)
+            except RuntimeError:
+                # 没有运行的事件循环，可以使用asyncio.run
+                return asyncio.run(self.get_model_config(model_name))
+        except Exception as e:
+            print(f"❌ 获取模型配置失败: {e}")
+            return None
+    
+    def _get_model_config_sync_fallback(self, model_name: str) -> Optional[ModelConfig]:
+        """同步回退方法 - 直接从数据库获取"""
+        try:
+            import sqlite3
+            from pathlib import Path
+            
+            # 数据库路径
+            db_path = Path(__file__).parent.parent.parent / "admin" / "admin.db"
+            
+            if not db_path.exists():
+                print(f"❌ 数据库文件不存在: {db_path}")
+                return None
+            
+            # 从数据库获取模型配置
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+            
+            try:
+                cursor.execute("SELECT * FROM base_models WHERE name = ?", (model_name,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    print(f"⚠️ 数据库中未找到模型: {model_name}")
+                    return None
+                
+                # 构建ModelConfig对象
+                return ModelConfig(
+                    model_type=ModelType(result[1]),  # model_type
+                    name=result[2],  # name
+                    display_name=result[3],  # display_name
+                    unet_file=result[4],  # unet_file
+                    clip_file=result[5],  # clip_file
+                    vae_file=result[6],  # vae_file
+                    template_path="",  # 已移除
+                    description=result[8] if len(result) > 8 else ""  # description
+                )
+                
+            finally:
+                conn.close()
+                
+        except Exception as e:
+            print(f"❌ 同步获取模型配置失败: {e}")
             return None
     
     def _convert_dict_to_model_config(self, model_data: Dict[str, Any]) -> ModelConfig:

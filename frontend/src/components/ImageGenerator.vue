@@ -325,6 +325,7 @@ const generateImage = async (options = {}) => {
       // 多图融合模式
       formData.append('fusion_mode', 'concat')
       formData.append('cfg', 2.5)
+      formData.append('size', imageSize.value)  // 添加尺寸参数
       
       // 添加多张参考图片
       referenceImages.value.forEach((imageFile, index) => {
@@ -337,7 +338,7 @@ const generateImage = async (options = {}) => {
         }
       })
       
-      console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片`)
+      console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
     } else {
       // 单图生成模式
       formData.append('count', imageCount.value)

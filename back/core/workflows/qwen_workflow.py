@@ -76,9 +76,16 @@ class QwenWorkflow(BaseWorkflow):
         Returns:
             更新后的工作流字典
         """
-        from config.settings import TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
-        
         print("📸 为Qwen工作流添加参考图支持")
+        
+        # 从工作流中获取目标尺寸（应该已经被_update_image_dimensions设置）
+        target_width = 1024  # 默认值
+        target_height = 1024  # 默认值
+        
+        if "27" in workflow and "inputs" in workflow["27"]:
+            target_width = workflow["27"]["inputs"].get("width", 1024)
+            target_height = workflow["27"]["inputs"].get("height", 1024)
+            print(f"🔄 使用工作流目标尺寸: {target_width}x{target_height}")
         
         # 添加LoadImage节点
         comfyui_path = self._convert_path_for_comfyui(image_path)
@@ -95,8 +102,8 @@ class QwenWorkflow(BaseWorkflow):
         workflow["101"] = {
             "inputs": {
                 "image": ["100", 0],
-                "width": TARGET_IMAGE_WIDTH,
-                "height": TARGET_IMAGE_HEIGHT,
+                "width": target_width,
+                "height": target_height,
                 "crop": "disabled",
                 "upscale_method": "lanczos",
                 "downscale_method": "area"

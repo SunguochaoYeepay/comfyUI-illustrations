@@ -114,7 +114,7 @@ defineProps({
 
 .images-grid[data-count="1"] {
   grid-template-columns: 1fr;
-  max-width: 400px;
+  max-width: 300px;
   margin: 0 auto;
 }
 

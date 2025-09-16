@@ -516,7 +516,8 @@ async def generate_image_fusion(
     cfg: float = Form(2.5),
     seed: Optional[int] = Form(None),
     model: str = Form("qwen-image"),
-    loras: Optional[str] = Form(None)
+    loras: Optional[str] = Form(None),
+    size: str = Form(DEFAULT_IMAGE_SIZE)  # 添加尺寸参数
 ):
     """多图融合生成API"""
     try:
@@ -587,6 +588,16 @@ async def generate_image_fusion(
         if loras:
             print("⚠️ 多图融合功能暂不支持LoRA配置")
         
+        # 获取最优尺寸（使用配置客户端）
+        try:
+            from core.image_gen_config_manager import get_optimal_size
+            optimal_width, optimal_height = await get_optimal_size(size, model)
+            optimal_size = f"{optimal_width}x{optimal_height}"
+            print(f"🎯 使用最优尺寸: {optimal_size} (原始: {size})")
+        except Exception as config_error:
+            print(f"⚠️ 获取最优尺寸失败，使用原始尺寸: {config_error}")
+            optimal_size = size
+        
         # 准备参数
         parameters = {
             "steps": steps,
@@ -594,10 +605,11 @@ async def generate_image_fusion(
             "seed": seed,
             "model": model,
             "fusion_mode": fusion_mode,
+            "size": optimal_size,  # 添加尺寸参数
             "loras": lora_configs
         }
         
-        print(f"🔍 接收到多图融合请求: description='{description[:50]}...', 图像数量={len(image_paths)}, 融合模式={fusion_mode}")
+        print(f"🔍 接收到多图融合请求: description='{description[:50]}...', 图像数量={len(image_paths)}, 融合模式={fusion_mode}, 尺寸={size}")
         print(f"📊 参数详情: {parameters}")
         
         # 创建多图融合任务

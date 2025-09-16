@@ -200,17 +200,26 @@ class QwenFusionWorkflow(BaseWorkflow):
             print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 20)}, 种子={workflow['158']['inputs']['seed']}, CFG={parameters.get('cfg', 2.5)}")
         
         # 动态更新图像尺寸配置
-        workflow = self._update_image_dimensions(workflow)
+        workflow = self._update_image_dimensions(workflow, parameters)
         
         return workflow
     
-    def _update_image_dimensions(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_image_dimensions(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
         """动态更新图像尺寸配置"""
+        # 从参数中获取尺寸
+        size_str = parameters.get("size", "1024x1024")
+        try:
+            width, height = map(int, size_str.split('x'))
+        except (ValueError, AttributeError):
+            # 如果解析失败，使用默认尺寸
+            width, height = 1024, 1024
+            print(f"⚠️ 多图融合尺寸解析失败，使用默认尺寸: {width}x{height}")
+        
         # 更新节点164（LatentUpscale）的尺寸配置
         if "164" in workflow:
-            workflow["164"]["inputs"]["width"] = 1024
-            workflow["164"]["inputs"]["height"] = 768
-            print(f"✅ 动态更新多图融合图像尺寸: 1024x768")
+            workflow["164"]["inputs"]["width"] = width
+            workflow["164"]["inputs"]["height"] = height
+            print(f"✅ 动态更新多图融合图像尺寸: {width}x{height}")
         
         return workflow
     

@@ -44,20 +44,20 @@ class WorkflowTemplate:
             print(f"❌ 加载模板文件失败: {e}")
             return {}
     
-    async def customize_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any], model_name: str = "flux1-dev"):
+    async def customize_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any], model_name: str = "flux-dev"):
         """自定义工作流参数 - 支持多种模型
         
         Args:
             reference_image_path: 参考图像路径
             description: 图像描述
             parameters: 生成参数
-            model_name: 模型名称（默认flux1-dev）
+            model_name: 模型名称（默认flux-dev）
         """
         # 获取模型配置 - 使用配置客户端
         model_config = await self._get_model_config_from_client(model_name)
         if not model_config:
             print(f"⚠️ 模型 {model_name} 不可用，使用默认Flux模型")
-            model_config = await self._get_model_config_from_client("flux1-dev")
+            model_config = await self._get_model_config_from_client("flux-dev")
         
         if model_config:
             print(f"🎯 使用模型: {model_config.get('display_name', model_name)}")
@@ -76,11 +76,8 @@ class WorkflowTemplate:
         if model_type == "flux":
             # 根据模型名称选择不同的工作流
             model_config_obj = self._convert_dict_to_model_config(model_config)
-            if model_config.get("name") == "flux1-standard":
-                from core.workflows import Flux1Workflow
-                workflow_creator = Flux1Workflow(model_config_obj)
-            else:
-                workflow_creator = FluxWorkflow(model_config_obj)
+            # flux1-standard模型已移除，直接使用Flux工作流
+            workflow_creator = FluxWorkflow(model_config_obj)
         elif model_type == "qwen":
             # 根据图片数量选择不同的Qwen工作流
             # 检查是否是多图融合模式
@@ -94,10 +91,7 @@ class WorkflowTemplate:
         elif model_type == "wan":
             model_config_obj = self._convert_dict_to_model_config(model_config)
             workflow_creator = WanWorkflow(model_config_obj)
-        elif model_type == "flux1":  # 新增
-            from core.workflows import Flux1VectorWorkflow
-            model_config_obj = self._convert_dict_to_model_config(model_config)
-            workflow_creator = Flux1VectorWorkflow(model_config_obj)
+        # flux1模型已移除，只保留FLUX.1 Kontext
         elif model_type == "gemini":
             from core.workflows import GeminiWorkflow
             model_config_obj = self._convert_dict_to_model_config(model_config)
@@ -184,7 +178,6 @@ class WorkflowTemplate:
         type_mapping = {
             "qwen": ModelType.QWEN,
             "flux": ModelType.FLUX,
-            "flux1": ModelType.FLUX1,
             "wan": ModelType.WAN,
             "gemini": ModelType.GEMINI
         }
@@ -374,7 +367,7 @@ class WorkflowTemplate:
             return workflow_template.copy()
     
     async def customize_workflow_from_config(self, reference_image_path: str, description: str, 
-                                           parameters: Dict[str, Any], model_name: str = "flux1-dev",
+                                           parameters: Dict[str, Any], model_name: str = "flux-dev",
                                            workflow_type: Optional[str] = None) -> Dict[str, Any]:
         """从配置自定义工作流参数"""
         try:
@@ -444,16 +437,7 @@ class WorkflowTemplate:
                 "available": True,
                 "description": "Qwen单图生成工作流"
             },
-            {
-                "id": 2,
-                "name": "flux1_workflow",
-                "display_name": "Flux1工作流",
-                "base_model_type": "flux1",
-                "workflow_type": "image_generation",
-                "workflow_json": {},  # 空的工作流JSON，需要从数据库获取
-                "available": True,
-                "description": "Flux1基础模型工作流"
-            }
+            # flux1工作流已移除，只保留FLUX.1 Kontext
         ]
         
         # 应用过滤条件

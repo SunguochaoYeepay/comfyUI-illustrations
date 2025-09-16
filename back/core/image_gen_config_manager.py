@@ -185,7 +185,7 @@ class ImageGenConfigManager:
             logger.error(f"验证图像尺寸失败: {e}")
             return False
     
-    async def get_optimal_size(self, requested_size: str, model_name: str = "flux1-dev") -> Tuple[int, int]:
+    async def get_optimal_size(self, requested_size: str, model_name: str = "flux-dev") -> Tuple[int, int]:
         """获取最优尺寸"""
         try:
             # 解析请求的尺寸
@@ -197,7 +197,7 @@ class ImageGenConfigManager:
                 return await self.get_default_image_size()
             
             # 根据模型调整尺寸
-            if model_name == "flux1-dev" or model_name == "flux1":
+            if model_name == "flux-dev":
                 # Flux模型通常支持更大的尺寸
                 max_size = 1536
                 if width > max_size:
@@ -306,7 +306,7 @@ async def get_quality_settings() -> Dict[str, Dict[str, Any]]:
     return await manager.get_quality_settings()
 
 
-async def get_optimal_size(requested_size: str, model_name: str = "flux1-dev") -> Tuple[int, int]:
+async def get_optimal_size(requested_size: str, model_name: str = "flux-dev") -> Tuple[int, int]:
     """获取最优尺寸"""
     manager = get_image_gen_config_manager()
     return await manager.get_optimal_size(requested_size, model_name)

@@ -37,7 +37,7 @@ admin/
 │   └── workflows/                     # 工作流文件存储目录
 │       ├── qwen/                      # Qwen工作流
 │       ├── flux/                      # Flux工作流
-│       ├── flux1/                     # Flux1工作流
+│       # flux1/ 目录已移除，只保留FLUX.1 Kontext
 │       ├── gemini/                    # Gemini工作流
 │       ├── wan/                       # Wan工作流
 │       └── fusion/                    # 融合工作流
@@ -93,11 +93,11 @@ npm run dev
 - `qwen_fusion_2image_fusion` - 2图融合工作流
 - `qwen_fusion_3image_fusion` - 3图融合工作流
 
-### Flux1工作流 (4个)
-- `flux1_flux1_vector_workflow` - Flux1矢量工作流
-- `flux1_flux_kontext_dev_basic_2` - Flux1基础工作流
-- `flux1_flux_redux_model_1` - Flux1单图风格迁移
-- `flux1_flux_redux_model_2` - Flux1多图风格融合
+### Flux Kontext工作流 (4个)
+- `flux1_flux_kontext_dev_basic_2` - Flux Kontext基础工作流
+- `flux1_flux_redux_model_1_backup` - Flux Kontext单图风格迁移
+- `flux1_flux_redux_model_2_backup` - Flux Kontext多图风格融合
+- `flux1_flux_redux_model_multilora` - Flux Kontext多图多LoRA工作流
 
 ### Gemini工作流 (2个)
 - `gemini_api_google_gemini_image` - Gemini API图像生成

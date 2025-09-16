@@ -60,21 +60,14 @@ class LocalConfigManager:
                         "description": "千问图像模型，支持单图生成和多图融合"
                     },
                     {
-                        "name": "flux1-dev",
+                        "name": "flux-dev",
                         "display_name": "Flux Kontext",
                         "model_type": "flux",
                         "available": True,
                         "sort_order": 2,
                         "description": "Flux Kontext开发版本，支持高质量图像生成"
                     },
-                    {
-                        "name": "flux1",
-                        "display_name": "Flux1基础模型",
-                        "model_type": "flux1",
-                        "available": True,
-                        "sort_order": 3,
-                        "description": "Flux1基础模型，支持多种工作流，可配置不同LoRA"
-                    },
+                    # flux1基础模型已移除，只保留FLUX.1 Kontext
                     {
                         "name": "wan2.2-video",
                         "display_name": "Wan2.2 视频",
@@ -96,8 +89,7 @@ class LocalConfigManager:
             "loras": {
                 "loras": [],
                 "grouped_by_model": {
-                    "flux1": [],
-                    "flux1-dev": [],
+                    "flux-dev": [],
                     "qwen-image": [],
                     "wan2.2-video": []
                 }
@@ -125,13 +117,7 @@ class LocalConfigManager:
                         "description": "Qwen多图融合工作流"
                     },
                     {
-                        "id": 3,
-                        "name": "flux1_workflow",
-                        "display_name": "Flux1工作流",
-                        "base_model_type": "flux1",
-                        "workflow_type": "image_generation",
-                        "template_path": "workflows/flux1_vector_workflow.json",
-                        "available": True,
+                        # flux1工作流已移除，只保留FLUX.1 Kontext
                         "description": "Flux1基础模型工作流"
                     },
                     {

@@ -25,10 +25,18 @@ def create_workflow(
     return crud.create_workflow(db=db, workflow=workflow)
 
 
-@router.get("/", response_model=List[schemas.Workflow])
-def read_workflows(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    workflows = crud.get_workflows(db, skip=skip, limit=limit)
-    return workflows
+@router.get("/")
+def read_workflows(skip: int = 0, limit: int = 100, search: str = "", db: Session = Depends(get_db)):
+    workflows = crud.get_workflows(db, skip=skip, limit=limit, search=search)
+    total = crud.get_workflows_count(db, search=search)
+    
+    return {
+        "data": workflows,
+        "total": total,
+        "page": (skip // limit) + 1,
+        "pageSize": limit,
+        "hasMore": (skip + limit) < total
+    }
 
 
 @router.get("/size-mappings")

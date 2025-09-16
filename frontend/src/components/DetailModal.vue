@@ -333,12 +333,12 @@ const getModelName = () => {
   if (props.item?.parameters?.model) {
     return props.item.parameters.model
   }
-  return 'flux1'
+  return 'flux-dev'
 }
 
 const getModelDescription = () => {
   const model = getModelName()
-  if (model === 'flux1') {
+  if (model === 'flux-dev') {
     return 'Flux模型- 更精确控制'
   } else if (model === 'qwen-image') {
     return 'Qwen模型- 支持多图融合'

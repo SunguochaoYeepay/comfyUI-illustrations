@@ -242,13 +242,6 @@ class SizeConfigManager:
                 "max_pixels": 1048576,
                 "recommended_width": 512,
                 "recommended_height": 512
-            },
-            "flux1": {
-                "max_width": 2048,
-                "max_height": 2048,
-                "max_pixels": 2097152,
-                "recommended_width": 1024,
-                "recommended_height": 1024
             }
         }
     

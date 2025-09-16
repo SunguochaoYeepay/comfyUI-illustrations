@@ -102,7 +102,7 @@ class TaskManager:
             self.db.update_task_status(task_id, "processing")
             
             # 获取模型名称
-            model_name = parameters.get("model", "flux1-dev")
+            model_name = parameters.get("model", "flux-dev")
             
             # 根据模型类型决定是否翻译
             translated_description = description
@@ -300,19 +300,10 @@ class TaskManager:
             fusion_parameters = parameters.copy()
             fusion_parameters["reference_image_paths"] = reference_image_paths
             
-            # 对于Flux1模型，直接传递图片路径列表
-            if model_name == "flux1":
-                from core.workflows import Flux1VectorWorkflow
-                from core.model_manager import get_model_config
-                model_config = get_model_config(model_name)
-                workflow_creator = Flux1VectorWorkflow(model_config)
-                workflow = workflow_creator.create_workflow(
-                    reference_image_paths, translated_description, fusion_parameters
-                )
-            else:
-                workflow = await self.workflow_template.customize_workflow(
-                    reference_image_paths[0], translated_description, fusion_parameters, model_name
-                )
+            # 使用工作流模板创建多图融合工作流
+            workflow = await self.workflow_template.customize_workflow(
+                reference_image_paths[0], translated_description, fusion_parameters, model_name
+            )
             print(f"✅ 多图融合工作流准备完成")
             
             # 提交到ComfyUI

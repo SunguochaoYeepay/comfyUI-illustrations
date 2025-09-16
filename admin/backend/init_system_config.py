@@ -54,11 +54,7 @@ def init_system_config():
                 "value": "diffusion_models,text_encoders,vae",
                 "description": "Wan模型文件子目录：UNet,CLIP,VAE"
             },
-            {
-                "key": "model_paths_flux1",
-                "value": "unet,clip,vae",
-                "description": "Flux1模型文件子目录：UNet,CLIP,VAE"
-            },
+            # flux1模型路径配置已移除，只保留FLUX.1 Kontext
             {
                 "key": "model_paths_gemini",
                 "value": ",,",
@@ -67,7 +63,7 @@ def init_system_config():
             # 生图配置
             {
                 "key": "image_gen_base_model_order",
-                "value": "qwen-image,gemini-image,flux1-dev,flux1,wan2.2-video",
+                "value": "qwen-image,gemini-image,flux-dev,wan2.2-video",
                 "description": "基础模型排序配置，逗号分隔"
             },
             {

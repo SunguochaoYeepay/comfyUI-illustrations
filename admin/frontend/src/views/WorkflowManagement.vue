@@ -166,14 +166,21 @@ const fetchWorkflows = async (page = 1, pageSize = 10, search = '') => {
     })
     
     console.log('API响应:', response)
-    console.log('响应类型:', typeof response, '是否为数组:', Array.isArray(response))
     
-    if (response && Array.isArray(response)) {
+    // 处理新的API响应格式
+    if (response && response.data && Array.isArray(response.data)) {
+      data.value = response.data
+      pagination.total = response.total || 0
+      pagination.current = page
+      pagination.pageSize = pageSize
+      console.log('设置数据成功，工作流数量:', response.data.length, '总数:', response.total)
+    } else if (response && Array.isArray(response)) {
+      // 兼容旧的API格式
       data.value = response
       pagination.total = response.length
       pagination.current = page
       pagination.pageSize = pageSize
-      console.log('设置数据成功，工作流数量:', response.length)
+      console.log('使用旧格式，工作流数量:', response.length)
     } else {
       data.value = []
       console.error('响应格式错误:', response)

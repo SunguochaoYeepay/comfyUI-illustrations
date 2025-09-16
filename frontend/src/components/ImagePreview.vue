@@ -529,7 +529,7 @@ const formatFileSize = (bytes) => {
 // 获取模型显示名称
 const getModelDisplayName = (modelName) => {
   const modelMap = {
-    'flux1-dev': 'Flux Kontext',
+    'flux-dev': 'Flux Kontext',
     'qwen-image': 'Qwen Image'
   }
   return modelMap[modelName] || modelName

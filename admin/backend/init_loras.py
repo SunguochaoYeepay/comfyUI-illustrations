@@ -99,7 +99,7 @@ def determine_base_model(lora_name, lora_dir):
     
     # 根据目录名判断
     if 'flux' in dir_name:
-        return 'flux1-dev'
+        return 'flux-dev'
     elif 'qwen' in dir_name:
         return 'qwen-image'
     elif 'wan' in dir_name:
@@ -107,7 +107,7 @@ def determine_base_model(lora_name, lora_dir):
     
     # 根据文件名判断
     if any(keyword in lora_name_lower for keyword in ['flux', 'kontext', 'sdxl']):
-        return 'flux1-dev'
+        return 'flux-dev'
     elif any(keyword in lora_name_lower for keyword in ['qwen', '千问', 'qwen2']):
         return 'qwen-image'
     elif any(keyword in lora_name_lower for keyword in ['wan', 'video', '视频']):
@@ -116,7 +116,7 @@ def determine_base_model(lora_name, lora_dir):
         return 'gemini-image'
     else:
         # 默认使用Flux
-        return 'flux1-dev'
+        return 'flux-dev'
 
 def generate_display_name(lora_name):
     """生成显示名称"""
@@ -134,10 +134,9 @@ def generate_display_name(lora_name):
 def generate_description(lora_name, base_model):
     """生成描述"""
     base_model_names = {
-        'flux1-dev': 'Flux Kontext',
+        'flux-dev': 'Flux Kontext',
         'qwen-image': 'Qwen',
         'wan2.2-video': 'Wan2.2 视频',
-        'flux1': 'Flux1基础模型',
         'gemini-image': 'Nano Banana'
     }
     

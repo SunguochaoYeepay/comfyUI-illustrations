@@ -51,8 +51,30 @@ def delete_inspiration(db: Session, inspiration_id: int):
 def get_audit_logs(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.AdminAuditLog).order_by(models.AdminAuditLog.timestamp.desc()).offset(skip).limit(limit).all()
 
-def get_workflows(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Workflow).order_by(models.Workflow.created_at.desc()).offset(skip).limit(limit).all()
+def get_workflows(db: Session, skip: int = 0, limit: int = 100, search: str = ""):
+    query = db.query(models.Workflow)
+    
+    # 如果有搜索条件，添加搜索过滤
+    if search:
+        query = query.filter(
+            models.Workflow.name.contains(search) |
+            models.Workflow.description.contains(search)
+        )
+    
+    return query.order_by(models.Workflow.created_at.desc()).offset(skip).limit(limit).all()
+
+def get_workflows_count(db: Session, search: str = ""):
+    """获取工作流总数（用于分页）"""
+    query = db.query(models.Workflow)
+    
+    # 如果有搜索条件，添加搜索过滤
+    if search:
+        query = query.filter(
+            models.Workflow.name.contains(search) |
+            models.Workflow.description.contains(search)
+        )
+    
+    return query.count()
 
 def get_workflow(db: Session, workflow_id: int):
     return db.query(models.Workflow).filter(models.Workflow.id == workflow_id).first()

@@ -298,6 +298,17 @@ class WorkflowValidator:
                         "node_type": model_node.get("class_type", ""),
                         "model_type": self._infer_model_type(model_param["value"])
                     }
+                
+                # 如果是UNETLoader，也识别weight_dtype参数
+                if model_node.get("class_type") == "UNETLoader":
+                    weight_dtype = model_node.get("inputs", {}).get("weight_dtype", "")
+                    if weight_dtype:
+                        core_config["weight_dtype"] = {
+                            "node_id": node_id,
+                            "parameter": "weight_dtype",
+                            "current_value": weight_dtype,
+                            "node_type": model_node.get("class_type", "")
+                        }
         
         # 识别VAE配置
         vae_loader_info = node_analysis["key_nodes"].get("vae_loader")
@@ -447,6 +458,7 @@ class WorkflowValidator:
             "CheckpointLoader": {"category": "model", "configurable": True},
             "LoraLoader": {"category": "lora", "configurable": True},
             "LoraLoaderStack": {"category": "lora", "configurable": True},
+            "Lora Loader Stack (rgthree)": {"category": "lora", "configurable": True},
             "LoadImage": {"category": "image", "configurable": True},
             "LoadImageBatch": {"category": "image", "configurable": True},
             "EmptyLatentImage": {"category": "latent", "configurable": True},
@@ -475,7 +487,7 @@ class WorkflowValidator:
             "text_encoder": ["CLIPTextEncode", "CLIPTextEncodeAdvanced"],
             "sampler": ["KSampler", "KSamplerAdvanced"],
             "model_loader": ["UNETLoader", "CheckpointLoader"],
-            "lora_loader": ["LoraLoader", "LoraLoaderStack", "LoraLoaderModelOnly"],
+            "lora_loader": ["LoraLoader", "LoraLoaderStack", "LoraLoaderModelOnly", "Lora Loader Stack (rgthree)"],
             "image_loader": ["LoadImage", "LoadImageBatch"],
             "latent_processor": ["EmptyLatentImage", "LatentUpscale", "EmptySD3LatentImage"],
             "negative_prompt": ["CLIPTextEncode", "CLIPTextEncodeAdvanced"],
@@ -594,11 +606,27 @@ class WorkflowValidator:
     def _extract_lora_parameters(self, lora_node: Dict[str, Any]) -> Dict[str, Any]:
         """提取LoRA参数"""
         inputs = lora_node.get("inputs", {})
-        return {
-            "lora_name": inputs.get("lora_name", ""),
-            "strength_model": inputs.get("strength_model", 1.0),
-            "strength_clip": inputs.get("strength_clip", 1.0)
-        }
+        class_type = lora_node.get("class_type", "")
+        
+        if class_type == "Lora Loader Stack (rgthree)":
+            # 多LoRA模式
+            lora_params = {}
+            for i in range(1, 5):  # lora_01 到 lora_04
+                lora_name = inputs.get(f"lora_{i:02d}", "None")
+                strength = inputs.get(f"strength_{i:02d}", 1.0)
+                if lora_name and lora_name != "None":
+                    lora_params[f"lora_{i:02d}"] = {
+                        "name": lora_name,
+                        "strength": strength
+                    }
+            return lora_params
+        else:
+            # 单LoRA模式
+            return {
+                "lora_name": inputs.get("lora_name", ""),
+                "strength_model": inputs.get("strength_model", 1.0),
+                "strength_clip": inputs.get("strength_clip", 1.0)
+            }
     
     def _extract_sampling_parameters(self, sampler_node: Dict[str, Any]) -> Dict[str, Any]:
         """提取采样参数"""
@@ -652,17 +680,25 @@ class WorkflowValidator:
         """生成警告"""
         warnings = []
         
-        # 检查是否有未连接的节点
-        nodes = workflow_json.get("nodes", {})
-        connections = workflow_json.get("connections", [])
+        # 处理两种格式
+        if "nodes" in workflow_json:
+            nodes = workflow_json["nodes"]
+            connections = workflow_json.get("connections", [])
+        elif self._is_node_dict_format(workflow_json):
+            nodes = workflow_json
+            connections = []  # 导出格式没有connections
+        else:
+            nodes = {}
+            connections = []
         
+        # 检查是否有未连接的节点
         connected_nodes = set()
         for connection in connections:
             connected_nodes.add(connection.get("from"))
             connected_nodes.add(connection.get("to"))
         
         for node_id in nodes:
-            if node_id not in connected_nodes:
+            if node_id not in connected_nodes and connections:  # 只有在有connections时才检查
                 warnings.append(f"节点{node_id}未连接到工作流中")
         
         # 检查关键节点是否存在
@@ -673,5 +709,48 @@ class WorkflowValidator:
             warnings.append("未找到采样器节点")
         if "model_loader" not in key_nodes:
             warnings.append("未找到模型加载器节点")
+        
+        # 检查UNET节点配置
+        unet_warnings = self._check_unet_configurations(nodes)
+        warnings.extend(unet_warnings)
+        
+        return warnings
+    
+    def _check_unet_configurations(self, nodes: Dict[str, Any]) -> List[str]:
+        """检查UNET节点配置"""
+        warnings = []
+        
+        for node_id, node in nodes.items():
+            if node.get("class_type") == "UNETLoader":
+                inputs = node.get("inputs", {})
+                unet_name = inputs.get("unet_name", "")
+                weight_dtype = inputs.get("weight_dtype", "")
+                
+                # 检查UNET模型名称
+                if not unet_name:
+                    warnings.append(f"节点{node_id} (UNETLoader): 缺少unet_name配置")
+                else:
+                    # 检查模型名称格式
+                    if not unet_name.endswith(('.safetensors', '.ckpt', '.pt')):
+                        warnings.append(f"节点{node_id} (UNETLoader): unet_name格式可能不正确: {unet_name}")
+                    
+                    # 检查常见的错误配置
+                    if unet_name == "flux1-standard":
+                        warnings.append(f"节点{node_id} (UNETLoader): 检测到错误的模型配置 'flux1-standard'，建议使用 'flux-dev.safetensors'")
+                    
+                    # 检查模型类型一致性
+                    if "flux" in unet_name.lower() and weight_dtype not in ["fp8_e4m3fn", "fp16", "fp32"]:
+                        warnings.append(f"节点{node_id} (UNETLoader): Flux模型建议使用fp8_e4m3fn精度，当前配置: {weight_dtype}")
+                
+                # 检查权重数据类型
+                if not weight_dtype:
+                    warnings.append(f"节点{node_id} (UNETLoader): 缺少weight_dtype配置")
+                elif weight_dtype not in ["fp8_e4m3fn", "fp16", "fp32", "bf16"]:
+                    warnings.append(f"节点{node_id} (UNETLoader): 不支持的权重数据类型: {weight_dtype}")
+                
+                # 检查配置组合的合理性
+                if unet_name and weight_dtype:
+                    if "flux" in unet_name.lower() and weight_dtype == "fp32":
+                        warnings.append(f"节点{node_id} (UNETLoader): Flux模型使用fp32精度会占用大量显存，建议使用fp16或fp8_e4m3fn")
         
         return warnings

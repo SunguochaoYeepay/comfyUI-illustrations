@@ -21,7 +21,6 @@ class ModelType(Enum):
     FLUX = "flux"
     QWEN = "qwen"
     WAN = "wan" # Added WAN model type
-    FLUX1 = "flux1" # Added FLUX1 model type
     GEMINI = "gemini" # Added GEMINI model type
 
 
@@ -69,10 +68,6 @@ class ModelConfig:
             elif self.model_type == ModelType.WAN: # Added WAN model type
                 unet_path = model_dir / "diffusion_models" / self.unet_file
                 clip_path = model_dir / "text_encoders" / self.clip_file
-                vae_path = model_dir / "vae" / self.vae_file
-            elif self.model_type == ModelType.FLUX1: # Added FLUX1 model type
-                unet_path = model_dir / "unet" / self.unet_file # 使用unet目录
-                clip_path = model_dir / "clip" / self.clip_file
                 vae_path = model_dir / "vae" / self.vae_file
             else:
                 # 默认使用checkpoints目录

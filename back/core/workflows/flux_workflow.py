@@ -41,6 +41,9 @@ class FluxWorkflow(BaseWorkflow):
         # 从数据库加载基础工作流
         workflow = self._load_workflow_template()
         
+        # 更新基础模型
+        workflow = self._update_base_model(workflow, validated_params)
+        
         # 清理无效的图像引用节点
         workflow = self._clean_invalid_image_nodes(workflow)
         
@@ -57,6 +60,16 @@ class FluxWorkflow(BaseWorkflow):
         workflow = self._update_final_parameters(workflow, validated_params)
         
         print(f"✅ Flux工作流创建完成，包含 {len(workflow)} 个节点")
+        return workflow
+    
+    def _update_base_model(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """更新基础模型"""
+        base_model = parameters.get("base_model", self.model_config.unet_file)
+        
+        if "37" in workflow:  # UNETLoader节点
+            workflow["37"]["inputs"]["unet_name"] = base_model
+            print(f"🔄 更新基础模型: {base_model}")
+        
         return workflow
     
     def _create_base_workflow(self, description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
@@ -402,5 +415,42 @@ class FluxWorkflow(BaseWorkflow):
                             print(f"🧹 清理节点 {node_id} 中对已删除节点 {referenced_node} 的引用")
                             # 将引用设置为None或空值，而不是删除整个节点
                             node["inputs"][input_name] = None
+        
+        # 修复节点42的连接 - FluxKontextImageScale需要一个图像输入
+        if "42" in workflow:
+            # 检查节点42的类型
+            if workflow["42"].get("class_type") == "FluxKontextImageScale":
+                # 检查节点42是否已经有有效的图像输入
+                if "image" not in workflow["42"]["inputs"] or workflow["42"]["inputs"]["image"] is None:
+                    # 添加一个新的EmptyImage节点
+                    workflow["200"] = {
+                        "inputs": {
+                            "width": 1024,
+                            "height": 1024,
+                            "batch_size": 1,
+                            "color": 0
+                        },
+                        "class_type": "EmptyImage",
+                        "_meta": {"title": "空图像"}
+                    }
+                    # 将节点42连接到新的EmptyImage节点
+                    workflow["42"]["inputs"]["image"] = ["200", 0]
+                    print("✅ 为节点42添加EmptyImage输入")
+        
+        # 删除节点146（ImageStitch），因为它的输入已经被删除
+        if "146" in workflow:
+            del workflow["146"]
+            print("✅ 删除节点146（ImageStitch）")
+        
+        # 修复其他节点对节点146的引用
+        for node_id, node in workflow.items():
+            if "inputs" in node:
+                for input_name, input_value in node["inputs"].items():
+                    if isinstance(input_value, list) and len(input_value) >= 1:
+                        referenced_node = str(input_value[0])
+                        if referenced_node == "146":
+                            # 将引用重定向到节点42
+                            node["inputs"][input_name] = ["42", 0]
+                            print(f"✅ 将节点 {node_id} 的 {input_name} 引用重定向到节点42")
         
         return workflow

@@ -221,7 +221,7 @@ import SizeSelector from './SizeSelector.vue'
    },
   model: {
     type: String,
-    default: 'flux1-dev'
+    default: 'flux-dev'
   },
   size: {
     type: String,
@@ -251,8 +251,8 @@ const emit = defineEmits([
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式
 const isFusionMode = computed(() => {
-  // Qwen、Flux1和Gemini模型都支持多图融合
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1' || localModel.value === 'gemini-image'
+  // Qwen和Gemini模型都支持多图融合
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image'
   return isMultiImageModel && localReferenceImages.value.length >= 2
 })
 
@@ -270,7 +270,7 @@ const shouldShowLoraPanel = computed(() => {
 
 // 计算属性：判断是否应该显示上传按钮
 const shouldShowUploadButton = computed(() => {
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1' || localModel.value === 'gemini-image'
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image'
   
   // 支持多图的模型：根据图片数量限制显示上传按钮
   if (isMultiImageModel) {
@@ -331,7 +331,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
   
   // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到qwen-image
   if (newCount >= 2) {
-    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'flux1' || localModel.value === 'gemini-image'
+    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image'
     if (!isMultiImageModel) {
       console.log('🔄 自动切换到Qwen模型')
       localModel.value = 'qwen-image'
@@ -341,7 +341,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
 
 // 监听模型变化，处理图片数量限制
 watch(() => localModel.value, (newModel) => {
-  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'flux1' || newModel === 'gemini-image'
+  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'gemini-image'
   
   // 如果切换到不支持多图的模型，且有多张图片，只保留第一张
   if (!isMultiImageModel && localReferenceImages.value.length > 1) {
@@ -559,7 +559,7 @@ const fetchLoras = async () => {
    left: 50%;
    transform: translateX(-50%);
    z-index: 1000;
-   max-width: 800px;
+   max-width: 900px;
    width: 90%;
    border-radius: 16px;
    overflow: hidden;

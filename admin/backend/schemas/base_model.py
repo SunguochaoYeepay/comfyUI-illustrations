@@ -5,7 +5,7 @@ import datetime
 class BaseModelBase(BaseModel):
     name: str = Field(..., description="模型名称（唯一标识）")
     display_name: str = Field(..., description="显示名称")
-    model_type: str = Field(..., description="模型类型：flux, qwen, wan, flux1, gemini")
+    model_type: str = Field(..., description="模型类型：flux, qwen, wan, gemini")
     description: Optional[str] = Field(None, description="模型描述")
     unet_file: Optional[str] = Field(None, description="UNet文件名")
     clip_file: Optional[str] = Field(None, description="CLIP文件名")
@@ -23,7 +23,7 @@ class BaseModelCreate(BaseModelBase):
 class BaseModelUpdate(BaseModel):
     name: Optional[str] = Field(None, description="模型名称（唯一标识）")
     display_name: Optional[str] = Field(None, description="显示名称")
-    model_type: Optional[str] = Field(None, description="模型类型：flux, qwen, wan, flux1, gemini")
+    model_type: Optional[str] = Field(None, description="模型类型：flux, qwen, wan, gemini")
     description: Optional[str] = Field(None, description="模型描述")
     unet_file: Optional[str] = Field(None, description="UNet文件名")
     clip_file: Optional[str] = Field(None, description="CLIP文件名")

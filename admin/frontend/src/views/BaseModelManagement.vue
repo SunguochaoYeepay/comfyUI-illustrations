@@ -67,7 +67,7 @@
             <a-select-option value="flux">Flux</a-select-option>
             <a-select-option value="qwen">Qwen</a-select-option>
             <a-select-option value="wan">Wan</a-select-option>
-            <a-select-option value="flux1">Flux1</a-select-option>
+            <!-- flux1选项已移除，只保留FLUX.1 Kontext -->
             <a-select-option value="gemini">Gemini</a-select-option>
           </a-select>
         </a-form-item>

@@ -36,7 +36,7 @@ def init_base_models():
         # 主工程的基础模型配置
         base_models_data = [
             {
-                "name": "flux1-dev",
+                "name": "flux-dev",
                 "display_name": "Flux Kontext",
                 "model_type": "flux",
                 "description": "Flux Kontext开发版本，支持高质量图像生成",
@@ -74,19 +74,7 @@ def init_base_models():
                 "is_default": False,
                 "sort_order": 3
             },
-            {
-                "name": "flux1",
-                "display_name": "Flux1基础模型",
-                "model_type": "flux1",
-                "description": "Flux1基础模型，支持多种工作流，可配置不同LoRA，输出高质量图像",
-                "unet_file": "FLUX.1-FP16-dev.sft",
-                "clip_file": "clip_l.safetensors",
-                "vae_file": "ae.safetensors",
-                "template_path": None,  # 工作流独立管理
-                "is_available": True,
-                "is_default": False,
-                "sort_order": 4
-            },
+            # flux1基础模型已移除，只保留FLUX.1 Kontext
             {
                 "name": "gemini-image",
                 "display_name": "Nano Banana",
@@ -98,7 +86,7 @@ def init_base_models():
                 "template_path": None,  # 工作流独立管理
                 "is_available": True,
                 "is_default": False,
-                "sort_order": 5
+                "sort_order": 4
             }
         ]
         

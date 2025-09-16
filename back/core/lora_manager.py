@@ -47,8 +47,7 @@ class LoraManager:
                 if base_model:
                     # 模型名称映射：处理模型名称的变体
                     model_mapping = {
-                        "flux1": "flux1-dev",  # flux1基础模型对应flux1-dev的LoRA
-                        "flux1-dev": "flux1-dev",
+                        "flux-dev": "flux-dev",
                         "qwen-image": "qwen-image",
                         "gemini-image": "gemini-image",
                         "wan2.2-video": "wan2.2-video"
@@ -143,10 +142,7 @@ class LoraManager:
         
         # 根据文件名中的关键词推断模型类型
         if "flux" in filename_lower:
-            if "flux1" in filename_lower:
-                return "flux1"
-            else:
-                return "flux1-dev"
+            return "flux-dev"
         elif "qwen" in filename_lower:
             return "qwen-image"
         elif "wan" in filename_lower:
@@ -154,8 +150,8 @@ class LoraManager:
         elif "gemini" in filename_lower:
             return "gemini-image"
         else:
-            # 默认返回flux1，因为这是最常用的
-            return "flux1"
+            # 默认返回flux-dev，因为这是最常用的
+            return "flux-dev"
     
     def _generate_display_name(self, filename: str) -> str:
         """生成显示名称"""

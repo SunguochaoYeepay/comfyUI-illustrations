@@ -200,7 +200,7 @@
             <a-select v-model:value="workflowConfig.core_config.base_model" style="width: 100%">
               <a-select-option value="qwen-image">Qwen图像生成模型</a-select-option>
               <a-select-option value="flux-dev">Flux开发版</a-select-option>
-              <a-select-option value="flux1-standard">Flux1标准版</a-select-option>
+              <!-- flux1标准版选项已移除，只保留FLUX.1 Kontext -->
               <a-select-option value="wan-video">WAN视频生成模型</a-select-option>
             </a-select>
           </a-form-item>

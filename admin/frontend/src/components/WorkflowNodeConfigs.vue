@@ -170,6 +170,21 @@
             </a-row>
           </div>
           
+          <!-- 权重数据类型配置 -->
+          <div v-else-if="config.type === 'weight_dtype'">
+            <a-form-item :label="config.label" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }">
+              <a-input 
+                :value="config.value" 
+                @update:value="updateConfig(index, 'value', $event)"
+                :placeholder="config.placeholder"
+                style="width: 100%"
+              />
+              <div v-if="config.helpText" style="margin-top: 4px; font-size: 12px; color: #666;">
+                {{ config.helpText }}
+              </div>
+            </a-form-item>
+          </div>
+          
           <!-- LoRA配置 -->
           <div v-else-if="config.type === 'lora'">
             <a-form-item label="LoRA模型" :label-col="{ span: 24 }" :wrapper-col="{ span: 24 }">

@@ -143,7 +143,7 @@ async def get_available_models():
 
 
 @app.get("/api/loras")
-async def get_available_loras(model: str = Query("flux1-dev", description="基础模型名称")):
+async def get_available_loras(model: str = Query("flux-dev", description="基础模型名称")):
     """获取可用的LoRA列表（根据模型过滤）"""
     try:
         from core.lora_manager import get_loras_from_config
@@ -382,7 +382,7 @@ async def generate_image(
     size: str = Form(DEFAULT_IMAGE_SIZE),
     steps: int = Form(DEFAULT_STEPS),
     seed: Optional[int] = Form(None),
-    model: str = Form("flux1-dev"),  # 新增模型选择参数
+    model: str = Form("flux-dev"),  # 新增模型选择参数
     loras: Optional[str] = Form(None),  # JSON字符串格式的LoRA配置
     duration: Optional[int] = Form(None),  # 视频时长（秒）
     fps: Optional[int] = Form(None)  # 视频帧率
@@ -522,8 +522,8 @@ async def generate_image_fusion(
     """多图融合生成API"""
     try:
         # 验证模型类型
-        if model not in ['qwen-image', 'flux1', 'gemini-image']:
-            raise HTTPException(status_code=400, detail="多图融合只支持Qwen、Flux1和Gemini模型")
+        if model not in ['qwen-image', 'gemini-image']:
+            raise HTTPException(status_code=400, detail="多图融合只支持Qwen和Gemini模型")
         
         # 验证图像数量
         if len(reference_images) < 2:

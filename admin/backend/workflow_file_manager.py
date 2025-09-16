@@ -31,7 +31,7 @@ class WorkflowFileManager:
         self.subdirs = {
             'qwen': self.workflows_dir / 'qwen',
             'flux': self.workflows_dir / 'flux',
-            'flux1': self.workflows_dir / 'flux1',
+            # flux1目录已移除，只保留FLUX.1 Kontext
             'gemini': self.workflows_dir / 'gemini',
             'wan': self.workflows_dir / 'wan',
             'fusion': self.workflows_dir / 'fusion',

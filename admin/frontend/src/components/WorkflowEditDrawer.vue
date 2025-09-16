@@ -159,16 +159,29 @@ const generateNodeConfigs = async (workflowJson) => {
         if (configItems.core_config.base_model) {
           configs.push({
             type: 'model',
-            title: '基础模型',
-            label: '基础模型',
+            title: 'UNET模型',
+            label: 'UNET模型',
             value: configItems.core_config.base_model.current_value || '',
             options: [
               { value: 'qwen_image_fp8_e4m3fn.safetensors', label: 'Qwen图像生成模型' },
-              { value: 'flux-dev', label: 'Flux开发版' },
-              { value: 'flux1-standard', label: 'Flux1标准版' },
-              { value: 'wan-video', label: 'WAN视频生成模型' }
+              { value: 'flux-dev.safetensors', label: 'Flux开发版' },
+              { value: 'wan-video.safetensors', label: 'WAN视频生成模型' }
             ],
             node_id: configItems.core_config.base_model.node_id
+          })
+        }
+        
+        // 权重数据类型（仅对UNETLoader）
+        if (configItems.core_config.weight_dtype) {
+          configs.push({
+            type: 'weight_dtype',
+            title: 'UNET精度',
+            label: 'UNET精度',
+            value: configItems.core_config.weight_dtype.current_value || '',
+            inputType: 'text',
+            placeholder: '如: fp8_e4m3fn, fp16, fp32, bf16',
+            helpText: '推荐: fp8_e4m3fn (显存少) | fp16 (平衡) | fp32 (质量高)',
+            node_id: configItems.core_config.weight_dtype.node_id
           })
         }
         
@@ -281,6 +294,11 @@ const handleSave = async () => {
             } else if (node.class_type === 'CLIPLoader' && 'clip_name' in node.inputs) {
               node.inputs.clip_name = config.value
             }
+          }
+          break
+        case 'weight_dtype':
+          if (node.inputs && 'weight_dtype' in node.inputs) {
+            node.inputs.weight_dtype = config.value
           }
           break
         case 'size':

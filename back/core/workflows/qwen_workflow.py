@@ -45,6 +45,9 @@ class QwenWorkflow(BaseWorkflow):
         # 更新采样参数
         workflow = self._update_sampling_parameters(workflow, validated_params)
         
+        # 更新图像尺寸
+        workflow = self._update_image_dimensions(workflow, validated_params)
+        
         # 更新保存路径
         workflow = self._update_save_path(workflow)
         
@@ -267,8 +270,7 @@ class QwenWorkflow(BaseWorkflow):
                 workflow["20"]["inputs"]["seed"] = parameters["seed"]
             print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 8)}, 种子={parameters.get('seed', 'random')}")
         
-        # 动态更新图像尺寸配置
-        workflow = self._update_image_dimensions(workflow)
+        # 图像尺寸更新已移到单独的步骤
         
         # 默认设置为文生图模式（完全降噪）
         if "20" in workflow:
@@ -282,17 +284,24 @@ class QwenWorkflow(BaseWorkflow):
         
         return workflow
     
-    def _update_image_dimensions(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_image_dimensions(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
         """动态更新图像尺寸配置"""
-        from config.settings import TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
+        # 从参数中获取尺寸
+        size_str = parameters.get("size", "1024x1024")
+        try:
+            width, height = map(int, size_str.split('x'))
+        except (ValueError, AttributeError):
+            # 如果解析失败，使用默认尺寸
+            width, height = 1024, 1024
+            print(f"⚠️ 尺寸解析失败，使用默认尺寸: {width}x{height}")
         
         # 更新节点27（CR SDXL Aspect Ratio）的尺寸配置
         if "27" in workflow:
-            workflow["27"]["inputs"]["width"] = TARGET_IMAGE_WIDTH
-            workflow["27"]["inputs"]["height"] = TARGET_IMAGE_HEIGHT
+            workflow["27"]["inputs"]["width"] = width
+            workflow["27"]["inputs"]["height"] = height
             # 使用custom选项，通过width和height参数控制尺寸
             workflow["27"]["inputs"]["aspect_ratio"] = "custom"
-            print(f"✅ 动态更新图像尺寸: {TARGET_IMAGE_WIDTH}x{TARGET_IMAGE_HEIGHT} (自定义)")
+            print(f"✅ 动态更新图像尺寸: {width}x{height} (自定义)")
         
         return workflow
     

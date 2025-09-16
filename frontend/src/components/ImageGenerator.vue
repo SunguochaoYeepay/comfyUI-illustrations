@@ -37,6 +37,8 @@
         v-model:reference-images="referenceImages"
         v-model:loras="selectedLoras"
         v-model:model="selectedModel"
+        v-model:size="imageSize"
+        v-model:count="imageCount"
         :is-generating="isGenerating"
         @generate="generateImage"
         @preview="handlePreview"

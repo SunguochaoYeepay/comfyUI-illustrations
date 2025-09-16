@@ -205,9 +205,14 @@ class ImageGenConfigManager:
                 if height > max_size:
                     height = max_size
             elif model_name == "qwen-image":
-                # Qwen模型建议使用1024x1024
-                if width != 1024 or height != 1024:
-                    return 1024, 1024
+                # Qwen模型支持自定义尺寸，但需要确保是64的倍数
+                width = (width // 64) * 64
+                height = (height // 64) * 64
+                # 确保最小尺寸
+                if width < 64:
+                    width = 64
+                if height < 64:
+                    height = 64
             
             return width, height
         except Exception as e:

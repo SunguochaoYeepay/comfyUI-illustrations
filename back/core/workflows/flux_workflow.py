@@ -294,11 +294,26 @@ class FluxWorkflow(BaseWorkflow):
                 workflow["31"]["inputs"]["seed"] = seed
                 print(f"使用随机种子: {seed}")
         
+        # 更新图像尺寸
+        size_str = parameters.get("size", "1024x1024")
+        try:
+            width, height = map(int, size_str.split('x'))
+        except (ValueError, AttributeError):
+            # 如果解析失败，使用默认尺寸
+            width, height = 1024, 1024
+            print(f"⚠️ 尺寸解析失败，使用默认尺寸: {width}x{height}")
+        
+        # 更新节点42（FluxKontextImageScale）的尺寸配置
+        if "42" in workflow:
+            workflow["42"]["inputs"]["width"] = width
+            workflow["42"]["inputs"]["height"] = height
+            print(f"✅ 更新Flux图像尺寸: {width}x{height}")
+        
         # 安全地打印参数信息
         steps_info = workflow["31"]["inputs"]["steps"] if "31" in workflow else "N/A"
         cfg_info = workflow["31"]["inputs"]["cfg"] if "31" in workflow else "N/A"
         guidance_info = workflow["35"]["inputs"]["guidance"] if "35" in workflow else "N/A"
-        print(f"工作流参数更新完成: 步数={steps_info}, CFG={cfg_info}, 引导={guidance_info}")
+        print(f"工作流参数更新完成: 步数={steps_info}, CFG={cfg_info}, 引导={guidance_info}, 尺寸={width}x{height}")
         return workflow
     
     def _convert_path_for_comfyui(self, image_path: str) -> str:

@@ -38,6 +38,14 @@
                class="model-selector-section"
              />
              
+             <!-- 尺寸和数量选择器 - 仅在非视频模型时显示 -->
+             <SizeSelector 
+               v-if="!isVideoModel"
+               v-model:size="localSize"
+               v-model:count="localCount"
+               class="size-selector-section"
+             />
+             
              <!-- 视频生成配置 - 仅在WAN2.2视频模型时显示 -->
              <div v-if="isVideoModel" class="video-config-section">
                <div class="video-config-item">
@@ -184,9 +192,10 @@
  import { computed, ref, onMounted, watch } from 'vue'
  import { message } from 'ant-design-vue'
    import { ReloadOutlined, DownOutlined } from '@ant-design/icons-vue'
- import ReferenceUpload from './ReferenceUpload.vue'
- import MultiImageUpload from './MultiImageUpload.vue'
- import ModelSelector from './ModelSelector.vue'
+import ReferenceUpload from './ReferenceUpload.vue'
+import MultiImageUpload from './MultiImageUpload.vue'
+import ModelSelector from './ModelSelector.vue'
+import SizeSelector from './SizeSelector.vue'
 
  // API基础URL - 自动检测环境
  const API_BASE = (() => {
@@ -210,25 +219,35 @@
      type: Array,
      default: () => []
    },
-   model: {
-     type: String,
-     default: 'flux1-dev'
-   },
-   isGenerating: {
-     type: Boolean,
-     default: false
-   }
+  model: {
+    type: String,
+    default: 'flux1-dev'
+  },
+  size: {
+    type: String,
+    default: '1024x1024'
+  },
+  count: {
+    type: Number,
+    default: 1
+  },
+  isGenerating: {
+    type: Boolean,
+    default: false
+  }
  })
 
  // Emits
- const emit = defineEmits([
-   'update:prompt',
-   'update:referenceImages',
-   'update:loras',
-   'update:model',
-   'generate',
-   'preview'
- ])
+const emit = defineEmits([
+  'update:prompt',
+  'update:referenceImages',
+  'update:loras',
+  'update:model',
+  'update:size',
+  'update:count',
+  'generate',
+  'preview'
+])
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式
 const isFusionMode = computed(() => {
@@ -294,6 +313,16 @@ const videoFps = ref('16') // 默认16 FPS
  const localModel = computed({
    get: () => props.model,
    set: (value) => emit('update:model', value)
+ })
+
+ const localSize = computed({
+   get: () => props.size,
+   set: (value) => emit('update:size', value)
+ })
+
+ const localCount = computed({
+   get: () => props.count,
+   set: (value) => emit('update:count', value)
  })
 
 // 监听图片数量变化，自动调整模型

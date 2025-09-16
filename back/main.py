@@ -378,6 +378,7 @@ async def generate_video(
 async def generate_image(
     description: str = Form(...),
     reference_image: Optional[UploadFile] = File(None),
+    reference_images: Optional[List[UploadFile]] = File(None),  # 支持多张参考图
     count: int = Form(DEFAULT_COUNT),
     size: str = Form(DEFAULT_IMAGE_SIZE),
     steps: int = Form(DEFAULT_STEPS),
@@ -391,7 +392,63 @@ async def generate_image(
     try:
         # 处理参考图像
         image_path = None
-        if reference_image:
+        image_paths = []
+        
+        # 处理多张参考图像（Flux模型2图融合）
+        if reference_images and len(reference_images) > 0:
+            print(f"🖼️ 处理多张参考图像: {len(reference_images)}张")
+            for i, ref_img in enumerate(reference_images):
+                try:
+                    # 保存上传的参考图像
+                    image_filename = f"{uuid.uuid4()}_{ref_img.filename}"
+                    image_path = UPLOAD_DIR / image_filename
+                    
+                    # 读取文件内容
+                    content = await ref_img.read()
+                    
+                    # 验证文件内容
+                    if len(content) == 0:
+                        print(f"❌ 参考图像{i+1}文件为空")
+                        raise HTTPException(status_code=400, detail=f"参考图像{i+1}文件为空")
+                    
+                    if len(content) < MIN_FILE_SIZE:
+                        print(f"❌ 参考图像{i+1}文件过小: {len(content)} 字节")
+                        raise HTTPException(status_code=400, detail=f"参考图像{i+1}文件过小或损坏")
+                    
+                    # 保存文件
+                    async with aiofiles.open(image_path, 'wb') as f:
+                        await f.write(content)
+                    
+                    # 验证保存的文件
+                    if not image_path.exists() or image_path.stat().st_size == 0:
+                        print(f"❌ 参考图像{i+1}保存失败")
+                        raise HTTPException(status_code=500, detail=f"参考图像{i+1}保存失败")
+                    
+                    # 复制文件到ComfyUI输入目录
+                    from config.settings import COMFYUI_INPUT_DIR
+                    import shutil
+                    
+                    comfyui_input_path = COMFYUI_INPUT_DIR / image_filename
+                    shutil.copy2(image_path, comfyui_input_path)
+                    print(f"✅ 复制参考图像{i+1}到ComfyUI输入目录: {comfyui_input_path}")
+                    
+                    image_paths.append(str(image_path))
+                    print(f"✅ 保存参考图像{i+1}成功: {image_path} ({image_path.stat().st_size} 字节)")
+                    
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    print(f"❌ 保存参考图像{i+1}时出错: {e}")
+                    # 如果保存失败，清理可能创建的文件
+                    if image_path and image_path.exists():
+                        try:
+                            image_path.unlink()
+                        except:
+                            pass
+                    raise HTTPException(status_code=500, detail=f"保存参考图像{i+1}失败: {str(e)}")
+        
+        # 处理单张参考图像（向后兼容）
+        elif reference_image:
             try:
                 # 保存上传的参考图像
                 image_filename = f"{uuid.uuid4()}_{reference_image.filename}"
@@ -493,8 +550,21 @@ async def generate_image(
             print(f"🎨 LoRA配置: {lora_configs}")
         
         # 创建任务
+        # 确定参考图像路径
+        reference_path = ""
+        if image_paths:
+            # 多张参考图像
+            reference_path = str(image_paths)
+        elif image_path:
+            # 单张参考图像
+            reference_path = str(image_path)
+        
+        # 添加多图路径参数
+        if image_paths:
+            parameters["reference_image_paths"] = image_paths
+        
         task_id = await task_manager.create_task(
-            str(image_path) if image_path else "", description, parameters
+            reference_path, description, parameters
         )
         
         return TaskResponse(

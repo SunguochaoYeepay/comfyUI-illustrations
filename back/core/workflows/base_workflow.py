@@ -134,11 +134,13 @@ class BaseWorkflow(ABC):
         
         return True
     
-    def _process_reference_image(self, reference_image_path: str) -> Optional[str]:
+    def _process_reference_image(self, reference_image_path: str, target_width: int = None, target_height: int = None) -> Optional[str]:
         """处理参考图像
         
         Args:
             reference_image_path: 参考图像路径
+            target_width: 目标宽度，如果为None则使用默认值
+            target_height: 目标高度，如果为None则使用默认值
             
         Returns:
             处理后的图像路径，如果没有参考图则返回None
@@ -163,19 +165,23 @@ class BaseWorkflow(ABC):
             source_file = Path(reference_image_path)
             dest_file = COMFYUI_MAIN_OUTPUT_DIR / source_file.name
             
-            # 压缩图像到512x512
+            # 使用传入的尺寸参数，如果没有则使用默认值
+            width = target_width if target_width is not None else TARGET_IMAGE_WIDTH
+            height = target_height if target_height is not None else TARGET_IMAGE_HEIGHT
+            
+            # 压缩图像到目标尺寸
             with Image.open(source_file) as img:
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 
-                img.thumbnail((TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT), Image.Resampling.LANCZOS)
+                img.thumbnail((width, height), Image.Resampling.LANCZOS)
                 
-                background = Image.new('RGB', (TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT), (255, 255, 255))
-                offset = ((TARGET_IMAGE_WIDTH - img.width) // 2, (TARGET_IMAGE_HEIGHT - img.height) // 2)
+                background = Image.new('RGB', (width, height), (255, 255, 255))
+                offset = ((width - img.width) // 2, (height - img.height) // 2)
                 background.paste(img, offset)
                 background.save(dest_file, 'PNG')
             
-            print(f"✅ 参考图压缩到512x512并保存成功: {source_file} -> {dest_file}")
+            print(f"✅ 参考图压缩到{width}x{height}并保存成功: {source_file} -> {dest_file}")
             return f"{source_file.name} [output]"
             
         except Exception as e:
@@ -191,8 +197,14 @@ class BaseWorkflow(ABC):
         Returns:
             (width, height) 元组
         """
-        # 目前固定使用512x512
-        return TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
+        # 从参数中解析尺寸
+        size_str = parameters.get("size", "1024x1024")
+        try:
+            width, height = map(int, size_str.split('x'))
+            return width, height
+        except (ValueError, AttributeError):
+            # 如果解析失败，使用默认尺寸
+            return TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
     
     def _add_common_metadata(self, workflow: Dict[str, Any], description: str, parameters: Dict[str, Any]):
         """添加公共元数据

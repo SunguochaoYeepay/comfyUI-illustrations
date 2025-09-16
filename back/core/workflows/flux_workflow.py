@@ -36,28 +36,60 @@ class FluxWorkflow(BaseWorkflow):
         validated_params = self._validate_parameters(parameters)
         
         # 处理参考图像
-        processed_image_path = self._process_reference_image(reference_image_path)
+        width, height = self._get_image_dimensions(parameters)
         
-        # 从数据库加载基础工作流
-        workflow = self._load_workflow_template()
+        # 检查是否是多图融合模式
+        reference_image_paths = parameters.get("reference_image_paths", [])
+        if reference_image_paths and len(reference_image_paths) >= 2:
+            # 多图融合模式（ImageStitch只支持2张图）
+            if len(reference_image_paths) > 2:
+                print(f"⚠️ ImageStitch节点只支持2张图，将使用前2张图像")
+                reference_image_paths = reference_image_paths[:2]
+            
+            print(f"🖼️ 检测到2图融合模式，处理 {len(reference_image_paths)} 张图像")
+            processed_image_paths = []
+            for path in reference_image_paths:
+                processed_path = self._process_reference_image(path, width, height)
+                if processed_path:
+                    processed_image_paths.append(processed_path)
+            
+            if processed_image_paths:
+                workflow = self._load_image_to_image_workflow_template()
+            else:
+                print("📝 多图处理失败，使用文生图工作流")
+                workflow = self._load_text_to_image_workflow_template()
+        else:
+            # 单图模式
+            processed_image_path = self._process_reference_image(reference_image_path, width, height)
+            
+            # 根据是否有参考图选择不同的工作流模板
+            if processed_image_path:
+                print("🖼️ 检测到参考图像，使用图生图工作流")
+                workflow = self._load_image_to_image_workflow_template()
+            else:
+                print("📝 无参考图像，使用文生图工作流")
+                workflow = self._load_text_to_image_workflow_template()
         
         # 更新基础模型
         workflow = self._update_base_model(workflow, validated_params)
         
-        # 清理无效的图像引用节点
-        workflow = self._clean_invalid_image_nodes(workflow)
-        
-        # 处理LoRA配置
+        # 处理LoRA配置和文本描述更新
         loras = validated_params.get("loras", [])
-        if loras:
-            workflow = self._add_lora_nodes(workflow, loras, description)
+        workflow = self._add_lora_nodes(workflow, loras, description)
         
         # 处理参考图像
-        if processed_image_path:
+        if reference_image_paths and len(reference_image_paths) >= 2:
+            # 多图融合模式
+            workflow = self._add_reference_image_nodes(workflow, processed_image_paths)
+        elif processed_image_path:
+            # 单图模式
             workflow = self._add_reference_image_nodes(workflow, processed_image_path)
         
         # 更新最终参数
-        workflow = self._update_final_parameters(workflow, validated_params)
+        workflow = self._update_final_parameters(workflow, validated_params, description)
+        
+        # 处理模板变量（如{{description}}）
+        workflow = self._process_template_variables(workflow, description, validated_params)
         
         print(f"✅ Flux工作流创建完成，包含 {len(workflow)} 个节点")
         return workflow
@@ -69,121 +101,6 @@ class FluxWorkflow(BaseWorkflow):
         if "37" in workflow:  # UNETLoader节点
             workflow["37"]["inputs"]["unet_name"] = base_model
             print(f"🔄 更新基础模型: {base_model}")
-        
-        return workflow
-    
-    def _create_base_workflow(self, description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """创建基础Flux工作流"""
-        workflow = {
-            "6": {
-                "inputs": {
-                    "text": description,
-                    "clip": ["38", 0]
-                },
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "CLIP文本编码器"}
-            },
-            "8": {
-                "inputs": {
-                    "samples": ["31", 0],
-                    "vae": ["39", 0]
-                },
-                "class_type": "VAEDecode",
-                "_meta": {"title": "VAE解码"}
-            },
-            "31": {
-                "inputs": {
-                    "seed": parameters.get("seed", random.randint(1, 2**32 - 1)),
-                    "steps": parameters.get("steps", DEFAULT_STEPS),
-                    "cfg": 1,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "denoise": 1,
-                    "batch_size": parameters.get("count", DEFAULT_COUNT),
-                    "model": ["37", 0],
-                    "positive": ["35", 0],
-                    "negative": ["135", 0],
-                    "latent_image": ["124", 0]
-                },
-                "class_type": "KSampler",
-                "_meta": {"title": "K采样器"}
-            },
-            "35": {
-                "inputs": {
-                    "guidance": 2.5,
-                    "conditioning": ["177", 0]
-                },
-                "class_type": "FluxGuidance",
-                "_meta": {"title": "Flux引导"}
-            },
-            "37": {
-                "inputs": {
-                    "unet_name": self.model_config.unet_file,
-                    "weight_dtype": "default"
-                },
-                "class_type": "UNETLoader",
-                "_meta": {"title": "UNET加载器"}
-            },
-            "38": {
-                "inputs": {
-                    "clip_name1": "clip_l.safetensors",
-                    "clip_name2": "t5xxl_fp8_e4m3fn_scaled.safetensors",
-                    "type": "flux",
-                    "device": "default"
-                },
-                "class_type": "DualCLIPLoader",
-                "_meta": {"title": "双CLIP加载器"}
-            },
-            "39": {
-                "inputs": {
-                    "vae_name": "ae.safetensors"
-                },
-                "class_type": "VAELoader",
-                "_meta": {"title": "VAE加载器"}
-            },
-            "42": {
-                "inputs": {
-                    "width": TARGET_IMAGE_WIDTH,
-                    "height": TARGET_IMAGE_HEIGHT,
-                    "batch_size": 1,
-                    "color": 0
-                },
-                "class_type": "EmptyImage",
-                "_meta": {"title": "空图像"}
-            },
-            "124": {
-                "inputs": {
-                    "pixels": ["42", 0],
-                    "vae": ["39", 0]
-                },
-                "class_type": "VAEEncode",
-                "_meta": {"title": "VAE编码"}
-            },
-            "135": {
-                "inputs": {
-                    "conditioning": ["6", 0]
-                },
-                "class_type": "ConditioningZeroOut",
-                "_meta": {"title": "条件零化"}
-            },
-            "136": {
-                "inputs": {
-                    "filename_prefix": "yeepay/yeepay",
-                    "images": ["8", 0],
-                    "save_all": True
-                },
-                "class_type": "SaveImage",
-                "_meta": {"title": "保存图像"}
-            },
-            "177": {
-                "inputs": {
-                    "conditioning": ["6", 0],
-                    "latent": ["124", 0]
-                },
-                "class_type": "ReferenceLatent",
-                "_meta": {"title": "ReferenceLatent"}
-            }
-        }
         
         return workflow
     
@@ -239,41 +156,171 @@ class FluxWorkflow(BaseWorkflow):
         return workflow
     
     def _add_reference_image_nodes(self, workflow: Dict[str, Any], image_path: str) -> Dict[str, Any]:
-        """添加参考图像节点"""
-        print("检测到参考图，使用参考图模式")
+        """添加参考图像节点到Flux工作流"""
+        print("📸 为Flux工作流添加参考图支持")
         
-        # 添加LoadImageOutput节点
-        comfyui_path = self._convert_path_for_comfyui(image_path)
-        workflow["142"] = {
-            "inputs": {
-                "image": comfyui_path,
-                "refresh": "refresh"
-            },
-            "class_type": "LoadImageOutput",
-            "_meta": {"title": "加载图像（来自输出）"}
+        # 检查是否是多图融合模式
+        image_paths = []
+        if isinstance(image_path, list):
+            image_paths = image_path
+        else:
+            image_paths = [image_path]
+        
+        # ImageStitch只支持2张图，限制数量
+        if len(image_paths) > 2:
+            print(f"⚠️ ImageStitch节点只支持2张图，将使用前2张图像")
+            image_paths = image_paths[:2]
+        
+        print(f"📸 处理 {len(image_paths)} 张参考图像")
+        
+        # 添加LoadImage节点
+        load_image_nodes = []
+        for i, path in enumerate(image_paths):
+            node_id = str(142 + i)  # 142, 143
+            comfyui_path = self._convert_path_for_comfyui(path)
+            workflow[node_id] = {
+                "inputs": {
+                    "image": comfyui_path,
+                    "upload": "image"
+                },
+                "class_type": "LoadImage",
+                "_meta": {"title": f"加载参考图像{i+1}"}
+            }
+            load_image_nodes.append([node_id, 0])
+        
+        # 添加ImageStitch节点（只支持image1和image2）
+        stitch_inputs = {
+            "direction": "right",
+            "match_image_size": True,
+            "spacing_width": 0,
+            "spacing_color": "white",
+            "image1": load_image_nodes[0]
         }
         
-        # 更新ImageScale节点
+        # 如果有第二张图，添加image2输入
+        if len(load_image_nodes) > 1:
+            stitch_inputs["image2"] = load_image_nodes[1]
+        
+        workflow["146"] = {
+            "inputs": stitch_inputs,
+            "class_type": "ImageStitch",
+            "_meta": {"title": "Image Stitch"}
+        }
+        
+        # 添加FluxKontextImageScale节点（尺寸将在_update_final_parameters中更新）
         workflow["42"] = {
             "inputs": {
-                "image": ["142", 0],
-                "width": TARGET_IMAGE_WIDTH,
-                "height": TARGET_IMAGE_HEIGHT,
-                "crop": "disabled",
-                "upscale_method": "lanczos",
-                "downscale_method": "area"
+                "image": ["146", 0],
+                "width": 1024,  # 临时值，会被_update_final_parameters覆盖
+                "height": 1024,  # 临时值，会被_update_final_parameters覆盖
+                "crop": "disabled"
             },
-            "class_type": "ImageScale",
-            "_meta": {"title": "图像缩放"}
+            "class_type": "FluxKontextImageScale",
+            "_meta": {"title": "FluxKontextImageScale"}
         }
         
-        # 更新VAEEncode节点
-        workflow["124"]["inputs"]["pixels"] = ["42", 0]
+        # 添加VAEEncode节点
+        workflow["124"] = {
+            "inputs": {
+                "pixels": ["42", 0],
+                "vae": ["39", 0]
+            },
+            "class_type": "VAEEncode",
+            "_meta": {"title": "VAE编码"}
+        }
         
-        print(f"✅ 配置参考图模式工作流")
+        # 更新KSampler的latent_image输入
+        if "31" in workflow:
+            workflow["31"]["inputs"]["latent_image"] = ["124", 0]
+            print("✅ 更新KSampler的latent_image输入为VAEEncode输出")
+        
+        if len(image_paths) > 1:
+            print(f"✅ 2图融合节点添加完成: {len(image_paths)}个LoadImage -> ImageStitch -> FluxKontextImageScale -> VAEEncode")
+        else:
+            print(f"✅ 参考图节点添加完成: LoadImage -> ImageStitch -> FluxKontextImageScale -> VAEEncode")
         return workflow
     
-    def _update_final_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_path_for_comfyui(self, image_path: str) -> str:
+        """将图像路径转换为ComfyUI可用的路径"""
+        from config.settings import COMFYUI_INPUT_DIR
+        
+        # 获取文件名
+        filename = image_path.split('/')[-1] if '/' in image_path else image_path.split('\\')[-1]
+        
+        # ComfyUI期望的是相对于输入目录的文件名
+        comfyui_path = filename
+        
+        print(f"🔄 路径转换: {image_path} -> {comfyui_path}")
+        print(f"📁 ComfyUI输入目录: {COMFYUI_INPUT_DIR}")
+        return comfyui_path
+    
+    def _load_text_to_image_workflow_template(self) -> Dict[str, Any]:
+        """加载文生图工作流模板"""
+        import sqlite3
+        import json
+        from pathlib import Path
+        
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
+        
+        # 从数据库加载文生图工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("文生图工作流",))
+            result = cursor.fetchone()
+            
+            if result:
+                workflow = json.loads(result[0])
+                print(f"✅ 从数据库加载Flux文生图工作流模板: 文生图工作流")
+                return workflow
+            
+            raise ValueError("数据库中未找到文生图工作流")
+            
+        except Exception as e:
+            print(f"❌ 从数据库加载文生图工作流失败: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def _load_image_to_image_workflow_template(self) -> Dict[str, Any]:
+        """加载图生图工作流模板"""
+        import sqlite3
+        import json
+        from pathlib import Path
+        
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
+        
+        # 从数据库加载图生图工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("图生图工作流",))
+            result = cursor.fetchone()
+            
+            if result:
+                workflow = json.loads(result[0])
+                print(f"✅ 从数据库加载Flux图生图工作流模板: 图生图工作流")
+                return workflow
+            
+            raise ValueError("数据库中未找到图生图工作流")
+            
+        except Exception as e:
+            print(f"❌ 从数据库加载图生图工作流失败: {e}")
+            raise
+        finally:
+            conn.close()
+    
+    def _update_final_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any], description: str = "") -> Dict[str, Any]:
         """更新最终参数（安全更新，检查节点是否存在）"""
         # 更新生成参数 - 检查节点31是否存在
         if "31" in workflow:
@@ -307,14 +354,8 @@ class FluxWorkflow(BaseWorkflow):
                 workflow["31"]["inputs"]["seed"] = seed
                 print(f"使用随机种子: {seed}")
         
-        # 更新图像尺寸
-        size_str = parameters.get("size", "1024x1024")
-        try:
-            width, height = map(int, size_str.split('x'))
-        except (ValueError, AttributeError):
-            # 如果解析失败，使用默认尺寸
-            width, height = 1024, 1024
-            print(f"⚠️ 尺寸解析失败，使用默认尺寸: {width}x{height}")
+        # 获取图像尺寸（使用基类方法）
+        width, height = self._get_image_dimensions(parameters)
         
         # 更新节点42（FluxKontextImageScale）的尺寸配置
         if "42" in workflow:
@@ -322,135 +363,40 @@ class FluxWorkflow(BaseWorkflow):
             workflow["42"]["inputs"]["height"] = height
             print(f"✅ 更新Flux图像尺寸: {width}x{height}")
         
+        # 更新节点188（EmptySD3LatentImage）的尺寸配置（文生图工作流）
+        if "188" in workflow:
+            workflow["188"]["inputs"]["width"] = width
+            workflow["188"]["inputs"]["height"] = height
+            print(f"✅ 更新EmptySD3LatentImage尺寸: {width}x{height}")
+        
+        # 更新节点178（EmptySD3LatentImage）的尺寸配置（图生图工作流）
+        if "178" in workflow:
+            workflow["178"]["inputs"]["width"] = width
+            workflow["178"]["inputs"]["height"] = height
+            print(f"✅ 更新图生图EmptySD3LatentImage尺寸: {width}x{height}")
+        
         # 安全地打印参数信息
-        steps_info = workflow["31"]["inputs"]["steps"] if "31" in workflow else "N/A"
-        cfg_info = workflow["31"]["inputs"]["cfg"] if "31" in workflow else "N/A"
-        guidance_info = workflow["35"]["inputs"]["guidance"] if "35" in workflow else "N/A"
-        print(f"工作流参数更新完成: 步数={steps_info}, CFG={cfg_info}, 引导={guidance_info}, 尺寸={width}x{height}")
+        steps = parameters.get("steps", 20)
+        cfg = parameters.get("cfg", 1)
+        guidance = parameters.get("guidance", 2.5)
+        
+        print(f"工作流参数更新完成: 步数={steps}, CFG={cfg}, 引导={guidance}, 尺寸={width}x{height}")
         return workflow
     
-    def _convert_path_for_comfyui(self, image_path: str) -> str:
-        """转换Windows路径为ComfyUI兼容的路径格式
-        
-        Args:
-            image_path: 原始图像路径
-            
-        Returns:
-            ComfyUI兼容的路径格式
-        """
-        import os
-        from config.settings import COMFYUI_INPUT_DIR
-        
-        # 获取文件名（不包含路径）
-        filename = os.path.basename(image_path)
-        
-        # ComfyUI期望的是相对于输入目录的文件名
-        comfyui_path = filename
-        
-        print(f"🔄 路径转换: {image_path} -> {comfyui_path}")
-        print(f"📁 ComfyUI输入目录: {COMFYUI_INPUT_DIR}")
-        return comfyui_path
-    
-    def _load_workflow_template(self) -> Dict[str, Any]:
-        """从数据库加载工作流模板"""
-        import sqlite3
-        import json
-        from pathlib import Path
-        
-        # 数据库路径
-        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
-        
-        if not db_path.exists():
-            print(f"⚠️ 数据库文件不存在，使用内置模板: {db_path}")
-            return self._create_base_workflow("", {})
-        
-        # 从数据库加载工作流
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("flux1_flux_kontext_dev_basic_2",))
-            result = cursor.fetchone()
-            
-            if not result:
-                print(f"⚠️ 数据库中未找到Flux工作流，使用内置模板")
-                return self._create_base_workflow("", {})
-            
-            workflow = json.loads(result[0])
-            print(f"✅ 从数据库加载Flux工作流模板: flux1_flux_kontext_dev_basic_2")
-            return workflow
-            
-        except Exception as e:
-            print(f"❌ 从数据库加载Flux工作流失败: {e}，使用内置模板")
-            return self._create_base_workflow("", {})
-        finally:
-            conn.close()
-    
-    def _clean_invalid_image_nodes(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
-        """清理无效的图像引用节点（保守清理策略）"""
-        # 需要清理的节点ID列表
-        invalid_nodes = ["142", "147"]  # 根据错误信息中的节点ID
-        
-        # 只删除无效的图像引用节点，不删除依赖节点
-        for node_id in invalid_nodes:
-            if node_id in workflow:
-                node = workflow[node_id]
-                # 检查是否是LoadImageOutput节点且引用了无效文件
-                if (node.get("class_type") == "LoadImageOutput" and 
-                    "image" in node.get("inputs", {})):
-                    image_path = node["inputs"]["image"]
-                    # 如果引用了不存在的输出文件，移除这个节点
-                    if "[output]" in image_path:
-                        print(f"🧹 清理无效的图像引用节点 {node_id}: {image_path}")
-                        del workflow[node_id]
-        
-        # 清理引用已删除节点的输入，但不删除节点本身
+    def _process_template_variables(self, workflow: Dict[str, Any], description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """处理模板变量（如{{description}}）"""
+        # 遍历工作流节点，处理模板变量
         for node_id, node in workflow.items():
-            if "inputs" in node:
-                for input_name, input_value in node["inputs"].items():
-                    # 检查是否引用了已删除的节点
-                    if isinstance(input_value, list) and len(input_value) >= 1:
-                        referenced_node = str(input_value[0])
-                        if referenced_node in invalid_nodes:
-                            print(f"🧹 清理节点 {node_id} 中对已删除节点 {referenced_node} 的引用")
-                            # 将引用设置为None或空值，而不是删除整个节点
-                            node["inputs"][input_name] = None
-        
-        # 修复节点42的连接 - FluxKontextImageScale需要一个图像输入
-        if "42" in workflow:
-            # 检查节点42的类型
-            if workflow["42"].get("class_type") == "FluxKontextImageScale":
-                # 检查节点42是否已经有有效的图像输入
-                if "image" not in workflow["42"]["inputs"] or workflow["42"]["inputs"]["image"] is None:
-                    # 添加一个新的EmptyImage节点
-                    workflow["200"] = {
-                        "inputs": {
-                            "width": 1024,
-                            "height": 1024,
-                            "batch_size": 1,
-                            "color": 0
-                        },
-                        "class_type": "EmptyImage",
-                        "_meta": {"title": "空图像"}
-                    }
-                    # 将节点42连接到新的EmptyImage节点
-                    workflow["42"]["inputs"]["image"] = ["200", 0]
-                    print("✅ 为节点42添加EmptyImage输入")
-        
-        # 删除节点146（ImageStitch），因为它的输入已经被删除
-        if "146" in workflow:
-            del workflow["146"]
-            print("✅ 删除节点146（ImageStitch）")
-        
-        # 修复其他节点对节点146的引用
-        for node_id, node in workflow.items():
-            if "inputs" in node:
-                for input_name, input_value in node["inputs"].items():
-                    if isinstance(input_value, list) and len(input_value) >= 1:
-                        referenced_node = str(input_value[0])
-                        if referenced_node == "146":
-                            # 将引用重定向到节点42
-                            node["inputs"][input_name] = ["42", 0]
-                            print(f"✅ 将节点 {node_id} 的 {input_name} 引用重定向到节点42")
+            if not isinstance(node, dict):
+                continue
+                
+            inputs = node.get("inputs", {})
+            
+            # 处理文本字段中的模板变量
+            for key, value in inputs.items():
+                if isinstance(value, str) and "{{description}}" in value:
+                    # 替换{{description}}为实际描述
+                    inputs[key] = value.replace("{{description}}", description)
+                    print(f"✅ 处理模板变量 {node_id}.{key}: {{description}} -> {description[:30]}...")
         
         return workflow

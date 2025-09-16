@@ -251,8 +251,8 @@ const emit = defineEmits([
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式
 const isFusionMode = computed(() => {
-  // Qwen和Gemini模型都支持多图融合
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image'
+  // Qwen、Gemini和Flux模型都支持多图融合
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev'
   return isMultiImageModel && localReferenceImages.value.length >= 2
 })
 
@@ -270,11 +270,11 @@ const shouldShowLoraPanel = computed(() => {
 
 // 计算属性：判断是否应该显示上传按钮
 const shouldShowUploadButton = computed(() => {
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image'
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev'
   
   // 支持多图的模型：根据图片数量限制显示上传按钮
   if (isMultiImageModel) {
-    // Qwen模型支持3张图片，其他模型最多2张
+    // Qwen模型支持3张图片，Flux和Gemini模型最多2张
     const maxImages = localModel.value === 'qwen-image' ? 3 : 2
     return localReferenceImages.value.length < maxImages
   }
@@ -331,7 +331,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
   
   // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到qwen-image
   if (newCount >= 2) {
-    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image'
+    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev'
     if (!isMultiImageModel) {
       console.log('🔄 自动切换到Qwen模型')
       localModel.value = 'qwen-image'
@@ -341,12 +341,18 @@ watch(() => localReferenceImages.value.length, (newCount) => {
 
 // 监听模型变化，处理图片数量限制
 watch(() => localModel.value, (newModel) => {
-  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'gemini-image'
+  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'gemini-image' || newModel === 'flux-dev'
   
   // 如果切换到不支持多图的模型，且有多张图片，只保留第一张
   if (!isMultiImageModel && localReferenceImages.value.length > 1) {
     console.log('🔄 切换到不支持多图的模型，只保留第一张图片')
     localReferenceImages.value = [localReferenceImages.value[0]]
+  }
+  
+  // 如果切换到Flux模型，且有多于2张图片，只保留前2张
+  if (newModel === 'flux-dev' && localReferenceImages.value.length > 2) {
+    console.log('🔄 切换到Flux模型，只保留前2张图片')
+    localReferenceImages.value = localReferenceImages.value.slice(0, 2)
   }
 }, { immediate: true })
 
@@ -355,7 +361,11 @@ const getPromptPlaceholder = () => {
   if (isVideoModel.value) {
     return '请描述您想要的视频效果（如：镜头缓慢推进，人物微笑，背景模糊）'
   } else if (isFusionMode.value) {
-    return '请描述多图融合的效果，支持中文输入（如：将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上）'
+    if (localModel.value === 'flux-dev') {
+      return '请描述2图融合的效果，支持中文输入（如：将两张图像融合，让左边的人物拿着右边的物品）'
+    } else {
+      return '请描述多图融合的效果，支持中文输入（如：将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上）'
+    }
   } else if (localModel.value === 'qwen-image') {
     return '请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）'
   } else {

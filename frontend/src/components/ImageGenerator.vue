@@ -295,6 +295,12 @@ const generateImage = async (options = {}) => {
     message.warning('多图融合至少需要2张图片')
     return
   }
+  
+  // Flux模型2图融合验证
+  if (selectedModel.value === 'flux-dev' && referenceImages.value.length > 2) {
+    message.warning('Flux模型最多支持2张图片融合')
+    return
+  }
 
   isGenerating.value = true
   progress.value = 0
@@ -323,22 +329,41 @@ const generateImage = async (options = {}) => {
     // 根据模式设置不同的参数
     if (mode === 'fusion') {
       // 多图融合模式
-      formData.append('fusion_mode', 'concat')
-      formData.append('cfg', 2.5)
-      formData.append('size', imageSize.value)  // 添加尺寸参数
-      
-      // 添加多张参考图片
-      referenceImages.value.forEach((imageFile, index) => {
-        if (imageFile.originFileObj instanceof File) {
-          formData.append('reference_images', imageFile.originFileObj)
-        } else {
-          console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
-          message.error(`参考图片${index + 1}文件无效，请重新选择`)
-          return
-        }
-      })
-      
-      console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
+      if (selectedModel.value === 'flux-dev') {
+        // Flux模型2图融合模式
+        formData.append('size', imageSize.value)
+        
+        // 添加2张参考图片
+        referenceImages.value.forEach((imageFile, index) => {
+          if (imageFile.originFileObj instanceof File) {
+            formData.append('reference_images', imageFile.originFileObj)
+          } else {
+            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
+            message.error(`参考图片${index + 1}文件无效，请重新选择`)
+            return
+          }
+        })
+        
+        console.log(`🎨 Flux 2图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
+      } else {
+        // Qwen/Gemini多图融合模式
+        formData.append('fusion_mode', 'concat')
+        formData.append('cfg', 2.5)
+        formData.append('size', imageSize.value)  // 添加尺寸参数
+        
+        // 添加多张参考图片
+        referenceImages.value.forEach((imageFile, index) => {
+          if (imageFile.originFileObj instanceof File) {
+            formData.append('reference_images', imageFile.originFileObj)
+          } else {
+            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
+            message.error(`参考图片${index + 1}文件无效，请重新选择`)
+            return
+          }
+        })
+        
+        console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
+      }
     } else {
       // 单图生成模式
       formData.append('count', imageCount.value)
@@ -365,7 +390,19 @@ const generateImage = async (options = {}) => {
     }
 
     // 调用后端API
-    const apiEndpoint = mode === 'fusion' ? '/api/generate-image-fusion' : '/api/generate-image'
+    let apiEndpoint
+    if (mode === 'fusion') {
+      if (selectedModel.value === 'flux-dev') {
+        // Flux模型使用普通生成接口，但传递多张图片
+        apiEndpoint = '/api/generate-image'
+      } else {
+        // Qwen/Gemini模型使用专门的融合接口
+        apiEndpoint = '/api/generate-image-fusion'
+      }
+    } else {
+      apiEndpoint = '/api/generate-image'
+    }
+    
     const response = await fetch(`${API_BASE}${apiEndpoint}`, {
       method: 'POST',
       body: formData

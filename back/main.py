@@ -143,7 +143,7 @@ async def get_available_models():
 
 
 @app.get("/api/loras")
-async def get_available_loras(model: str = Query("flux-dev", description="基础模型名称")):
+async def get_available_loras(model: str = Query(..., description="基础模型名称")):
     """获取可用的LoRA列表（根据模型过滤）"""
     try:
         from core.lora_manager import get_loras_from_config
@@ -383,7 +383,7 @@ async def generate_image(
     size: str = Form(DEFAULT_IMAGE_SIZE),
     steps: int = Form(DEFAULT_STEPS),
     seed: Optional[int] = Form(None),
-    model: str = Form("flux-dev"),  # 新增模型选择参数
+    model: str = Form(...),  # 模型选择参数（必填）
     loras: Optional[str] = Form(None),  # JSON字符串格式的LoRA配置
     duration: Optional[int] = Form(None),  # 视频时长（秒）
     fps: Optional[int] = Form(None)  # 视频帧率
@@ -585,15 +585,32 @@ async def generate_image_fusion(
     steps: int = Form(20),
     cfg: float = Form(2.5),
     seed: Optional[int] = Form(None),
-    model: str = Form("qwen-image"),
+    model: str = Form(...),
     loras: Optional[str] = Form(None),
     size: str = Form(DEFAULT_IMAGE_SIZE)  # 添加尺寸参数
 ):
     """多图融合生成API"""
     try:
-        # 验证模型类型
-        if model not in ['qwen-image', 'gemini-image']:
-            raise HTTPException(status_code=400, detail="多图融合只支持Qwen和Gemini模型")
+        # 动态验证模型类型 - 从配置获取支持的融合模型
+        try:
+            from core.config_client import get_config_client
+            config_client = get_config_client()
+            models_config = await config_client.get_models_config()
+            available_models = [m.get("name") for m in models_config.get("models", []) if m.get("available", True)]
+            
+            # 检查模型是否支持融合功能（这里可以根据实际需求调整）
+            fusion_supported_models = [m for m in available_models if m in ['qwen-image', 'gemini-image']]
+            
+            if model not in fusion_supported_models:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"模型 {model} 不支持多图融合功能。支持的模型: {', '.join(fusion_supported_models)}"
+                )
+        except Exception as e:
+            print(f"⚠️ 动态验证模型失败，使用默认验证: {e}")
+            # 降级到默认验证
+            if model not in ['qwen-image', 'gemini-image']:
+                raise HTTPException(status_code=400, detail="多图融合只支持Qwen和Gemini模型")
         
         # 验证图像数量
         if len(reference_images) < 2:

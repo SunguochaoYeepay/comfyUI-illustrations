@@ -53,12 +53,13 @@ import { message } from 'ant-design-vue'
 import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
 import cacheManager from '../utils/cacheManager.js'
+import modelManager from '../utils/modelManager.js'
 
 // API基础URL - 自动检测环境
 const API_BASE = (() => {
   // 开发环境：指向后端9000端口
   if (import.meta.env.DEV) {
-    return 'http://localhost:9000'
+    return import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000'
   }
   // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
   return import.meta.env.VITE_API_BASE_URL || ''
@@ -136,7 +137,7 @@ const referenceImages = ref([])
 // 缓存状态
 const cacheStatus = ref(null)
 const selectedLoras = ref([]) // 新增：选择的LoRA配置
-const selectedModel = ref('qwen-image') // 新增：选择的模型
+const selectedModel = ref('') // 动态选择的模型，将从配置中获取
 const previewVisible = ref(false)
 const previewImage = ref('')
 
@@ -1803,8 +1804,32 @@ const handleFilterChange = async (filterParams) => {
 
 // 历史记录现在由后端数据库管理，无需本地存储
 
+// 初始化默认模型
+const initializeDefaultModel = async () => {
+  try {
+    console.log('🔍 正在获取默认模型配置...')
+    
+    // 使用全局模型管理器
+    await modelManager.fetchModels()
+    const defaultModel = modelManager.getDefaultModel()
+    
+    if (defaultModel) {
+      selectedModel.value = defaultModel.name
+      console.log('✅ 默认模型已设置:', defaultModel.display_name)
+    } else {
+      console.warn('⚠️ 没有可用的模型配置')
+      selectedModel.value = 'qwen-image' // 最后的降级方案
+    }
+  } catch (error) {
+    console.error('❌ 初始化默认模型失败:', error)
+    selectedModel.value = 'qwen-image' // 降级方案
+  }
+}
+
 // 组件挂载时加载历史记录
 onMounted(async () => {
+  // 首先获取默认模型
+  await initializeDefaultModel()
   await loadHistory()
   
   // 检查是否有回填数据

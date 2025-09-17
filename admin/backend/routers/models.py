@@ -35,7 +35,7 @@ def list_checkpoints():
     models_dir = Path(settings.COMFYUI_MODELS_DIR)
     return get_models_from_dir(models_dir, allowed_extensions)
 
-@router.get("/loras", response_model=List[schemas.ModelInfo])
+@router.get("/models/loras", response_model=List[schemas.ModelInfo])
 def list_loras():
     """
     Get a list of available LoRA models.

@@ -12,16 +12,16 @@ from pathlib import Path
 # 添加当前目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from database import SessionLocal, engine
-import models
+from database import SessionLocal, engine, Base
 import crud
+import models
 from schemas import system_config
 
 def init_system_config():
     """初始化系统配置"""
     
     # 创建数据库表
-    models.Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     
     # 获取数据库会话
     db = SessionLocal()

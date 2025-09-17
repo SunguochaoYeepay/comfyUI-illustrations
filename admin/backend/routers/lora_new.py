@@ -9,55 +9,94 @@ from config import settings
 
 router = APIRouter()
 
-@router.get("/loras/", response_model=dict)
+@router.get("/loras", response_model=dict)
 async def get_loras(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
-    base_model: Optional[str] = Query(None, description="基础模型过滤"),
-    name: Optional[str] = Query(None, description="名称搜索"),
+    base_model_filter: Optional[str] = Query(None, description="基础模型过滤"),
+    name_filter: Optional[str] = Query(None, description="名称搜索"),
     db: Session = Depends(get_db),
     # current_user: models.AdminUser = Depends(get_current_user)  # 暂时移除认证
 ):
-    """获取LoRA列表"""
+    """获取LoRA列表 - 从文件系统扫描"""
     try:
-        skip = (page - 1) * page_size
-        loras = crud.get_loras(db, skip=skip, limit=page_size, base_model=base_model, name=name)
+        from pathlib import Path
+        import time
+        import json
         
-        # 获取总数
-        total_query = db.query(models.Lora)
-        if base_model:
-            total_query = total_query.filter(models.Lora.base_model == base_model)
-        if name:
-            total_query = total_query.filter(models.Lora.name.contains(name))
-        total = total_query.count()
-        
-        # 将SQLAlchemy对象转换为字典
-        loras_data = []
-        for lora in loras:
-            lora_dict = {
-                "id": lora.id,
-                "name": lora.name,
-                "display_name": lora.display_name,
-                "base_model": lora.base_model,
-                "description": lora.description,
-                "file_path": lora.file_path,
-                "file_size": lora.file_size,
-                "is_available": lora.is_available,
-                "is_managed": lora.is_managed,
-                "created_at": lora.created_at.isoformat() if lora.created_at else None,
-                "updated_at": lora.updated_at.isoformat() if lora.updated_at else None
+        # 检查LoRA目录是否存在
+        if not settings.COMFYUI_LORAS_DIR.exists():
+            return {
+                "code": 200,
+                "message": "获取成功",
+                "data": {
+                    "items": [],
+                    "total": 0,
+                    "page": page,
+                    "pageSize": page_size
+                }
             }
-            loras_data.append(lora_dict)
+        
+        # 扫描LoRA文件
+        lora_files = []
+        for file_path in settings.COMFYUI_LORAS_DIR.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in ['.safetensors', '.ckpt', '.pt']:
+                # 获取文件元数据
+                stat_info = file_path.stat()
+                json_path = file_path.with_suffix('.json')
+                
+                # 读取JSON元数据
+                meta = {
+                    "display_name": file_path.stem,
+                    "base_model": "未知",
+                    "description": "",
+                    "created_at": stat_info.st_ctime,
+                    "modified_at": stat_info.st_mtime
+                }
+                
+                if json_path.exists():
+                    try:
+                        with open(json_path, 'r', encoding='utf-8') as f:
+                            json_data = json.load(f)
+                            meta.update(json_data)
+                    except:
+                        pass
+                
+                # 应用过滤器
+                if base_model_filter and base_model_filter not in meta.get("base_model", ""):
+                    continue
+                if name_filter and name_filter.lower() not in file_path.name.lower() and name_filter.lower() not in meta.get("display_name", "").lower():
+                    continue
+                
+                lora_files.append({
+                    "id": None,  # 文件系统扫描没有ID
+                    "name": file_path.name,
+                    "display_name": meta.get("display_name", file_path.stem),
+                    "base_model": meta.get("base_model", "未知"),
+                    "description": meta.get("description", ""),
+                    "file_path": str(file_path),
+                    "file_size": stat_info.st_size,
+                    "is_available": True,
+                    "is_managed": json_path.exists(),
+                    "created_at": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(meta.get("created_at", stat_info.st_ctime))),
+                    "updated_at": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(meta.get("modified_at", stat_info.st_mtime)))
+                })
+        
+        # 按修改时间排序
+        lora_files.sort(key=lambda x: x["updated_at"], reverse=True)
+        
+        # 分页
+        total = len(lora_files)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_loras = lora_files[start:end]
         
         return {
-            "code": 200,
-            "message": "获取成功",
-            "data": {
-                "items": loras_data,
-                "total": total,
-                "page": page,
-                "pageSize": page_size
-            }
+            "loras": paginated_loras,
+            "total": total,
+            "directory": str(settings.COMFYUI_LORAS_DIR),
+            "model": "flux1-dev",  # 可以从配置或参数获取
+            "model_type": "flux"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取LoRA列表失败: {str(e)}")
@@ -159,7 +198,7 @@ async def delete_lora(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除LoRA失败: {str(e)}")
 
-@router.post("/loras/", response_model=dict)
+@router.post("/loras", response_model=dict)
 async def create_lora(
     lora_data: lora.LoraCreate,
     db: Session = Depends(get_db),

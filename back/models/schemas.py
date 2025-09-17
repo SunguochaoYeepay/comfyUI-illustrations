@@ -1,166 +1,157 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-数据模型模块
-包含所有Pydantic模型定义和API响应模式
+YeePay AI图像生成服务 - 数据模型定义
+定义API请求和响应的数据结构
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
-
-from config.settings import DEFAULT_COUNT, DEFAULT_IMAGE_SIZE, DEFAULT_STEPS
-
-
-class LoRAConfig(BaseModel):
-    """LoRA配置模型"""
-    name: str = Field(..., description="LoRA文件名（.safetensors格式）")
-    strength_model: float = Field(1.0, ge=0.0, le=2.0, description="UNET权重强度 (0.0-2.0)")
-    strength_clip: float = Field(1.0, ge=0.0, le=2.0, description="CLIP权重强度 (0.0-2.0)")
-    trigger_word: Optional[str] = Field(None, description="触发词（可选）")
-    enabled: bool = Field(True, description="是否启用此LoRA")
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "name": "anime_style.safetensors",
-                "strength_model": 0.8,
-                "strength_clip": 0.7,
-                "trigger_word": "anime style",
-                "enabled": True
-            }
-        }
-
-
-class GenerateImageRequest(BaseModel):
-    """图像生成请求模型"""
-    description: str = Field(..., description="图像描述文本")
-    parameters: Optional[Dict[str, Any]] = Field(
-        default={
-            "count": DEFAULT_COUNT,
-            "size": DEFAULT_IMAGE_SIZE,
-            "steps": DEFAULT_STEPS,
-            "seed": None
-        },
-        description="生成参数"
-    )
-    loras: Optional[List[LoRAConfig]] = Field(
-        default=[],
-        max_items=4,
-        description="LoRA配置列表（最多4个）"
-    )
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "description": "A beautiful anime girl with blue hair",
-                "parameters": {
-                    "count": 1,
-                    "steps": 20,
-                    "seed": 12345
-                },
-                "loras": [
-                    {
-                        "name": "anime_style.safetensors",
-                        "strength_model": 0.8,
-                        "strength_clip": 0.7,
-                        "trigger_word": "anime style",
-                        "enabled": True
-                    }
-                ]
-            }
-        }
-
-
-class GenerateFusionRequest(BaseModel):
-    """多图融合请求模型"""
-    description: str = Field(..., description="融合描述文本")
-    fusion_mode: str = Field("concat", description="融合模式：concat(拼接), blend(混合), edit(编辑)")
-    parameters: Optional[Dict[str, Any]] = Field(
-        default={
-            "steps": DEFAULT_STEPS,
-            "seed": None,
-            "cfg": 2.5
-        },
-        description="生成参数"
-    )
-    loras: Optional[List[LoRAConfig]] = Field(
-        default=[],
-        max_items=4,
-        description="LoRA配置列表（最多4个，多图融合暂不支持）"
-    )
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "description": "将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上",
-                "fusion_mode": "concat",
-                "parameters": {
-                    "steps": 20,
-                    "cfg": 2.5,
-                    "seed": 12345
-                },
-                "loras": []
-            }
-        }
+from datetime import datetime
 
 
 class TaskResponse(BaseModel):
-    """任务响应模型"""
-    task_id: str
-    status: str
-    message: str
+    """任务创建响应"""
+    task_id: str = Field(..., description="任务ID")
+    status: str = Field(..., description="任务状态")
+    message: str = Field(..., description="响应消息")
 
 
 class TaskStatusResponse(BaseModel):
-    """任务状态响应模型"""
-    task_id: str
-    status: str
-    progress: int
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "task_id": "123e4567-e89b-12d3-a456-426614174000",
-                "status": "completed",
-                "progress": 100,
-                "result": {
-                    "image_urls": ["/api/image/123e4567-e89b-12d3-a456-426614174000?index=0"],
-                    "count": 1,
-                    "filenames": ["ComfyUI_00001_.png"],
-                    "direct_urls": ["/api/image/123e4567-e89b-12d3-a456-426614174000?filename=ComfyUI_00001_.png"]
-                },
-                "error": None
-            }
-        }
+    """任务状态响应"""
+    task_id: str = Field(..., description="任务ID")
+    status: str = Field(..., description="任务状态")
+    progress: int = Field(..., description="任务进度百分比")
+    result: Optional[Dict[str, Any]] = Field(None, description="任务结果")
+    error: Optional[str] = Field(None, description="错误信息")
 
 
 class HistoryResponse(BaseModel):
-    """历史记录响应模型"""
-    tasks: list
-    total: int
-    has_more: bool
-    limit: int
-    offset: int
-    order: str
+    """历史记录响应"""
+    tasks: List[Dict[str, Any]] = Field(..., description="任务列表")
+    total: int = Field(..., description="总任务数")
+    limit: int = Field(..., description="每页限制")
+    offset: int = Field(..., description="偏移量")
 
 
 class FavoriteResponse(BaseModel):
-    """收藏状态响应模型"""
-    task_id: str
-    is_favorited: bool
-    message: str
+    """收藏响应"""
+    task_id: str = Field(..., description="任务ID")
+    is_favorited: bool = Field(..., description="是否已收藏")
+    message: str = Field(..., description="响应消息")
 
 
 class DeleteResponse(BaseModel):
-    """删除响应模型"""
-    task_id: str
-    message: str
+    """删除响应"""
+    task_id: str = Field(..., description="任务ID")
+    message: str = Field(..., description="响应消息")
 
 
 class HealthResponse(BaseModel):
-    """健康检查响应模型"""
-    status: str
-    comfyui_connected: bool
-    timestamp: str
+    """健康检查响应"""
+    status: str = Field(..., description="服务状态")
+    database_connected: bool = Field(..., description="数据库连接状态")
+    comfyui_connected: bool = Field(..., description="ComfyUI连接状态")
+    redis_cache: Optional[Dict[str, Any]] = Field(None, description="Redis缓存状态")
+    timestamp: str = Field(..., description="检查时间戳")
+
+
+class GenerateFusionRequest(BaseModel):
+    """多图融合生成请求"""
+    description: str = Field(..., description="描述文本")
+    reference_images: List[str] = Field(..., description="参考图像路径列表")
+    fusion_mode: str = Field(default="concat", description="融合模式")
+    steps: int = Field(default=20, description="生成步数")
+    cfg: float = Field(default=2.5, description="CFG值")
+    seed: Optional[int] = Field(None, description="随机种子")
+    model: str = Field(..., description="模型名称")
+    size: str = Field(default="1024x1024", description="图像尺寸")
+
+
+class ImageGenerationRequest(BaseModel):
+    """图像生成请求"""
+    description: str = Field(..., description="描述文本")
+    reference_image: Optional[str] = Field(None, description="参考图像路径")
+    count: int = Field(default=1, description="生成数量")
+    size: str = Field(default="1024x1024", description="图像尺寸")
+    steps: int = Field(default=20, description="生成步数")
+    seed: Optional[int] = Field(None, description="随机种子")
+    model: str = Field(..., description="模型名称")
+    loras: Optional[List[Dict[str, Any]]] = Field(None, description="LoRA配置")
+
+
+class VideoGenerationRequest(BaseModel):
+    """视频生成请求"""
+    description: str = Field(..., description="描述文本")
+    reference_image: str = Field(..., description="参考图像路径")
+    fps: int = Field(default=16, description="帧率")
+    duration: int = Field(default=5, description="时长（秒）")
+    model: str = Field(..., description="模型名称")
+    loras: Optional[List[Dict[str, Any]]] = Field(None, description="LoRA配置")
+
+
+class TranslationRequest(BaseModel):
+    """翻译请求"""
+    text: str = Field(..., description="待翻译文本")
+
+
+class TranslationResponse(BaseModel):
+    """翻译响应"""
+    original: str = Field(..., description="原文")
+    translated: str = Field(..., description="译文")
+    success: bool = Field(..., description="是否成功")
+    timestamp: str = Field(..., description="时间戳")
+
+
+class ConfigStatusResponse(BaseModel):
+    """配置状态响应"""
+    status: str = Field(..., description="配置状态")
+    backend_connected: bool = Field(..., description="后台服务连接状态")
+    config_source: str = Field(..., description="配置来源")
+    last_config_update: str = Field(..., description="最后配置更新时间")
+    cache_status: Optional[Dict[str, Any]] = Field(None, description="缓存状态")
+    timestamp: str = Field(..., description="检查时间戳")
+
+
+class ImageGenConfigResponse(BaseModel):
+    """图像生成配置响应"""
+    default_size: Dict[str, Union[int, str]] = Field(..., description="默认尺寸")
+    default_steps: int = Field(..., description="默认步数")
+    default_count: int = Field(..., description="默认数量")
+    supported_ratios: List[str] = Field(..., description="支持的宽高比")
+    supported_formats: List[str] = Field(..., description="支持的格式")
+    quality_settings: Dict[str, Dict[str, Union[int, float]]] = Field(..., description="质量设置")
+    config_source: str = Field(..., description="配置来源")
+    timestamp: str = Field(..., description="时间戳")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
+class ModelListResponse(BaseModel):
+    """模型列表响应"""
+    models: List[Dict[str, Any]] = Field(..., description="模型列表")
+    config_source: str = Field(..., description="配置来源")
+    timestamp: str = Field(..., description="时间戳")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
+class LoRAListResponse(BaseModel):
+    """LoRA列表响应"""
+    loras: List[Dict[str, Any]] = Field(..., description="LoRA列表")
+    config_source: str = Field(..., description="配置来源")
+    timestamp: str = Field(..., description="时间戳")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
+class UploadResponse(BaseModel):
+    """上传响应"""
+    message: str = Field(..., description="响应消息")
+    filename: str = Field(..., description="文件名")
+    size: int = Field(..., description="文件大小")
+
+
+class FavoritesResponse(BaseModel):
+    """收藏列表响应"""
+    favorites: List[Dict[str, Any]] = Field(..., description="收藏列表")
+    total: int = Field(..., description="总数")
+    images: int = Field(..., description="图片数量")
+    videos: int = Field(..., description="视频数量")

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from enum import Enum
 
-from config.settings import COMFYUI_MAIN_OUTPUT_DIR, COMFYUI_MODELS_DIR
+from config.settings import COMFYUI_MAIN_OUTPUT_DIR, COMFYUI_MODELS_DIR, ADMIN_BACKEND_URL
 
 
 class ModelType(Enum):
@@ -236,47 +236,32 @@ class ModelManager:
             return None
     
     def _get_model_config_sync_fallback(self, model_name: str) -> Optional[ModelConfig]:
-        """同步回退方法 - 直接从数据库获取"""
+        """同步回退方法 - 通过admin API获取"""
         try:
-            import sqlite3
-            from pathlib import Path
+            import requests
             
-            # 数据库路径
-            db_path = Path(__file__).parent.parent.parent / "admin" / "admin.db"
+            # 通过admin API获取模型配置
+            admin_url = f"{ADMIN_BACKEND_URL}/api/admin/config-sync/models"
+            response = requests.get(admin_url, timeout=5)
             
-            if not db_path.exists():
-                print(f"❌ 数据库文件不存在: {db_path}")
+            if response.status_code != 200:
+                print(f"❌ admin API调用失败: {response.status_code}")
                 return None
             
-            # 从数据库获取模型配置
-            conn = sqlite3.connect(str(db_path))
-            cursor = conn.cursor()
+            data = response.json()
+            models = data.get("models", [])
             
-            try:
-                cursor.execute("SELECT * FROM base_models WHERE name = ?", (model_name,))
-                result = cursor.fetchone()
-                
-                if not result:
-                    print(f"⚠️ 数据库中未找到模型: {model_name}")
-                    return None
-                
-                # 构建ModelConfig对象
-                return ModelConfig(
-                    model_type=ModelType(result[1]),  # model_type
-                    name=result[2],  # name
-                    display_name=result[3],  # display_name
-                    unet_file=result[4],  # unet_file
-                    clip_file=result[5],  # clip_file
-                    vae_file=result[6],  # vae_file
-                    template_path="",  # 已移除
-                    description=result[8] if len(result) > 8 else ""  # description
-                )
-                
-            finally:
-                conn.close()
+            # 查找指定模型
+            for model_data in models:
+                if model_data.get("name") == model_name:
+                    print(f"✅ 通过admin API获取模型配置: {model_name}")
+                    return self._convert_dict_to_model_config(model_data)
+            
+            print(f"⚠️ admin API中未找到模型: {model_name}")
+            return None
                 
         except Exception as e:
-            print(f"❌ 同步获取模型配置失败: {e}")
+            print(f"❌ 通过admin API获取模型配置失败: {e}")
             return None
     
     def _convert_dict_to_model_config(self, model_data: Dict[str, Any]) -> ModelConfig:

@@ -9,6 +9,7 @@ import json
 from typing import Any, Dict
 
 from .base_workflow import BaseWorkflow
+from config.settings import ADMIN_BACKEND_URL
 
 
 class QwenWorkflow(BaseWorkflow):
@@ -136,38 +137,37 @@ class QwenWorkflow(BaseWorkflow):
         return workflow
     
     def _load_workflow_template(self) -> Dict[str, Any]:
-        """从数据库加载工作流模板"""
-        import sqlite3
-        from pathlib import Path
-        
-        # 数据库路径
-        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
-        
-        if not db_path.exists():
-            print(f"⚠️ 数据库文件不存在，使用内置模板: {db_path}")
-            return self._get_builtin_template()
-        
-        # 从数据库加载工作流
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
+        """通过admin API加载工作流模板"""
         try:
-            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("qwen_image_generation_workflow",))
-            result = cursor.fetchone()
+            import requests
+            import json
             
-            if not result:
-                print(f"⚠️ 数据库中未找到Qwen工作流，使用内置模板")
+            # 通过admin API获取工作流配置
+            admin_url = f"{ADMIN_BACKEND_URL}/api/admin/config-sync/workflows"
+            response = requests.get(admin_url, timeout=5)
+            
+            if response.status_code != 200:
+                print(f"⚠️ admin API调用失败: {response.status_code}，使用内置模板")
                 return self._get_builtin_template()
             
-            workflow = json.loads(result[0])
-            print(f"✅ 从数据库加载Qwen工作流模板: qwen_image_generation_workflow")
-            return workflow
+            data = response.json()
+            workflows = data.get("workflows", [])
+            
+            # 查找Qwen工作流
+            for workflow_data in workflows:
+                if workflow_data.get("name") == "qwen_image_generation_workflow":
+                    workflow_json = workflow_data.get("workflow_json")
+                    if workflow_json:
+                        workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
+                        print(f"✅ 通过admin API加载Qwen工作流模板: qwen_image_generation_workflow")
+                        return workflow
+            
+            print(f"⚠️ admin API中未找到Qwen工作流，使用内置模板")
+            return self._get_builtin_template()
             
         except Exception as e:
-            print(f"❌ 从数据库加载Qwen工作流失败: {e}，使用内置模板")
+            print(f"❌ 通过admin API加载Qwen工作流失败: {e}，使用内置模板")
             return self._get_builtin_template()
-        finally:
-            conn.close()
     
     def _get_builtin_template(self) -> Dict[str, Any]:
         """获取内置模板"""

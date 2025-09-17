@@ -1,14 +1,16 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 import json
-import os
 
 import crud
 import schemas_legacy as schemas
 from dependencies import get_db
 from workflow_validator import WorkflowValidator
-from size_config_manager import SizeConfigManager
 
 router = APIRouter(
     prefix="/admin/workflows",
@@ -39,35 +41,6 @@ def read_workflows(skip: int = 0, limit: int = 100, search: str = "", db: Sessio
     }
 
 
-@router.get("/size-mappings")
-def get_size_mappings():
-    """获取尺寸映射配置"""
-    size_manager = SizeConfigManager()
-    return {
-        "ratios": [ratio.__dict__ for ratio in size_manager.get_available_ratios()],
-        "statistics": size_manager.get_size_statistics()
-    }
-
-@router.get("/sizes/{ratio}")
-def get_sizes_by_ratio(ratio: str):
-    """根据比例获取可用尺寸"""
-    size_manager = SizeConfigManager()
-    sizes = size_manager.get_sizes_by_ratio(ratio)
-    return {"sizes": [size.__dict__ for size in sizes]}
-
-@router.get("/recommended-sizes")
-def get_recommended_sizes(model_type: str = None, ratio: str = None):
-    """获取推荐尺寸"""
-    size_manager = SizeConfigManager()
-    sizes = size_manager.get_recommended_sizes(model_type, ratio)
-    return {"sizes": [size.__dict__ for size in sizes]}
-
-@router.get("/default-size")
-def get_default_size(model_type: str = None, ratio: str = "1:1"):
-    """获取默认尺寸"""
-    size_manager = SizeConfigManager()
-    default_size = size_manager.get_default_size(model_type, ratio)
-    return {"size": default_size.__dict__}
 
 @router.get("/{workflow_id}", response_model=schemas.Workflow)
 def read_workflow(workflow_id: int, db: Session = Depends(get_db)):
@@ -279,22 +252,3 @@ def create_workflow_from_upload(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建工作流失败: {str(e)}")
-
-@router.post("/validate-size")
-def validate_size(size_data: Dict[str, Any]):
-    """验证尺寸"""
-    width = size_data.get("width")
-    height = size_data.get("height")
-    model_type = size_data.get("model_type")
-    
-    if not width or not height:
-        raise HTTPException(status_code=400, detail="Width and height are required")
-    
-    size_manager = SizeConfigManager()
-    is_valid, message = size_manager.validate_size(width, height, model_type)
-    
-    return {
-        "valid": is_valid,
-        "message": message,
-        "size_info": size_manager.get_size_info(width, height).__dict__ if is_valid else None
-    }

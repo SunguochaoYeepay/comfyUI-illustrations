@@ -150,8 +150,11 @@ class LoraManager:
         elif "gemini" in filename_lower:
             return "gemini-image"
         else:
-            # 默认返回flux-dev，因为这是最常用的
-            return "flux-dev"
+            # 如果没有找到匹配的模型，返回第一个可用的模型
+            available_models = list(self.model_mapping.keys())
+            if available_models:
+                return available_models[0]
+            return None
     
     def _generate_display_name(self, filename: str) -> str:
         """生成显示名称"""

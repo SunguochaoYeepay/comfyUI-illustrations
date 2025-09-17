@@ -21,6 +21,7 @@ services:
       - DEBUG=false
       - LOG_LEVEL=INFO
       - OLLAMA_URL=http://host.docker.internal:11434
+      - ADMIN_BACKEND_URL=http://admin-backend:8888
       - REDIS_ENABLED=true
       - REDIS_URL=redis://redis:6379
     networks:

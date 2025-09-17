@@ -45,32 +45,21 @@ class WorkflowTemplate:
             print(f"❌ 加载模板文件失败: {e}")
             return {}
     
-    async def customize_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any], model_name: str = "flux-dev"):
+    async def customize_workflow(self, reference_image_path: str, description: str, parameters: Dict[str, Any], model_name: str):
         """自定义工作流参数 - 支持多种模型
         
         Args:
             reference_image_path: 参考图像路径
             description: 图像描述
             parameters: 生成参数
-            model_name: 模型名称（默认flux-dev）
+            model_name: 模型名称（必填）
         """
         # 获取模型配置 - 使用配置客户端
         model_config = await self._get_model_config_from_client(model_name)
         if not model_config:
-            print(f"⚠️ 模型 {model_name} 不可用，使用默认Flux模型")
-            model_config = await self._get_model_config_from_client("flux-dev")
+            raise ValueError(f"模型 {model_name} 不可用或未配置")
         
-        if model_config:
-            print(f"🎯 使用模型: {model_config.get('display_name', model_name)}")
-        else:
-            print(f"⚠️ 无法获取模型配置，使用模型名称: {model_name}")
-            # 创建一个临时的模型配置
-            model_config = {
-                "name": model_name,
-                "display_name": model_name,
-                "model_type": "unknown",
-                "available": True
-            }
+        print(f"🎯 使用模型: {model_config.get('display_name', model_name)}")
         
         # 根据模型类型选择对应的工作流创建器
         model_type = model_config.get("model_type", "unknown")
@@ -371,7 +360,7 @@ class WorkflowTemplate:
             return workflow_template.copy()
     
     async def customize_workflow_from_config(self, reference_image_path: str, description: str, 
-                                           parameters: Dict[str, Any], model_name: str = "flux-dev",
+                                           parameters: Dict[str, Any], model_name: str,
                                            workflow_type: Optional[str] = None) -> Dict[str, Any]:
         """从配置自定义工作流参数"""
         try:

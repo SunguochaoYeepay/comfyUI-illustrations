@@ -15,7 +15,7 @@ async def fetch_tasks_from_main_backend():
     try:
         async with httpx.AsyncClient() as client:
             # 注意：这里我们直接调用主后端的 /api/history 接口
-            response = await client.get("http://127.0.0.1:9000/api/history")
+            response = await client.get(f"{settings.BACKEND_URL}/api/history")
             response.raise_for_status()
             return response.json().get("tasks", [])
     except (httpx.RequestError, httpx.HTTPStatusError) as e:

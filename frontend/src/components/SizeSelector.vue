@@ -158,7 +158,7 @@ const emit = defineEmits([
 // API基础URL
 const API_BASE = (() => {
   if (import.meta.env.DEV) {
-    return 'http://localhost:8888'  // admin后端运行在8888端口
+    return import.meta.env.VITE_ADMIN_BACKEND_URL || 'http://localhost:8888'  // admin后端运行在8888端口
   }
   return import.meta.env.VITE_API_BASE_URL || ''
 })()

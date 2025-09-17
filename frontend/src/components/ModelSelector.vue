@@ -30,7 +30,7 @@
               <a-button 
                 type="link" 
                 size="small" 
-                @click="fetchModels"
+                @click="fetchModelsWrapper"
                 :loading="loading"
               >
                 <template #icon>
@@ -77,67 +77,45 @@
 import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined, DownOutlined } from '@ant-design/icons-vue'
-
-// API基础URL
-const API_BASE = (() => {
-  if (import.meta.env.DEV) {
-    return 'http://localhost:9000'
-  }
-  return import.meta.env.VITE_API_BASE_URL || ''
-})()
+import modelManager from '../utils/modelManager.js'
 
 // Props
 const props = defineProps({
   model: {
     type: String,
-    default: 'qwen-image'
+    required: true
   }
 })
 
 // Emits
 const emit = defineEmits(['update:model'])
 
-// 状态
-const availableModels = ref([])
-const loading = ref(false)
-const configSource = ref('')
-const lastUpdated = ref('')
+// 使用全局模型管理器
+const { models: availableModels, loading, configSource, lastUpdated, fetchModels } = modelManager
 
   // 当前选择的模型
   const currentModel = computed({
     get: () => {
       const model = availableModels.value.find(m => m.name === props.model)
       return model || {
-        name: 'qwen-image',
-        display_name: 'Qwen',
-        description: 'Qwen支持中文较好，适合中文描述生成',
-        available: true
+        name: props.model,
+        display_name: props.model,
+        description: '模型配置加载中...',
+        available: false
       }
     },
     set: (value) => emit('update:model', value.name)
   })
 
-// 获取可用模型列表
-const fetchModels = async () => {
+// 获取可用模型列表（使用全局管理器）
+const fetchModelsWrapper = async () => {
   try {
-    loading.value = true
-    const response = await fetch(`${API_BASE}/api/models`)
-    if (response.ok) {
-      const data = await response.json()
-      availableModels.value = data.models || []
-      configSource.value = data.config_source || 'unknown'
-      lastUpdated.value = data.timestamp || ''
-      console.log('🤖 获取到模型列表:', availableModels.value)
-      console.log('📊 配置来源:', configSource.value)
-    } else {
-      console.error('❌ 获取模型列表失败:', response.status)
-      message.error('获取模型列表失败')
-    }
+    await fetchModels()
+    console.log('🤖 获取到模型列表:', availableModels.value)
+    console.log('📊 配置来源:', configSource.value)
   } catch (error) {
     console.error('❌ 获取模型列表出错:', error)
     message.error('获取模型列表出错')
-  } finally {
-    loading.value = false
   }
 }
 
@@ -173,14 +151,16 @@ const selectModel = (model) => {
 
 // 处理下拉菜单显示状态变化
 const handleDropdownVisibleChange = (visible) => {
-  if (visible && availableModels.value.length === 0) {
-    fetchModels()
+  if (visible && availableModels.value.length === 0 && !modelManager.initialized.value) {
+    fetchModelsWrapper()
   }
 }
 
-// 组件挂载时加载模型列表
+// 组件挂载时不自动加载模型列表，避免与ImageGenerator重复调用
+// 模型列表由ImageGenerator统一初始化
 onMounted(() => {
-  fetchModels()
+  // 不在这里调用fetchModels，避免重复请求
+  console.log('📋 ModelSelector已挂载，等待ImageGenerator初始化模型列表')
 })
 </script>
 

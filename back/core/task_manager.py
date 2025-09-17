@@ -102,7 +102,9 @@ class TaskManager:
             self.db.update_task_status(task_id, "processing")
             
             # 获取模型名称
-            model_name = parameters.get("model", "flux-dev")
+            model_name = parameters.get("model")
+            if not model_name:
+                raise ValueError("模型名称是必需的参数")
             
             # 根据模型类型决定是否翻译
             translated_description = description

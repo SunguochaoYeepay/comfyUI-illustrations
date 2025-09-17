@@ -17,15 +17,6 @@
   - 复杂度评估
   - 警告生成
 
-### **2. 尺寸配置管理器 (SizeConfigManager)**
-- **功能**: 管理图像尺寸配置
-- **特性**:
-  - 支持7种标准比例 (1:1, 3:4, 4:3, 16:9, 9:16, 2:3, 3:2)
-  - 每种比例提供多个预设尺寸
-  - 自定义尺寸支持
-  - 模型特定尺寸限制
-  - 尺寸验证和推荐
-  - 像素数格式化显示
 
 ### **3. 后端API接口**
 - **工作流验证接口**:
@@ -33,12 +24,6 @@
   - `POST /admin/workflows/upload-and-validate` - 上传并验证工作流
   - `POST /admin/workflows/create-from-upload` - 从上传创建工作流
 
-- **尺寸配置接口**:
-  - `GET /admin/workflows/size-mappings` - 获取尺寸映射
-  - `GET /admin/workflows/sizes/{ratio}` - 根据比例获取尺寸
-  - `POST /admin/workflows/validate-size` - 验证尺寸
-  - `GET /admin/workflows/recommended-sizes` - 获取推荐尺寸
-  - `GET /admin/workflows/default-size` - 获取默认尺寸
 
 ### **4. 前端工作流上传组件**
 - **功能**: 用户友好的工作流上传和配置界面
@@ -70,7 +55,6 @@
 ```
 admin/backend/
 ├── workflow_validator.py      # 工作流验证器
-├── size_config_manager.py     # 尺寸配置管理器
 ├── routers/workflows.py       # API路由
 └── test_workflow_system.py    # 测试脚本
 ```
@@ -87,7 +71,6 @@ admin/frontend/src/
 
 系统测试全部通过：
 - ✅ 工作流验证器: 通过
-- ✅ 尺寸配置管理器: 通过
 - ✅ API接口: 通过
 - ✅ 前端组件: 通过
 

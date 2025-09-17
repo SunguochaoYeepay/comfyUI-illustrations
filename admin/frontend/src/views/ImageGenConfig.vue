@@ -104,42 +104,6 @@
       </div>
     </a-card>
 
-    <a-card title="工作流尺寸配置" class="config-card">
-      <template #extra>
-        <a-tooltip title="显示所有工作流中的图片尺寸配置">
-          <info-circle-outlined />
-        </a-tooltip>
-      </template>
-      
-      <div class="workflow-sizes-section">
-        <p class="section-desc">查看所有工作流中配置的图片尺寸，确保生图配置与工作流配置保持一致</p>
-        
-        <div v-if="workflowSizes.length > 0">
-          <a-table 
-            :columns="workflowSizeColumns" 
-            :data-source="workflowSizes" 
-            :pagination="false"
-            size="small"
-            row-key="workflow_id"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'status'">
-                <a-tag :color="record.is_available ? 'green' : 'red'">
-                  {{ record.is_available ? '启用' : '禁用' }}
-                </a-tag>
-              </template>
-              <template v-if="column.key === 'aspect_ratio'">
-                <a-tag color="blue">{{ record.aspect_ratio }}</a-tag>
-              </template>
-            </template>
-          </a-table>
-        </div>
-        <div v-else class="loading-placeholder">
-          <a-spin size="large" />
-          <p>加载工作流尺寸配置中...</p>
-        </div>
-      </div>
-    </a-card>
 
     <a-card title="生图尺寸配置" class="config-card">
       <template #extra>
@@ -225,7 +189,7 @@ import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { SaveOutlined, InfoCircleOutlined, DragOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import draggable from 'vuedraggable'
-import { getImageGenConfig, updateImageGenConfig, getBaseModelsForConfig, getLorasForConfig, getWorkflowSizesForConfig } from '@/api/imageGenConfig'
+import { getImageGenConfig, updateImageGenConfig, getBaseModelsForConfig, getLorasForConfig } from '@/api/imageGenConfig'
 
 export default {
   name: 'ImageGenConfig',
@@ -255,7 +219,6 @@ export default {
     
     const baseModels = ref([])
     const loras = ref([])
-    const workflowSizes = ref([])
     // 计算按基础模型分组的LoRA列表
     const loraGroups = computed(() => {
       if (!loras.value.length) return []
@@ -296,45 +259,6 @@ export default {
       })
     })
 
-    // 工作流尺寸配置表格列定义
-    const workflowSizeColumns = [
-      {
-        title: '工作流名称',
-        dataIndex: 'workflow_name',
-        key: 'workflow_name',
-        width: 200
-      },
-      {
-        title: '描述',
-        dataIndex: 'workflow_description',
-        key: 'workflow_description',
-        ellipsis: true
-      },
-      {
-        title: '宽度',
-        dataIndex: 'width',
-        key: 'width',
-        width: 80
-      },
-      {
-        title: '高度',
-        dataIndex: 'height',
-        key: 'height',
-        width: 80
-      },
-      {
-        title: '宽高比',
-        dataIndex: 'aspect_ratio',
-        key: 'aspect_ratio',
-        width: 100
-      },
-      {
-        title: '状态',
-        dataIndex: 'is_available',
-        key: 'status',
-        width: 80
-      }
-    ]
     
     // 获取模型显示名称
     const getModelDisplayName = (modelName) => {
@@ -433,17 +357,15 @@ export default {
     // 加载配置
     const loadConfig = async () => {
       try {
-        const [configData, baseModelsData, lorasData, workflowSizesData] = await Promise.all([
+        const [configData, baseModelsData, lorasData] = await Promise.all([
           getImageGenConfig(),
           getBaseModelsForConfig(),
-          getLorasForConfig(),
-          getWorkflowSizesForConfig()
+          getLorasForConfig()
         ])
         
         // 先设置基础数据
         baseModels.value = baseModelsData.models || []
         loras.value = lorasData.loras || []
-        workflowSizes.value = workflowSizesData.workflow_sizes || []
         
         // 使用setTimeout确保在下一个事件循环中设置配置数据
         setTimeout(() => {
@@ -520,9 +442,7 @@ export default {
         config,
         baseModels,
         loras,
-        workflowSizes,
         loraGroups,
-        workflowSizeColumns,
         getModelDisplayName,
         getModelStatus,
         onDragStart,

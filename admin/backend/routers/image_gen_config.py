@@ -4,6 +4,10 @@
 生图配置管理API路由
 """
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
@@ -17,11 +21,25 @@ router = APIRouter()
 
 @router.get("/image-gen-config", summary="获取生图配置")
 async def get_image_gen_config(db: Session = Depends(get_db)):
-    """获取生图配置"""
+    """获取生图配置 - 智能过滤可用模型"""
     try:
-        # 获取基础模型排序配置
+        # 1. 获取所有可用模型
+        available_models = crud.get_available_base_models(db)
+        
+        # 2. 获取当前生图配置排序
         base_model_order_config = crud.get_system_config(db, "image_gen_base_model_order")
-        base_model_order = base_model_order_config.value.split(",") if base_model_order_config else []
+        configured_order = base_model_order_config.value.split(",") if base_model_order_config else []
+        
+        # 3. 智能合并：保留配置的排序，过滤掉不可用的模型
+        final_order = []
+        for model_name in configured_order:
+            if any(m.name == model_name and m.is_available for m in available_models):
+                final_order.append(model_name)
+        
+        # 4. 添加新可用但未配置的模型
+        for model in available_models:
+            if model.name not in final_order:
+                final_order.append(model.name)
         
         # 获取LoRA排序配置
         lora_order_config = crud.get_system_config(db, "image_gen_lora_order")
@@ -42,7 +60,7 @@ async def get_image_gen_config(db: Session = Depends(get_db)):
         size_ratios = size_ratios_config.value.split(",") if size_ratios_config else ["1:1", "4:3", "3:4", "16:9", "9:16"]
         
         return {
-            "base_model_order": base_model_order,
+            "base_model_order": final_order,
             "lora_order": lora_order,
             "default_size": {
                 "width": int(default_size[0]) if len(default_size) > 0 else 1024,
@@ -58,15 +76,26 @@ async def update_image_gen_config(
     config_data: Dict[str, Any],
     db: Session = Depends(get_db)
 ):
-    """更新生图配置"""
+    """更新生图配置 - 只允许配置可用模型"""
     try:
-        # 更新基础模型排序
+        # 更新基础模型排序 - 验证所有模型都是可用的
         if "base_model_order" in config_data:
-            base_model_order = ",".join(config_data["base_model_order"])
+            requested_models = config_data["base_model_order"]
+            available_models = crud.get_available_base_models(db)
+            available_names = [m.name for m in available_models]
+            
+            # 过滤掉不可用的模型
+            valid_models = [name for name in requested_models if name in available_names]
+            
+            if len(valid_models) != len(requested_models):
+                removed_models = set(requested_models) - set(valid_models)
+                print(f"⚠️ 生图配置中移除了不可用模型: {removed_models}")
+            
+            base_model_order = ",".join(valid_models)
             config_update = system_config.SystemConfigUpdate(
                 key="image_gen_base_model_order",
                 value=base_model_order,
-                description="基础模型排序配置，逗号分隔"
+                description="基础模型排序配置，逗号分隔（仅包含可用模型）"
             )
             crud.update_system_config(db, "image_gen_base_model_order", config_update)
         
@@ -107,28 +136,51 @@ async def update_image_gen_config(
 
 @router.get("/image-gen-config/base-models", summary="获取基础模型列表")
 async def get_base_models_for_config(db: Session = Depends(get_db)):
-    """获取基础模型列表用于配置排序"""
+    """获取基础模型列表用于配置排序 - 只返回可用模型"""
     try:
-        # 获取所有基础模型
-        base_models = crud.get_base_models(db, skip=0, limit=100)
+        # 只获取可用的基础模型
+        available_models = crud.get_available_base_models(db)
+        print(f"🔍 API获取到的可用模型数量: {len(available_models)}")
+        for model in available_models:
+            print(f"  - {model.name}: {model.display_name} (可用: {model.is_available})")
         
         # 获取当前排序配置
         base_model_order_config = crud.get_system_config(db, "image_gen_base_model_order")
         current_order = base_model_order_config.value.split(",") if base_model_order_config else []
         
-        # 构建模型列表
+        # 按配置排序重新排列模型
+        final_order = []
+        print(f"🔍 原始current_order: {current_order}")
+        for model_name in current_order:
+            if any(m.name == model_name and m.is_available for m in available_models):
+                final_order.append(model_name)
+                print(f"  ✅ 添加可用模型: {model_name}")
+            else:
+                print(f"  ❌ 跳过不可用模型: {model_name}")
+        
+        # 添加未配置但可用的模型
+        for model in available_models:
+            if model.name not in final_order:
+                final_order.append(model.name)
+                print(f"  ➕ 添加未配置但可用模型: {model.name}")
+        
+        print(f"🔍 最终final_order: {final_order}")
+        
+        # 构建模型列表（按最终排序）
         model_list = []
-        for model in base_models:
-            model_list.append({
-                "name": model.name,
-                "display_name": model.display_name,
-                "description": model.description,
-                "available": model.is_available
-            })
+        for model_name in final_order:
+            model = next((m for m in available_models if m.name == model_name), None)
+            if model:
+                model_list.append({
+                    "name": model.name,
+                    "display_name": model.display_name,
+                    "description": model.description,
+                    "available": model.is_available
+                })
         
         return {
             "models": model_list,
-            "current_order": current_order
+            "current_order": final_order
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取基础模型列表失败: {str(e)}")
@@ -169,62 +221,3 @@ async def get_loras_for_config(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取LoRA列表失败: {str(e)}")
 
-@router.get("/image-gen-config/workflow-sizes", summary="获取工作流图片尺寸配置")
-async def get_workflow_sizes_for_config(db: Session = Depends(get_db)):
-    """获取所有工作流中的图片尺寸配置"""
-    try:
-        from workflow_validator import WorkflowValidator
-        
-        # 获取所有工作流
-        workflows = crud.get_workflows(db, skip=0, limit=1000)
-        
-        # 初始化工作流验证器
-        validator = WorkflowValidator()
-        
-        # 构建工作流尺寸配置列表
-        workflow_sizes = []
-        for workflow in workflows:
-            if workflow.workflow_json:
-                try:
-                    # 验证和分析工作流
-                    result = validator.validate_and_analyze_workflow(workflow.workflow_json)
-                    
-                    if result.valid and result.config_items:
-                        core_config = result.config_items.get("core_config", {})
-                        
-                        # 提取图片尺寸配置
-                        image_width = core_config.get("image_width", {})
-                        image_height = core_config.get("image_height", {})
-                        
-                        if image_width and image_height:
-                            width = image_width.get("current_value", 1024)
-                            height = image_height.get("current_value", 1024)
-                            
-                            # 计算宽高比
-                            def gcd(a, b):
-                                while b:
-                                    a, b = b, a % b
-                                return a
-                            
-                            divisor = gcd(width, height)
-                            aspect_ratio = f"{width // divisor}:{height // divisor}"
-                            
-                            workflow_sizes.append({
-                                "workflow_id": workflow.id,
-                                "workflow_name": workflow.name,
-                                "workflow_description": workflow.description,
-                                "width": width,
-                                "height": height,
-                                "aspect_ratio": aspect_ratio,
-                                "node_type": image_width.get("node_type", ""),
-                                "is_available": workflow.status == "enabled"
-                            })
-                except Exception as e:
-                    print(f"解析工作流 {workflow.name} 失败: {e}")
-                    continue
-        
-        return {
-            "workflow_sizes": workflow_sizes
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取工作流尺寸配置失败: {str(e)}")

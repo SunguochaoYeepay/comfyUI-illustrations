@@ -21,7 +21,7 @@ const handleShowDetail = (item) => {
 
 const handleRemoveFavorite = async (item) => {
   try {
-    const API_BASE = import.meta.env.DEV ? 'http://localhost:9000' : ''
+    const API_BASE = import.meta.env.DEV ? (import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000') : ''
     
     console.log('🗑️ 取消收藏项目:', item)
     console.log('🗑️ 项目类型:', item.type)

@@ -32,7 +32,7 @@ class ConfigClient:
     
     def __init__(self):
         """初始化配置客户端"""
-        self.backend_url = os.getenv("BACKEND_CONFIG_URL", "http://localhost:8888/api/admin/config-sync")
+        self.backend_url = os.getenv("BACKEND_CONFIG_URL", os.getenv('ADMIN_BACKEND_URL', 'http://localhost:8888'))
         self.cache_ttl = int(os.getenv("CONFIG_CACHE_TTL", "300"))  # 5分钟缓存
         self.sync_interval = int(os.getenv("CONFIG_SYNC_INTERVAL", "60"))  # 1分钟同步间隔
         
@@ -133,7 +133,7 @@ class ConfigClient:
         return datetime.now() - cache_time < timedelta(seconds=self.cache_ttl)
     
     def _get_config_with_fallback(self, config_type: str, backend_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """获取配置，支持降级策略"""
+        """获取配置，只使用后台配置和缓存"""
         # 1. 优先使用后台配置
         if backend_data and self._backend_healthy:
             self._cache[config_type] = backend_data
@@ -148,14 +148,12 @@ class ConfigClient:
             cached_data["config_source"] = ConfigSource.CACHE.value
             return cached_data
         
-        # 3. 使用本地配置文件
-        local_data = self._load_local_config(config_type)
-        if local_data:
-            local_data["config_source"] = ConfigSource.LOCAL.value
-            return local_data
-        
-        # 4. 返回默认配置
-        return self._get_default_config(config_type)
+        # 3. 如果都没有，返回空配置
+        return {
+            "config_source": ConfigSource.ERROR.value,
+            "error": "无法获取配置，admin后端不可用",
+            "last_updated": datetime.now().isoformat()
+        }
     
     def _load_local_config(self, config_type: str) -> Optional[Dict[str, Any]]:
         """加载本地配置文件"""
@@ -217,9 +215,18 @@ class ConfigClient:
     async def get_models_config(self) -> Dict[str, Any]:
         """获取模型配置"""
         try:
-            # 尝试从后台获取
-            backend_data = await self._make_request("/models")
-            return self._get_config_with_fallback("models", backend_data)
+            # 尝试从admin后端获取基础模型列表
+            backend_data = await self._make_request("/api/admin/image-gen-config/base-models")
+            if backend_data and "models" in backend_data:
+                # 转换admin后端的格式到主服务需要的格式
+                models_data = {
+                    "models": backend_data["models"],
+                    "config_source": "admin_backend",
+                    "last_updated": datetime.now().isoformat()
+                }
+                return self._get_config_with_fallback("models", models_data)
+            else:
+                raise Exception("admin后端返回的模型数据格式不正确")
         except Exception as e:
             logger.error(f"获取模型配置失败: {e}")
             return self._get_config_with_fallback("models")
@@ -247,9 +254,21 @@ class ConfigClient:
     async def get_image_gen_config(self) -> Dict[str, Any]:
         """获取生图配置"""
         try:
-            # 尝试从后台获取
-            backend_data = await self._make_request("/image-gen")
-            return self._get_config_with_fallback("image_gen", backend_data)
+            # 尝试从admin后端获取生图配置
+            backend_data = await self._make_request("/api/admin/image-gen-config")
+            if backend_data:
+                # 转换admin后端的格式到主服务需要的格式
+                image_gen_data = {
+                    "default_size": backend_data.get("default_size", {"width": 1024, "height": 1024}),
+                    "size_ratios": backend_data.get("size_ratios", ["1:1", "4:3", "3:4", "16:9", "9:16"]),
+                    "default_steps": 20,
+                    "default_count": 1,
+                    "config_source": "admin_backend",
+                    "last_updated": datetime.now().isoformat()
+                }
+                return self._get_config_with_fallback("image_gen", image_gen_data)
+            else:
+                raise Exception("admin后端返回的生图配置数据为空")
         except Exception as e:
             logger.error(f"获取生图配置失败: {e}")
             return self._get_config_with_fallback("image_gen")

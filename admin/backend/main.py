@@ -1,3 +1,37 @@
+import sys
+import os
+import subprocess
+import time
+
+# 添加当前目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+def kill_process_on_port(port):
+    """清理指定端口上的进程"""
+    try:
+        # 查找占用端口的进程
+        result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, shell=True)
+        lines = result.stdout.split('\n')
+        
+        for line in lines:
+            if f':{port}' in line and 'LISTENING' in line:
+                parts = line.split()
+                if len(parts) >= 5:
+                    pid = parts[-1]
+                    try:
+                        # 终止进程
+                        subprocess.run(['taskkill', '/f', '/pid', pid], capture_output=True, shell=True)
+                        print(f"✅ 已清理端口 {port} 上的进程 PID: {pid}")
+                        time.sleep(1)  # 等待进程完全终止
+                    except Exception as e:
+                        print(f"⚠️ 清理进程 {pid} 失败: {e}")
+    except Exception as e:
+        print(f"⚠️ 清理端口 {port} 失败: {e}")
+
+# 启动前清理8888端口
+print("🔧 正在清理端口8888上的其他进程...")
+kill_process_on_port(8888)
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,12 +42,12 @@ import crud
 import models
 import security
 import schemas_legacy as schemas
-from database import engine
+from database import engine, Base
 from config import settings
-from routers import inspirations, admin_audit_log, models as models_router, dashboard, tasks, images, workflows, prompts, lora_new as lora, base_model, file_system, image_gen_config, config_sync
+from routers import inspirations, admin_audit_log, models as models_router, dashboard, tasks, images, workflows, prompts, lora_new as lora, base_model, file_system, image_gen_config, config_sync, frontend_config
 from dependencies import get_db, get_current_user
 
-models.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -37,6 +71,7 @@ app.include_router(workflows.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api")
 app.include_router(base_model.router, prefix="/api")
 app.include_router(file_system.router, prefix="/api")
+app.include_router(frontend_config.router, prefix="/api/frontend")
 app.include_router(image_gen_config.router, prefix="/api/admin")
 app.include_router(config_sync.router, prefix="/api/admin/config-sync")
 
@@ -75,8 +110,8 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
-        host="127.0.0.1",
-        port=8888,
+        host=settings.HOST,
+        port=settings.PORT,
         reload=True,
         reload_dirs=["./"]
     )

@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from sqlalchemy.orm import Session
 import models
 import schemas_legacy as schemas
@@ -137,9 +141,42 @@ def get_base_model(db: Session, base_model_id: int):
 def get_base_models(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.BaseModel).offset(skip).limit(limit).all()
 
+def get_available_base_models(db: Session):
+    """获取所有可用的基础模型"""
+    return db.query(models.BaseModel).filter(models.BaseModel.is_available == True).all()
+
+def sync_image_gen_config_with_available_models(db: Session):
+    """同步生图配置与可用模型"""
+    try:
+        # 获取当前生图配置
+        config = get_system_config(db, "image_gen_base_model_order")
+        if not config:
+            return
+        
+        current_order = config.value.split(",") if config.value else []
+        
+        # 过滤掉不可用的模型
+        available_models = get_available_base_models(db)
+        available_names = [m.name for m in available_models]
+        
+        # 保留配置中仍然可用的模型
+        new_order = [name for name in current_order if name in available_names]
+        
+        # 更新配置
+        if new_order != current_order:
+            config.value = ",".join(new_order)
+            db.commit()
+            print(f"🔄 生图配置已同步，移除了不可用模型: {set(current_order) - set(new_order)}")
+    except Exception as e:
+        print(f"❌ 同步生图配置失败: {e}")
+        db.rollback()
+
 def update_base_model(db: Session, base_model_id: int, base_model: base_model.BaseModelUpdate):
     db_base_model = db.query(models.BaseModel).filter(models.BaseModel.id == base_model_id).first()
     if db_base_model:
+        # 记录模型可用性是否改变
+        old_availability = db_base_model.is_available
+        
         # 使用model_dump()替代dict()以兼容新版本Pydantic
         try:
             update_data = base_model.model_dump(exclude_unset=True)
@@ -149,6 +186,12 @@ def update_base_model(db: Session, base_model_id: int, base_model: base_model.Ba
             setattr(db_base_model, key, value)
         db.commit()
         db.refresh(db_base_model)
+        
+        # 如果模型可用性改变，自动同步生图配置
+        new_availability = db_base_model.is_available
+        if old_availability != new_availability:
+            sync_image_gen_config_with_available_models(db)
+            print(f"🔄 模型 {db_base_model.name} 可用性从 {old_availability} 变为 {new_availability}，已同步生图配置")
     return db_base_model
 
 def delete_base_model(db: Session, base_model_id: int):

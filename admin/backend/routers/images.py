@@ -23,8 +23,8 @@ async def list_images():
     formatted_images = []
     try:
         async with httpx.AsyncClient() as client:
-            # Corrected port from 8000 to 9000 and use 127.0.0.1 instead of localhost
-            response = await client.get("http://127.0.0.1:9000/api/history")
+            # 使用配置中的后端URL
+            response = await client.get(f"{settings.BACKEND_URL}/api/history")
             response.raise_for_status()  # Raise an exception for bad status codes
             history_data = response.json()
 
@@ -43,8 +43,8 @@ async def list_images():
                                 for img_info in output['image_urls']:
                                     formatted_images.append({
                                         "image_id": f"{task_id}_{img_info.get('filename', '')}",
-                                        # Corrected port from 8000 to 9000 and use 127.0.0.1 instead of localhost
-                                        "url": f"http://127.0.0.1:9000/api/image/{task_id}/{img_info.get('index', '')}",
+                                        # 使用配置中的后端URL
+                                        "url": f"{settings.BACKEND_URL}/api/image/{task_id}/{img_info.get('index', '')}",
                                         "prompt": task_info.get("description", ""), # Use 'description' as prompt
                                         "status": task_info.get("status", "unknown"),
                                         "create_time": task_info.get("timestamp", ""),

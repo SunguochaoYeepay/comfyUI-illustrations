@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # Admin Backend服务
+  admin-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: yeepay-admin-backend
+    ports:
+      - "8888:8888"
+    environment:
+      - ENVIRONMENT=production
+      - HOST=0.0.0.0
+      - PORT=8888
+      - DATABASE_URL=sqlite:///./data/admin.db
+      - SECRET_KEY=yeepay_admin_secret_key_2024
+      - COMFYUI_MODELS_DIR=/app/comfyui/models
+      - COMFYUI_LORAS_DIR=/app/comfyui/models/loras
+      - YEEPAY_MODELS_DIR=/app/yeepay_models
+      - BACKEND_URL=http://backend:9000
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+    networks:
+      - admin-network
+      - yeepay_yeepay-network
+    volumes:
+      - admin-database:/app/data
+      - admin-logs:/app/logs
+      - E:/AI-Image/ComfyUI-aki-v1.4/models:/app/comfyui/models:ro
+      - E:/AI-Image/YeePay/back/models:/app/yeepay_models:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Frontend服务
+  admin-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: yeepay-admin-frontend
+    ports:
+      - "8889:80"
+    networks:
+      - admin-network
+    depends_on:
+      - admin-backend
+    restart: unless-stopped
+
+networks:
+  admin-network:
+    driver: bridge
+  yeepay_yeepay-network:
+    external: true
+
+volumes:
+  admin-database:
+  admin-logs:

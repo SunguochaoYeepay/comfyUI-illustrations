@@ -189,18 +189,19 @@
  </template>
 
  <script setup>
- import { computed, ref, onMounted, watch } from 'vue'
- import { message } from 'ant-design-vue'
-   import { ReloadOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { message } from 'ant-design-vue'
+  import { ReloadOutlined, DownOutlined } from '@ant-design/icons-vue'
 import ReferenceUpload from './ReferenceUpload.vue'
 import MultiImageUpload from './MultiImageUpload.vue'
 import ModelSelector from './ModelSelector.vue'
 import SizeSelector from './SizeSelector.vue'
+import modelManager from '../utils/modelManager.js'
 
  // API基础URL - 自动检测环境
  const API_BASE = (() => {
    if (import.meta.env.DEV) {
-     return 'http://localhost:9000'  // 开发环境指向后端9000端口
+     return import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000'  // 开发环境指向后端9000端口
    }
    return import.meta.env.VITE_API_BASE_URL || ''
  })()
@@ -221,7 +222,7 @@ import SizeSelector from './SizeSelector.vue'
    },
   model: {
     type: String,
-    default: 'flux-dev'
+    required: true
   },
   size: {
     type: String,
@@ -251,31 +252,30 @@ const emit = defineEmits([
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式
 const isFusionMode = computed(() => {
-  // Qwen、Gemini和Flux模型都支持多图融合
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev'
+  // 使用全局模型管理器判断是否支持多图
+  const isMultiImageModel = modelManager.isMultiImageModel(localModel.value)
   return isMultiImageModel && localReferenceImages.value.length >= 2
 })
 
 // 计算属性：判断是否为视频模型
 const isVideoModel = computed(() => {
-  return localModel.value === 'wan2.2-video'
+  return modelManager.isVideoModel(localModel.value)
 })
 
 // 计算属性：判断是否应该显示LoRA面板
 const shouldShowLoraPanel = computed(() => {
-  // 不支持LoRA的模型：Nano Banana（API模型）和Wan2.2视频模型
-  const unsupportedModels = ['gemini-image', 'wan2.2-video']
-  return !unsupportedModels.includes(localModel.value)
+  // 使用全局模型管理器判断是否支持LoRA
+  return modelManager.supportsLora(localModel.value)
 })
 
 // 计算属性：判断是否应该显示上传按钮
 const shouldShowUploadButton = computed(() => {
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev' || localModel.value === 'wan2.2-video'
+  const isMultiImageModel = modelManager.isMultiImageModel(localModel.value)
   
   // 支持多图的模型：根据图片数量限制显示上传按钮
   if (isMultiImageModel) {
-    // Qwen模型支持3张图片，Flux、Gemini和Wan模型最多2张
-    const maxImages = localModel.value === 'qwen-image' ? 3 : 2
+    // 使用全局模型管理器获取最大图片数量
+    const maxImages = modelManager.getMaxImages(localModel.value)
     return localReferenceImages.value.length < maxImages
   }
   
@@ -329,19 +329,25 @@ const videoFps = ref('16') // 默认16 FPS
 watch(() => localReferenceImages.value.length, (newCount) => {
   console.log('🔄 图片数量变化:', newCount)
   
-  // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到qwen-image
+  // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到第一个支持多图的模型
   if (newCount >= 2) {
-    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev' || localModel.value === 'wan2.2-video'
+    const isMultiImageModel = modelManager.isMultiImageModel(localModel.value)
     if (!isMultiImageModel) {
-      console.log('🔄 自动切换到Qwen模型')
-      localModel.value = 'qwen-image'
+      // 获取第一个支持多图的模型
+      const multiImageModels = modelManager.getAvailableModels().filter(model => 
+        modelManager.isMultiImageModel(model.name)
+      )
+      if (multiImageModels.length > 0) {
+        console.log('🔄 自动切换到支持多图的模型:', multiImageModels[0].display_name)
+        localModel.value = multiImageModels[0].name
+      }
     }
   }
 }, { immediate: true })
 
 // 监听模型变化，处理图片数量限制
 watch(() => localModel.value, (newModel) => {
-  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'gemini-image' || newModel === 'flux-dev' || newModel === 'wan2.2-video'
+  const isMultiImageModel = modelManager.isMultiImageModel(newModel)
   
   // 如果切换到不支持多图的模型，且有多张图片，只保留第一张
   if (!isMultiImageModel && localReferenceImages.value.length > 1) {
@@ -349,31 +355,27 @@ watch(() => localModel.value, (newModel) => {
     localReferenceImages.value = [localReferenceImages.value[0]]
   }
   
-  // 如果切换到Flux或Wan模型，且有多于2张图片，只保留前2张
-  if ((newModel === 'flux-dev' || newModel === 'wan2.2-video') && localReferenceImages.value.length > 2) {
-    console.log(`🔄 切换到${newModel}模型，只保留前2张图片`)
-    localReferenceImages.value = localReferenceImages.value.slice(0, 2)
+  // 如果切换到支持多图的模型，根据模型的最大图片数量限制
+  if (isMultiImageModel) {
+    const maxImages = modelManager.getMaxImages(newModel)
+    if (localReferenceImages.value.length > maxImages) {
+      console.log(`🔄 切换到${newModel}模型，只保留前${maxImages}张图片`)
+      localReferenceImages.value = localReferenceImages.value.slice(0, maxImages)
+    }
   }
 }, { immediate: true })
 
 // 获取提示词占位符
 const getPromptPlaceholder = () => {
   if (isVideoModel.value) {
-    if (localModel.value === 'wan2.2-video') {
-      return '请描述您想要的视频效果，支持中文输入（如：弹吉他、人物微笑、镜头推进）'
-    } else {
-      return '请描述您想要的视频效果（如：镜头缓慢推进，人物微笑，背景模糊）'
-    }
+    return '请描述您想要的视频效果，支持中文输入（如：弹吉他、人物微笑、镜头推进）'
   } else if (isFusionMode.value) {
-    if (localModel.value === 'flux-dev') {
+    const maxImages = modelManager.getMaxImages(localModel.value)
+    if (maxImages === 2) {
       return '请描述2图融合的效果，支持中文输入（如：将两张图像融合，让左边的人物拿着右边的物品）'
-    } else if (localModel.value === 'wan2.2-video') {
-      return '请描述2图视频过渡效果，支持中文输入（如：从第一张图过渡到第二张图，人物动作变化）'
     } else {
       return '请描述多图融合的效果，支持中文输入（如：将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上）'
     }
-  } else if (localModel.value === 'qwen-image') {
-    return '请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）'
   } else {
     return '请详细描述您想要生成的图像，支持中文输入（如：一只可爱的橙色小猫坐在花园里，阳光明媚，高清摄影风格）'
   }

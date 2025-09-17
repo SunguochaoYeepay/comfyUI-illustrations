@@ -278,22 +278,21 @@ export default {
         const response = await getLoras(page, pageSize, name, baseModel);
         console.log('LoRA API Response:', response); // 调试日志
         
-        if (response && response.code === 200) {
-          // 使用防护函数确保数据是数组，并映射字段
-          const rawData = ensureArray(response.data?.items || response.data || response);
-          data.value = rawData.map(item => ({
+        if (response && response.loras && Array.isArray(response.loras)) {
+          // 直接使用新的API格式
+          data.value = response.loras.map(item => ({
             ...item,
             size: item.file_size, // 映射file_size到size
             created: item.created_at, // 映射created_at到created
             modified: item.updated_at, // 映射updated_at到modified
           }));
-          pagination.total = response.data?.total || 0;
-          pagination.current = response.data?.page || 1;
-          pagination.pageSize = response.data?.pageSize || 10;
+          pagination.total = response.total || 0;
+          pagination.current = page;
+          pagination.pageSize = pageSize;
         } else {
           data.value = [];
           console.warn('LoRA API返回错误或非标准格式:', response);
-          message.error(response?.message || 'Failed to fetch LoRA models');
+          message.error('Failed to fetch LoRA models');
         }
       } catch (error) {
         console.error('Error fetching LoRA models:', error);

@@ -86,7 +86,7 @@ const imageLoadingStates = ref(new Map()) // 存储每个图片的加载状态
 const API_BASE = (() => {
   // 开发环境：指向后端9000端口
   if (import.meta.env.DEV) {
-    return 'http://localhost:9000'
+    return import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000'
   }
   // 生产环境：使用环境变量或默认空字符串（通过nginx代理）
   return import.meta.env.VITE_API_BASE_URL || ''

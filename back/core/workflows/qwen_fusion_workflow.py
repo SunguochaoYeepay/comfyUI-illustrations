@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .base_workflow import BaseWorkflow
+from config.settings import ADMIN_BACKEND_URL
 
 
 class QwenFusionWorkflow(BaseWorkflow):
@@ -83,43 +84,45 @@ class QwenFusionWorkflow(BaseWorkflow):
         return workflow
     
     def _load_fusion_template(self, image_count: int) -> Dict[str, Any]:
-        """从数据库加载对应的工作流模板"""
-        import sqlite3
-        from pathlib import Path
-        
-        # 数据库路径
-        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
-        
-        if not db_path.exists():
-            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
-        
-        # 根据图片数量选择对应的工作流名称
-        if image_count == 2:
-            workflow_name = "qwen_fusion_2image_fusion"
-        elif image_count == 3:
-            workflow_name = "qwen_fusion_3image_fusion"
-        else:
-            raise ValueError(f"不支持 {image_count} 张图片的融合，目前只支持2-3张图片")
-        
-        print(f"🔍 从数据库加载工作流模板: {workflow_name}")
-        
-        # 从数据库加载工作流
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
+        """通过admin API加载对应的工作流模板"""
         try:
-            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", (workflow_name,))
-            result = cursor.fetchone()
+            import requests
+            import json
             
-            if not result:
-                raise FileNotFoundError(f"数据库中未找到工作流: {workflow_name}")
+            # 根据图片数量选择对应的工作流名称
+            if image_count == 2:
+                workflow_name = "qwen_fusion_2image_fusion"
+            elif image_count == 3:
+                workflow_name = "qwen_fusion_3image_fusion"
+            else:
+                raise ValueError(f"不支持 {image_count} 张图片的融合，目前只支持2-3张图片")
             
-            workflow = json.loads(result[0])
-            print(f"✅ 从数据库加载Qwen多图融合工作流模板: {workflow_name} (支持{image_count}张图片)")
-            return workflow
+            print(f"🔍 通过admin API加载工作流模板: {workflow_name}")
             
-        finally:
-            conn.close()
+            # 通过admin API获取工作流配置
+            admin_url = f"{ADMIN_BACKEND_URL}/api/admin/config-sync/workflows"
+            response = requests.get(admin_url, timeout=5)
+            
+            if response.status_code != 200:
+                raise Exception(f"admin API调用失败: {response.status_code}")
+            
+            data = response.json()
+            workflows = data.get("workflows", [])
+            
+            # 查找对应的工作流
+            for workflow_data in workflows:
+                if workflow_data.get("name") == workflow_name:
+                    workflow_json = workflow_data.get("workflow_json")
+                    if workflow_json:
+                        workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
+                        print(f"✅ 通过admin API加载Qwen多图融合工作流模板: {workflow_name} (支持{image_count}张图片)")
+                        return workflow
+            
+            raise ValueError(f"admin API中未找到工作流: {workflow_name}")
+            
+        except Exception as e:
+            print(f"❌ 通过admin API加载Qwen融合工作流失败: {e}")
+            raise
     
     
     def _add_multi_image_nodes(self, workflow: Dict[str, Any], image_paths: List[str]) -> Dict[str, Any]:

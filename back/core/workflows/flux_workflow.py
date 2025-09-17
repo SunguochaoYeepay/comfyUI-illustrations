@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from config.settings import (
     TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT, 
-    DEFAULT_STEPS, DEFAULT_COUNT
+    DEFAULT_STEPS, DEFAULT_COUNT, ADMIN_BACKEND_URL
 )
 
 from .base_workflow import BaseWorkflow
@@ -256,69 +256,69 @@ class FluxWorkflow(BaseWorkflow):
     
     def _load_text_to_image_workflow_template(self) -> Dict[str, Any]:
         """加载文生图工作流模板"""
-        import sqlite3
-        import json
-        from pathlib import Path
-        
-        # 数据库路径
-        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
-        
-        if not db_path.exists():
-            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
-        
-        # 从数据库加载文生图工作流
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
         try:
-            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("文生图工作流",))
-            result = cursor.fetchone()
+            import requests
+            import json
             
-            if result:
-                workflow = json.loads(result[0])
-                print(f"✅ 从数据库加载Flux文生图工作流模板: 文生图工作流")
-                return workflow
+            # 通过admin API获取工作流配置
+            admin_url = f"{ADMIN_BACKEND_URL}/api/admin/config-sync/workflows"
+            response = requests.get(admin_url, timeout=5)
             
-            raise ValueError("数据库中未找到文生图工作流")
+            if response.status_code != 200:
+                print(f"⚠️ admin API调用失败: {response.status_code}，使用默认模板")
+                return self._get_default_text_to_image_template()
+            
+            data = response.json()
+            workflows = data.get("workflows", [])
+            
+            # 查找文生图工作流
+            for workflow_data in workflows:
+                if workflow_data.get("name") == "文生图工作流":
+                    workflow_json = workflow_data.get("workflow_json")
+                    if workflow_json:
+                        workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
+                        print(f"✅ 通过admin API加载Flux文生图工作流模板: 文生图工作流")
+                        return workflow
+            
+            print(f"⚠️ admin API中未找到文生图工作流，使用默认模板")
+            return self._get_default_text_to_image_template()
             
         except Exception as e:
-            print(f"❌ 从数据库加载文生图工作流失败: {e}")
-            raise
-        finally:
-            conn.close()
+            print(f"❌ 通过admin API加载文生图工作流失败: {e}，使用默认模板")
+            return self._get_default_text_to_image_template()
     
     def _load_image_to_image_workflow_template(self) -> Dict[str, Any]:
         """加载图生图工作流模板"""
-        import sqlite3
-        import json
-        from pathlib import Path
-        
-        # 数据库路径
-        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
-        
-        if not db_path.exists():
-            raise FileNotFoundError(f"数据库文件不存在: {db_path}")
-        
-        # 从数据库加载图生图工作流
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
         try:
-            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("图生图工作流",))
-            result = cursor.fetchone()
+            import requests
+            import json
             
-            if result:
-                workflow = json.loads(result[0])
-                print(f"✅ 从数据库加载Flux图生图工作流模板: 图生图工作流")
-                return workflow
+            # 通过admin API获取工作流配置
+            admin_url = f"{ADMIN_BACKEND_URL}/api/admin/config-sync/workflows"
+            response = requests.get(admin_url, timeout=5)
             
-            raise ValueError("数据库中未找到图生图工作流")
+            if response.status_code != 200:
+                print(f"⚠️ admin API调用失败: {response.status_code}，使用默认模板")
+                return self._get_default_image_to_image_template()
+            
+            data = response.json()
+            workflows = data.get("workflows", [])
+            
+            # 查找图生图工作流
+            for workflow_data in workflows:
+                if workflow_data.get("name") == "图生图工作流":
+                    workflow_json = workflow_data.get("workflow_json")
+                    if workflow_json:
+                        workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
+                        print(f"✅ 通过admin API加载Flux图生图工作流模板: 图生图工作流")
+                        return workflow
+            
+            print(f"⚠️ admin API中未找到图生图工作流，使用默认模板")
+            return self._get_default_image_to_image_template()
             
         except Exception as e:
-            print(f"❌ 从数据库加载图生图工作流失败: {e}")
-            raise
-        finally:
-            conn.close()
+            print(f"❌ 通过admin API加载图生图工作流失败: {e}，使用默认模板")
+            return self._get_default_image_to_image_template()
     
     def _update_final_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any], description: str = "") -> Dict[str, Any]:
         """更新最终参数（安全更新，检查节点是否存在）"""

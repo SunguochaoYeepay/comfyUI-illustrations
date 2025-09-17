@@ -10,6 +10,7 @@ import random
 from typing import Any, Dict, List, Optional
 
 from .base_workflow import BaseWorkflow
+from config.settings import ADMIN_BACKEND_URL
 
 
 class Seedream4Workflow(BaseWorkflow):
@@ -116,7 +117,7 @@ class Seedream4Workflow(BaseWorkflow):
                     print("⚠️ 配置客户端无缓存，直接调用admin API...")
                     try:
                         import requests
-                        admin_url = "http://localhost:8888/api/admin/config-sync/workflows"
+                        admin_url = f"{ADMIN_BACKEND_URL}/api/admin/config-sync/workflows"
                         response = requests.get(admin_url, timeout=5)
                         if response.status_code == 200:
                             config = response.json()

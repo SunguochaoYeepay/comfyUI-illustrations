@@ -64,7 +64,7 @@ class BaseModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, index=True, nullable=False)
     display_name = Column(String(200), nullable=False)  # 显示名称
-    model_type = Column(String(50), nullable=False)     # 模型类型：flux, qwen, wan, gemini
+    model_type = Column(String(50), nullable=False)     # 模型类型：flux, qwen, wan, gemini, seedream4
     description = Column(Text, nullable=True)
     unet_file = Column(String(255), nullable=True)      # 文件名而非路径
     clip_file = Column(String(255), nullable=True)      # 文件名而非路径

@@ -28,237 +28,174 @@ class WanWorkflow(BaseWorkflow):
         Returns:
             工作流字典
         """
+        print(f"🎬 创建Wan2.2视频工作流: {self.model_config.display_name}")
+        
         # 验证参数
         validated_params = self._validate_parameters(parameters)
         
-        # 创建基础工作流
-        workflow = self._create_base_workflow(description, validated_params, reference_image_path)
+        # 从数据库加载工作流模板
+        workflow = self._load_workflow_template()
         
-        # 添加参考图像节点
-        workflow = self._add_reference_image_nodes(workflow, reference_image_path)
+        # 更新文本描述
+        workflow = self._update_text_description(workflow, description)
         
-        # 添加LoRA节点（如果配置了）
+        # 更新采样参数
+        workflow = self._update_sampling_parameters(workflow, validated_params)
+        
+        # 更新视频参数
+        workflow = self._update_video_parameters(workflow, validated_params)
+        
+        # 更新保存路径
+        workflow = self._update_save_path(workflow)
+        
+        # 处理参考图像
+        if reference_image_path:
+            workflow = self._add_reference_image_nodes(workflow, reference_image_path)
+            print(f"📸 已添加参考图支持: {reference_image_path}")
+        else:
+            # 无图模式：清除默认图像节点
+            workflow = self._clear_reference_image_nodes(workflow)
+            print("📸 无参考图，使用无参考图模式")
+        
+        # 处理LoRA配置
         loras = validated_params.get("loras", [])
         if loras:
-            workflow = self._add_lora_nodes(workflow, loras, description)
+            workflow = self._update_lora_config(workflow, loras)
         
         print(f"✅ Wan2.2视频工作流创建完成")
         return workflow
     
-    def _create_base_workflow(self, description: str, parameters: Dict[str, Any], reference_image_path: str = None) -> Dict[str, Any]:
-        """创建基础工作流结构"""
-        # 获取视频参数
-        fps = parameters.get("fps", 16)
-        duration = parameters.get("duration", 5)  # 秒
-        total_frames = fps * duration
+    def _load_workflow_template(self) -> Dict[str, Any]:
+        """从数据库加载工作流模板"""
+        import sqlite3
+        from pathlib import Path
         
-        # 基础工作流模板
-        workflow = {
-            # CLIP加载器
-            "84": {
-                "inputs": {
-                    "clip_name": self.model_config.clip_file,
-                    "type": "wan",
-                    "device": "default"
-                },
+        # 数据库路径
+        db_path = Path(__file__).parent.parent.parent.parent / "admin" / "admin.db"
+        
+        if not db_path.exists():
+            print(f"⚠️ 数据库文件不存在，使用内置模板: {db_path}")
+            return self._get_builtin_template()
+        
+        # 从数据库加载工作流
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT workflow_json FROM workflows WHERE name = ?", ("wan2.2_video_generation_workflow",))
+            result = cursor.fetchone()
+            
+            if not result:
+                print(f"⚠️ 数据库中未找到WAN工作流，使用内置模板")
+                return self._get_builtin_template()
+            
+            workflow = json.loads(result[0])
+            print(f"✅ 从数据库加载WAN工作流模板: wan2.2_video_generation_workflow")
+            return workflow
+            
+        except Exception as e:
+            print(f"❌ 从数据库加载WAN工作流失败: {e}，使用内置模板")
+            return self._get_builtin_template()
+        finally:
+            conn.close()
+    
+    def _get_builtin_template(self) -> Dict[str, Any]:
+        """获取内置模板（降级方案）"""
+        print("⚠️ 使用WAN工作流内置模板")
+        # 返回一个简化的模板，避免与admin模板冲突
+        return {
+            "6": {
+                "inputs": {"text": "{{description}}", "clip": ["38", 0]},
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "CLIP文本编码器"}
+            },
+            "7": {
+                "inputs": {"text": "blurry, low quality, worst quality", "clip": ["38", 0]},
+                "class_type": "CLIPTextEncode", 
+                "_meta": {"title": "CLIP文本编码器"}
+            },
+            "37": {
+                "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors", "weight_dtype": "default"},
+                "class_type": "UNETLoader",
+                "_meta": {"title": "UNET加载器"}
+            },
+            "38": {
+                "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"},
                 "class_type": "CLIPLoader",
                 "_meta": {"title": "CLIP加载器"}
             },
-            
-            # 正面提示词编码
-            "93": {
-                "inputs": {
-                    "text": description,
-                    "speak_and_recognation": True,
-                    "clip": ["84", 0]
-                },
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "正面提示词编码"}
-            },
-            
-            # 负面提示词编码
-            "89": {
-                "inputs": {
-                    "text": "blurry, low quality, worst quality, low resolution, pixelated, grainy, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, extra fingers, bad hands, bad face, malformed, disfigured, mutated, fused fingers, cluttered background, extra legs, overexposed, oversaturated, static, motionless, watermark, text, signature, jpeg artifacts, compression artifacts, noise, artifacts, poorly drawn, amateur, sketch, draft",
-                    "speak_and_recognation": True,
-                    "clip": ["84", 0]
-                },
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "负面提示词编码"}
-            },
-            
-            # VAE加载器
-            "90": {
-                "inputs": {
-                    "vae_name": self.model_config.vae_file
-                },
+            "39": {
+                "inputs": {"vae_name": "wan_2.1_vae.safetensors"},
                 "class_type": "VAELoader",
                 "_meta": {"title": "VAE加载器"}
             },
-            
-            # 高噪声UNET加载器
-            "95": {
-                "inputs": {
-                    "unet_name": self.model_config.unet_file,
-                    "weight_dtype": "default"
-                },
-                "class_type": "UNETLoader",
-                "_meta": {"title": "高噪声UNET加载器"}
-            },
-            
-            # 低噪声UNET加载器
-            "96": {
-                "inputs": {
-                    "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
-                    "weight_dtype": "default"
-                },
-                "class_type": "UNETLoader",
-                "_meta": {"title": "低噪声UNET加载器"}
-            },
-            
-            # 图像加载器
-            "97": {
-                "inputs": {
-                    "image": Path(reference_image_path).name if reference_image_path else "input_image.png"
-                },
-                "class_type": "LoadImage",
-                "_meta": {"title": "加载参考图像"}
-            },
-            
-            # Wan图像到视频节点
-            "98": {
-                "inputs": {
-                    "width": 640,
-                    "height": 640,
-                    "length": total_frames,
-                    "batch_size": 1,
-                    "positive": ["93", 0],
-                    "negative": ["89", 0],
-                    "vae": ["90", 0],
-                    "start_image": ["97", 0]
-                },
-                "class_type": "WanImageToVideo",
-                "_meta": {"title": "Wan图像到视频"}
-            },
-            
-            # 高噪声LoRA加载器
-            "101": {
-                "inputs": {
-                    "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
-                    "strength_model": 1.0,
-                    "model": ["95", 0]
-                },
-                "class_type": "LoraLoaderModelOnly",
-                "_meta": {"title": "高噪声LoRA加载器"}
-            },
-            
-            # 低噪声LoRA加载器
-            "102": {
-                "inputs": {
-                    "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
-                    "strength_model": 1.0,
-                    "model": ["96", 0]
-                },
-                "class_type": "LoraLoaderModelOnly",
-                "_meta": {"title": "低噪声LoRA加载器"}
-            },
-            
-            # 高噪声采样器
-            "104": {
-                "inputs": {
-                    "shift": 5.0,
-                    "model": ["101", 0]
-                },
+            "54": {
+                "inputs": {"shift": 5, "model": ["91", 0]},
                 "class_type": "ModelSamplingSD3",
-                "_meta": {"title": "高噪声模型采样"}
+                "_meta": {"title": "模型采样算法SD3"}
             },
-            
-            # 低噪声采样器
-            "103": {
-                "inputs": {
-                    "shift": 5.0,
-                    "model": ["102", 0]
-                },
+            "55": {
+                "inputs": {"shift": 5, "model": ["92", 0]},
                 "class_type": "ModelSamplingSD3",
-                "_meta": {"title": "低噪声模型采样"}
+                "_meta": {"title": "模型采样算法SD3"}
             },
-            
-            # 第二阶段采样器（去噪）
-            "85": {
-                "inputs": {
-                    "add_noise": "disable",
-                    "noise_seed": 0,
-                    "steps": 4,
-                    "cfg": 1,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "start_at_step": 2,
-                    "end_at_step": 4,
-                    "return_with_leftover_noise": "disable",
-                    "model": ["103", 0],
-                    "positive": ["98", 0],  # WanImageToVideo的输出端口0是positive
-                    "negative": ["98", 1],  # WanImageToVideo的输出端口1是negative
-                    "latent_image": ["86", 0]
-                },
-                "class_type": "KSamplerAdvanced",
-                "_meta": {"title": "第二阶段采样器"}
+            "56": {
+                "inputs": {"unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors", "weight_dtype": "default"},
+                "class_type": "UNETLoader",
+                "_meta": {"title": "UNET加载器"}
             },
-            
-            # 第一阶段采样器（添加噪声）
-            "86": {
-                "inputs": {
-                    "add_noise": "enable",
-                    "noise_seed": random.randint(1, 2**32 - 1),
-                    "steps": 4,
-                    "cfg": 1,
-                    "sampler_name": "euler",
-                    "scheduler": "simple",
-                    "start_at_step": 0,
-                    "end_at_step": 2,
-                    "return_with_leftover_noise": "enable",
-                    "model": ["104", 0],
-                    "positive": ["98", 0],  # WanImageToVideo的输出端口0是positive
-                    "negative": ["98", 1],  # WanImageToVideo的输出端口1是negative
-                    "latent_image": ["98", 2]  # WanImageToVideo的输出端口2是latent_image
-                },
-                "class_type": "KSamplerAdvanced",
-                "_meta": {"title": "第一阶段采样器"}
-            },
-            
-            # VAE解码
-            "87": {
-                "inputs": {
-                    "samples": ["85", 0],
-                    "vae": ["90", 0]
-                },
+            "8": {
+                "inputs": {"samples": ["58", 0], "vae": ["39", 0]},
                 "class_type": "VAEDecode",
                 "_meta": {"title": "VAE解码"}
             },
-            
-            # 创建视频
-            "94": {
-                "inputs": {
-                    "fps": fps,
-                    "images": ["87", 0]
-                },
+            "57": {
+                "inputs": {"add_noise": "enable", "noise_seed": 57936518952277, "steps": 4, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 2, "return_with_leftover_noise": "enable", "model": ["54", 0], "positive": ["67", 0], "negative": ["67", 1], "latent_image": ["67", 2]},
+                "class_type": "KSamplerAdvanced",
+                "_meta": {"title": "K采样器(高级)"}
+            },
+            "58": {
+                "inputs": {"add_noise": "disable", "noise_seed": 788333148344562, "steps": 4, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 2, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": ["55", 0], "positive": ["67", 0], "negative": ["67", 1], "latent_image": ["57", 0]},
+                "class_type": "KSamplerAdvanced",
+                "_meta": {"title": "K采样器(高级)"}
+            },
+            "60": {
+                "inputs": {"fps": 16, "images": ["8", 0]},
                 "class_type": "CreateVideo",
                 "_meta": {"title": "创建视频"}
             },
-            
-            # 保存视频
-            "108": {
-                "inputs": {
-                    "filename_prefix": "video/yeepay_video",
-                    "format": "auto",
-                    "codec": "auto",
-                    "video": ["94", 0]
-                },
+            "62": {
+                "inputs": {"image": "generated-image-1758020573908.png"},
+                "class_type": "LoadImage",
+                "_meta": {"title": "结束图"}
+            },
+            "68": {
+                "inputs": {"image": "generated-image-1757490119660.png"},
+                "class_type": "LoadImage",
+                "_meta": {"title": "开始图"}
+            },
+            "61": {
+                "inputs": {"filename_prefix": "video/ComfyUI", "format": "auto", "codec": "auto", "video": ["60", 0]},
                 "class_type": "SaveVideo",
                 "_meta": {"title": "保存视频"}
+            },
+            "67": {
+                "inputs": {"width": 640, "height": 640, "length": 81, "batch_size": 1, "positive": ["6", 0], "negative": ["7", 0], "vae": ["39", 0], "start_image": ["68", 0], "end_image": ["62", 0]},
+                "class_type": "WanFirstLastFrameToVideo",
+                "_meta": {"title": "WanFirstLastFrameToVideo"}
+            },
+            "91": {
+                "inputs": {"lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors", "strength_model": 1, "model": ["37", 0]},
+                "class_type": "LoraLoaderModelOnly",
+                "_meta": {"title": "LoRA加载器(仅模型)"}
+            },
+            "92": {
+                "inputs": {"lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors", "strength_model": 1, "model": ["56", 0]},
+                "class_type": "LoraLoaderModelOnly",
+                "_meta": {"title": "LoRA加载器(仅模型)"}
             }
         }
-        
-        return workflow
+    
     
     def _validate_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """验证和标准化视频参数"""
@@ -287,24 +224,162 @@ class WanWorkflow(BaseWorkflow):
         print("ℹ️ Wan2.2视频模型使用固定LoRA配置")
         return workflow
     
-    def _add_reference_image_nodes(self, workflow: Dict[str, Any], image_path: str) -> Dict[str, Any]:
+    def _add_reference_image_nodes(self, workflow: Dict[str, Any], image_path) -> Dict[str, Any]:
         """添加参考图像节点"""
+        # 处理单个路径或路径列表
+        print(f"🔍 原始image_path类型: {type(image_path)}")
+        print(f"🔍 原始image_path内容: {image_path}")
+        
+        if isinstance(image_path, list):
+            image_paths = image_path
+        else:
+            image_paths = [image_path]
+        
+        print(f"🔍 处理后的image_paths: {image_paths}")
+        
+        # 清理路径，移除可能的引号和括号
+        cleaned_paths = []
+        for path in image_paths:
+            if isinstance(path, str):
+                # 移除可能的引号和括号，包括所有可能的字符
+                cleaned_path = path.strip("'\"[](){} ")
+                # 如果路径包含逗号，说明是多个路径拼接的，需要分割
+                if ',' in cleaned_path:
+                    # 分割路径并清理每个路径
+                    sub_paths = [p.strip("'\"[](){} ") for p in cleaned_path.split(',')]
+                    cleaned_paths.extend(sub_paths)
+                else:
+                    cleaned_paths.append(cleaned_path)
+            else:
+                cleaned_paths.append(str(path))
+        image_paths = cleaned_paths
+        
         # 复制参考图像到ComfyUI的input目录
         try:
             from config.settings import COMFYUI_INPUT_DIR
             import shutil
             
-            source_path = Path(image_path)
-            if source_path.exists():
-                # 复制到ComfyUI的input目录
-                dest_path = COMFYUI_INPUT_DIR / source_path.name
-                shutil.copy2(source_path, dest_path)
-                print(f"✅ 参考图像已复制到ComfyUI input目录: {dest_path}")
-            else:
-                print(f"⚠️ 参考图像不存在: {image_path}")
+            for path in image_paths:
+                source_path = Path(path)
+                if source_path.exists():
+                    # 复制到ComfyUI的input目录
+                    dest_path = COMFYUI_INPUT_DIR / source_path.name
+                    shutil.copy2(source_path, dest_path)
+                    print(f"✅ 参考图像已复制到ComfyUI input目录: {dest_path}")
+                else:
+                    print(f"⚠️ 参考图像不存在: {path}")
         except Exception as e:
             print(f"❌ 复制参考图像失败: {e}")
         
-        # 图像加载节点已在基础工作流中配置
-        print(f"✅ 参考图像配置完成: {Path(image_path).name}")
+        # 配置开始图和结束图节点
+        print(f"🔍 处理图像路径数量: {len(image_paths)}")
+        for i, path in enumerate(image_paths):
+            print(f"🔍 图像路径{i+1}: {path}")
+        
+        # 新模型只需要开始图，不需要结束图
+        if len(image_paths) >= 1:
+            # 使用第一个图像作为开始图
+            start_image = Path(image_paths[0]).name
+            
+            # 更新节点68（开始图）
+            if "68" in workflow:
+                workflow["68"]["inputs"]["image"] = start_image
+                print(f"✅ 开始图配置: {start_image}")
+            else:
+                print("⚠️ 工作流中未找到节点68（开始图）")
+            
+            # 检查是否有结束图节点（旧模型）
+            if "62" in workflow:
+                print("ℹ️ 检测到旧模型工作流，配置结束图")
+                if len(image_paths) >= 2:
+                    end_image = Path(image_paths[-1]).name
+                    workflow["62"]["inputs"]["image"] = end_image
+                    print(f"✅ 结束图配置: {end_image}")
+                else:
+                    # 如果只有一个图像，同时作为结束图
+                    workflow["62"]["inputs"]["image"] = start_image
+                    print(f"✅ 结束图配置: {start_image}")
+            else:
+                print("ℹ️ 新模型工作流，无需配置结束图")
+        
+        return workflow
+    
+    def _update_text_description(self, workflow: Dict[str, Any], description: str) -> Dict[str, Any]:
+        """更新文本描述"""
+        # 更新正面提示词
+        if "6" in workflow:
+            workflow["6"]["inputs"]["text"] = description
+        
+        print(f"✅ WAN文本描述更新完成: {description[:50]}...")
+        return workflow
+    
+    def _update_sampling_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """更新采样参数"""
+        # 更新采样器参数
+        if "57" in workflow:
+            workflow["57"]["inputs"]["noise_seed"] = parameters.get("seed", random.randint(1, 2**31 - 1))  # 限制在int32范围内
+        if "58" in workflow:
+            workflow["58"]["inputs"]["noise_seed"] = parameters.get("seed", random.randint(1, 2**31 - 1))  # 限制在int32范围内
+        
+        print("✅ WAN采样参数更新完成")
+        return workflow
+    
+    def _clear_reference_image_nodes(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+        """清除参考图像节点（无图模式）"""
+        # 清除节点68（开始图）
+        if "68" in workflow:
+            workflow["68"]["inputs"]["image"] = ""
+            print("✅ 已清除开始图节点68")
+        
+        # 清除节点62（结束图）
+        if "62" in workflow:
+            workflow["62"]["inputs"]["image"] = ""
+            print("✅ 已清除结束图节点62")
+        
+        # 清除节点67中的图像连接
+        if "67" in workflow:
+            # 清除start_image连接
+            if "start_image" in workflow["67"]["inputs"]:
+                workflow["67"]["inputs"]["start_image"] = ["", 0]
+            
+            # 清除end_image连接（如果存在）
+            if "end_image" in workflow["67"]["inputs"]:
+                workflow["67"]["inputs"]["end_image"] = ["", 0]
+            
+            print("✅ 已清除节点67中的图像连接")
+        
+        print("📸 无图模式配置完成")
+        return workflow
+    
+    def _update_video_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """更新视频参数"""
+        fps = parameters.get("fps", 16)
+        duration = parameters.get("duration", 5)
+        total_frames = fps * duration
+        
+        # 更新视频创建节点
+        if "60" in workflow:
+            workflow["60"]["inputs"]["fps"] = fps
+        
+        # 更新WanFirstLastFrameToVideo节点
+        if "67" in workflow:
+            workflow["67"]["inputs"]["fps"] = fps
+            workflow["67"]["inputs"]["length"] = total_frames
+        
+        print(f"✅ WAN视频参数更新完成: fps={fps}, duration={duration}s, frames={total_frames}")
+        return workflow
+    
+    def _update_save_path(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+        """更新保存路径"""
+        # 更新视频保存节点
+        if "61" in workflow:
+            workflow["61"]["inputs"]["filename_prefix"] = "video/ComfyUI"
+        
+        print("✅ WAN保存路径更新完成")
+        return workflow
+    
+    def _update_lora_config(self, workflow: Dict[str, Any], loras: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """更新LoRA配置（WAN模型使用固定LoRA）"""
+        # WAN2.2模型使用固定的LoRA配置，这里可以扩展支持自定义LoRA
+        print("ℹ️ WAN2.2模型使用固定LoRA配置")
         return workflow

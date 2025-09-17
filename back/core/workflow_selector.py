@@ -216,6 +216,18 @@ class WorkflowSelector:
                 "description": "Google Gemini图像编辑工作流"
             }
         
+        elif model_config.model_type == ModelType.SEEDREAM4:
+            return {
+                "id": 7,
+                "name": "seedream4_workflow",
+                "display_name": "Seedream4图像融合工作流",
+                "base_model_type": "seedream4",
+                "workflow_type": "image_fusion",
+                "template_path": "workflows/seedream4/seedream4_volcano_engine.json",
+                "available": True,
+                "description": "Seedream4 Volcano Engine图像融合工作流"
+            }
+        
         # 默认返回模型配置中的模板路径
         return {
             "id": 0,

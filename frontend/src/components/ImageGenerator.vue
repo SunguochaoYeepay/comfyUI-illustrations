@@ -301,6 +301,12 @@ const generateImage = async (options = {}) => {
     message.warning('Flux模型最多支持2张图片融合')
     return
   }
+  
+  // Wan模型2图验证
+  if (selectedModel.value === 'wan2.2-video' && referenceImages.value.length > 2) {
+    message.warning('Wan模型最多支持2张图片')
+    return
+  }
 
   isGenerating.value = true
   progress.value = 0
@@ -345,6 +351,22 @@ const generateImage = async (options = {}) => {
         })
         
         console.log(`🎨 Flux 2图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
+      } else if (selectedModel.value === 'wan2.2-video') {
+        // Wan模型2图视频模式
+        formData.append('size', imageSize.value)
+        
+        // 添加2张参考图片
+        referenceImages.value.forEach((imageFile, index) => {
+          if (imageFile.originFileObj instanceof File) {
+            formData.append('reference_images', imageFile.originFileObj)
+          } else {
+            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
+            message.error(`参考图片${index + 1}文件无效，请重新选择`)
+            return
+          }
+        })
+        
+        console.log(`🎬 Wan 2图视频模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
       } else {
         // Qwen/Gemini多图融合模式
         formData.append('fusion_mode', 'concat')
@@ -365,26 +387,45 @@ const generateImage = async (options = {}) => {
         console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
       }
     } else {
-      // 单图生成模式
-      formData.append('count', imageCount.value)
-      formData.append('size', imageSize.value)
-      
-      // 添加LoRA配置
-      if (selectedLoras.value.length > 0) {
-        formData.append('loras', JSON.stringify(selectedLoras.value))
-        console.log('🎨 添加LoRA配置:', selectedLoras.value)
-      }
-      
-      // 添加参考图片（如果有的话）
-      if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {
-        const fileObj = referenceImages.value[0].originFileObj
-        // 验证文件对象是否有效
-        if (fileObj instanceof File) {
-          formData.append('reference_image', fileObj)
-        } else {
-          console.error('参考图片文件对象无效:', fileObj)
-          message.error('参考图片文件无效，请重新选择')
-          return
+      // 单图生成模式 - 但Wan模型需要特殊处理
+      if (selectedModel.value === 'wan2.2-video' && referenceImages.value.length > 1) {
+        // Wan模型自动检测多图，即使不是融合模式
+        formData.append('size', imageSize.value)
+        
+        // 添加多张参考图片
+        referenceImages.value.forEach((imageFile, index) => {
+          if (imageFile.originFileObj instanceof File) {
+            formData.append('reference_images', imageFile.originFileObj)
+          } else {
+            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
+            message.error(`参考图片${index + 1}文件无效，请重新选择`)
+            return
+          }
+        })
+        
+        console.log(`🎬 Wan模型自动多图模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
+      } else {
+        // 真正的单图模式
+        formData.append('count', imageCount.value)
+        formData.append('size', imageSize.value)
+        
+        // 添加LoRA配置
+        if (selectedLoras.value.length > 0) {
+          formData.append('loras', JSON.stringify(selectedLoras.value))
+          console.log('🎨 添加LoRA配置:', selectedLoras.value)
+        }
+        
+        // 添加参考图片（如果有的话）
+        if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {
+          const fileObj = referenceImages.value[0].originFileObj
+          // 验证文件对象是否有效
+          if (fileObj instanceof File) {
+            formData.append('reference_image', fileObj)
+          } else {
+            console.error('参考图片文件对象无效:', fileObj)
+            message.error('参考图片文件无效，请重新选择')
+            return
+          }
         }
       }
     }
@@ -392,15 +433,21 @@ const generateImage = async (options = {}) => {
     // 调用后端API
     let apiEndpoint
     if (mode === 'fusion') {
-      if (selectedModel.value === 'flux-dev') {
-        // Flux模型使用普通生成接口，但传递多张图片
+      if (selectedModel.value === 'flux-dev' || selectedModel.value === 'wan2.2-video') {
+        // Flux和Wan模型使用普通生成接口，但传递多张图片
         apiEndpoint = '/api/generate-image'
       } else {
         // Qwen/Gemini模型使用专门的融合接口
         apiEndpoint = '/api/generate-image-fusion'
       }
     } else {
-      apiEndpoint = '/api/generate-image'
+      // 单图模式，但Wan模型可能需要多图接口
+      if (selectedModel.value === 'wan2.2-video' && referenceImages.value.length > 1) {
+        // Wan模型自动多图模式，使用普通生成接口
+        apiEndpoint = '/api/generate-image'
+      } else {
+        apiEndpoint = '/api/generate-image'
+      }
     }
     
     const response = await fetch(`${API_BASE}${apiEndpoint}`, {

@@ -162,7 +162,7 @@ class TaskManager:
                     
                     # 如果没有指定种子，为每张图片生成不同的随机种子
                     if not parameters.get("seed"):
-                        current_params["seed"] = random.randint(1, 2**32 - 1)
+                        current_params["seed"] = random.randint(1, 2**31 - 1)  # 限制在int32范围内
                         print(f"🎲 使用随机种子: {current_params['seed']}")
                     
                     # 准备工作流

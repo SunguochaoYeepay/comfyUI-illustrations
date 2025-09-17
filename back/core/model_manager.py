@@ -22,6 +22,7 @@ class ModelType(Enum):
     QWEN = "qwen"
     WAN = "wan" # Added WAN model type
     GEMINI = "gemini" # Added GEMINI model type
+    SEEDREAM4 = "seedream4" # Added SEEDREAM4 model type
 
 
 class ModelConfig:

@@ -63,7 +63,7 @@ def init_system_config():
             # 生图配置
             {
                 "key": "image_gen_base_model_order",
-                "value": "qwen-image,gemini-image,flux-dev,wan2.2-video",
+                "value": "qwen-image,gemini-image,flux-dev,wan2.2-video,seedream4_volcano_engine",
                 "description": "基础模型排序配置，逗号分隔"
             },
             {

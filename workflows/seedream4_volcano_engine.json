@@ -1,0 +1,66 @@
+{
+  "11": {
+    "inputs": {
+      "image": "generated-image-1758020573908.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "12": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "22": {
+    "inputs": {
+      "prompt": "图1与图2合并，坐在一起唱歌和弹吉他",
+      "size_preset": "2304x1728 (4:3)",
+      "width": 2048,
+      "height": 2048,
+      "seed": 559718440,
+      "image_input": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "Seedream4_VolcEngine",
+    "_meta": {
+      "title": "Seedream4 Volcano Engine"
+    }
+  },
+  "24": {
+    "inputs": {
+      "image1": [
+        "11",
+        0
+      ],
+      "image2": [
+        "25",
+        0
+      ]
+    },
+    "class_type": "ImageBatch",
+    "_meta": {
+      "title": "图像组合批次"
+    }
+  },
+  "25": {
+    "inputs": {
+      "image": "1fd35f28-9ebb-4702-a241-2d5cd8a076a4_8e065353-ae31-42e0-8a21-4540cecc0721_haipeng_Cartoon-style_young_Asian_male_programmer_25_years_old__5c1f034d-12e7-42a0-9602-a4a5526a26db.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  }
+}

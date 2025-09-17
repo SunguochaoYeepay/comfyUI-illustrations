@@ -270,11 +270,11 @@ const shouldShowLoraPanel = computed(() => {
 
 // 计算属性：判断是否应该显示上传按钮
 const shouldShowUploadButton = computed(() => {
-  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev'
+  const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev' || localModel.value === 'wan2.2-video'
   
   // 支持多图的模型：根据图片数量限制显示上传按钮
   if (isMultiImageModel) {
-    // Qwen模型支持3张图片，Flux和Gemini模型最多2张
+    // Qwen模型支持3张图片，Flux、Gemini和Wan模型最多2张
     const maxImages = localModel.value === 'qwen-image' ? 3 : 2
     return localReferenceImages.value.length < maxImages
   }
@@ -331,7 +331,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
   
   // 如果上传了2张或更多图片，且当前不是支持多图的模型，则切换到qwen-image
   if (newCount >= 2) {
-    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev'
+    const isMultiImageModel = localModel.value === 'qwen-image' || localModel.value === 'gemini-image' || localModel.value === 'flux-dev' || localModel.value === 'wan2.2-video'
     if (!isMultiImageModel) {
       console.log('🔄 自动切换到Qwen模型')
       localModel.value = 'qwen-image'
@@ -341,7 +341,7 @@ watch(() => localReferenceImages.value.length, (newCount) => {
 
 // 监听模型变化，处理图片数量限制
 watch(() => localModel.value, (newModel) => {
-  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'gemini-image' || newModel === 'flux-dev'
+  const isMultiImageModel = newModel === 'qwen-image' || newModel === 'gemini-image' || newModel === 'flux-dev' || newModel === 'wan2.2-video'
   
   // 如果切换到不支持多图的模型，且有多张图片，只保留第一张
   if (!isMultiImageModel && localReferenceImages.value.length > 1) {
@@ -349,9 +349,9 @@ watch(() => localModel.value, (newModel) => {
     localReferenceImages.value = [localReferenceImages.value[0]]
   }
   
-  // 如果切换到Flux模型，且有多于2张图片，只保留前2张
-  if (newModel === 'flux-dev' && localReferenceImages.value.length > 2) {
-    console.log('🔄 切换到Flux模型，只保留前2张图片')
+  // 如果切换到Flux或Wan模型，且有多于2张图片，只保留前2张
+  if ((newModel === 'flux-dev' || newModel === 'wan2.2-video') && localReferenceImages.value.length > 2) {
+    console.log(`🔄 切换到${newModel}模型，只保留前2张图片`)
     localReferenceImages.value = localReferenceImages.value.slice(0, 2)
   }
 }, { immediate: true })
@@ -359,10 +359,16 @@ watch(() => localModel.value, (newModel) => {
 // 获取提示词占位符
 const getPromptPlaceholder = () => {
   if (isVideoModel.value) {
-    return '请描述您想要的视频效果（如：镜头缓慢推进，人物微笑，背景模糊）'
+    if (localModel.value === 'wan2.2-video') {
+      return '请描述您想要的视频效果，支持中文输入（如：弹吉他、人物微笑、镜头推进）'
+    } else {
+      return '请描述您想要的视频效果（如：镜头缓慢推进，人物微笑，背景模糊）'
+    }
   } else if (isFusionMode.value) {
     if (localModel.value === 'flux-dev') {
       return '请描述2图融合的效果，支持中文输入（如：将两张图像融合，让左边的人物拿着右边的物品）'
+    } else if (localModel.value === 'wan2.2-video') {
+      return '请描述2图视频过渡效果，支持中文输入（如：从第一张图过渡到第二张图，人物动作变化）'
     } else {
       return '请描述多图融合的效果，支持中文输入（如：将三张图像拼接后，让左边的女人手里拎着中间棕色的包，坐在白色沙发上）'
     }

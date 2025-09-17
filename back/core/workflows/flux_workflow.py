@@ -350,7 +350,7 @@ class FluxWorkflow(BaseWorkflow):
                 workflow["31"]["inputs"]["seed"] = parameters["seed"]
                 print(f"使用指定种子: {parameters['seed']}")
             else:
-                seed = random.randint(1, 2**32 - 1)
+                seed = random.randint(1, 2**31 - 1)  # 限制在int32范围内
                 workflow["31"]["inputs"]["seed"] = seed
                 print(f"使用随机种子: {seed}")
         

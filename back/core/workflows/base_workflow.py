@@ -70,9 +70,9 @@ class BaseWorkflow(ABC):
         # 验证种子
         if 'seed' in validated:
             if not isinstance(validated['seed'], int):
-                validated['seed'] = random.randint(1, 2**32 - 1)
+                validated['seed'] = random.randint(1, 2**31 - 1)  # 限制在int32范围内
         else:
-            validated['seed'] = random.randint(1, 2**32 - 1)
+            validated['seed'] = random.randint(1, 2**31 - 1)  # 限制在int32范围内
         
         return validated
     

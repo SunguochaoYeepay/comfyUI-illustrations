@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from core.model_manager import get_model_config, ModelType
 from core.workflows import FluxWorkflow, QwenWorkflow
 from core.workflows import WanWorkflow
+from core.workflows.seedream4_workflow import Seedream4Workflow
 
 
 class WorkflowTemplate:
@@ -96,6 +97,9 @@ class WorkflowTemplate:
             from core.workflows import GeminiWorkflow
             model_config_obj = self._convert_dict_to_model_config(model_config)
             workflow_creator = GeminiWorkflow(model_config_obj)
+        elif model_type == "seedream4":
+            model_config_obj = self._convert_dict_to_model_config(model_config)
+            workflow_creator = Seedream4Workflow(model_config_obj)
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")
         

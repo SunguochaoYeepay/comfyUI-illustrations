@@ -139,14 +139,14 @@ class WorkflowTemplate:
     
     def _get_config_client(self):
         """获取配置客户端"""
-        if self._config_client is None:
-            try:
-                from core.config_client import get_config_client
-                self._config_client = get_config_client()
-            except ImportError:
-                # 如果配置客户端不可用，返回None
-                return None
-        return self._config_client
+        # 每次都重新获取配置客户端，确保使用最新的配置
+        try:
+            from core.config_client import get_config_client
+            self._config_client = get_config_client()
+            return self._config_client
+        except ImportError:
+            # 如果配置客户端不可用，返回None
+            return None
     
     async def _get_model_config_from_client(self, model_name: str) -> Optional[Dict[str, Any]]:
         """从配置客户端获取模型配置"""

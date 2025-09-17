@@ -23,6 +23,7 @@ services:
       - DEBUG=false
       - LOG_LEVEL=INFO
       - OLLAMA_URL=http://host.docker.internal:11434
+      - ADMIN_BACKEND_URL=http://yeepay-admin-backend:8888
     networks:
       - yeepay-network
     volumes:

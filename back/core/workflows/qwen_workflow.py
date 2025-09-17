@@ -155,11 +155,11 @@ class QwenWorkflow(BaseWorkflow):
             
             # 查找Qwen工作流
             for workflow_data in workflows:
-                if workflow_data.get("name") == "qwen_image_generation_workflow":
+                if workflow_data.get("name") == "qwen_image_generation":
                     workflow_json = workflow_data.get("workflow_json")
                     if workflow_json:
                         workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
-                        print(f"✅ 通过admin API加载Qwen工作流模板: qwen_image_generation_workflow")
+                        print(f"✅ 通过admin API加载Qwen工作流模板: qwen_image_generation")
                         return workflow
             
             print(f"⚠️ admin API中未找到Qwen工作流，使用内置模板")
@@ -175,7 +175,7 @@ class QwenWorkflow(BaseWorkflow):
         
         return {
             "20": {
-                "type": "KSampler",
+                "class_type": "KSampler",
                 "inputs": {
                     "seed": 287237245922212,
                     "steps": 8,
@@ -186,20 +186,20 @@ class QwenWorkflow(BaseWorkflow):
                 }
             },
             "22": {
-                "type": "VAELoader", 
+                "class_type": "VAELoader", 
                 "inputs": {
                     "vae_name": "qwen_image_vae.safetensors"
                 }
             },
             "23": {
-                "type": "UNETLoader",
+                "class_type": "UNETLoader",
                 "inputs": {
                     "unet_name": "Qwen-Image_1.0",
                     "weight_dtype": "default"
                 }
             },
             "24": {
-                "type": "CLIPLoader",
+                "class_type": "CLIPLoader",
                 "inputs": {
                     "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
                     "clip_type": "qwen_image",
@@ -207,13 +207,13 @@ class QwenWorkflow(BaseWorkflow):
                 }
             },
             "25": {
-                "type": "CLIPTextEncode",
+                "class_type": "CLIPTextEncode",
                 "inputs": {
                     "text": "{{description}}"
                 }
             },
             "27": {
-                "type": "CR SDXL Aspect Ratio",
+                "class_type": "CR SDXL Aspect Ratio",
                 "inputs": {
                     "width": TARGET_IMAGE_WIDTH,
                     "height": TARGET_IMAGE_HEIGHT,
@@ -224,13 +224,13 @@ class QwenWorkflow(BaseWorkflow):
                 }
             },
             "28": {
-                "type": "SaveImage",
+                "class_type": "SaveImage",
                 "inputs": {
                     "filename_prefix": "yeepay/yeepay"
                 }
             },
             "33": {
-                "type": "Lora Loader Stack (rgthree)",
+                "class_type": "Lora Loader Stack (rgthree)",
                 "inputs": {
                     "lora_01": "None",
                     "strength_01": 0.8,

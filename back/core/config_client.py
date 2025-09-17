@@ -25,6 +25,7 @@ class ConfigSource(Enum):
     BACKEND = "backend"  # 后台管理服务
     CACHE = "cache"      # 本地缓存
     LOCAL = "local"      # 本地配置文件
+    ERROR = "error"      # 配置错误
 
 
 class ConfigClient:
@@ -32,7 +33,18 @@ class ConfigClient:
     
     def __init__(self):
         """初始化配置客户端"""
-        self.backend_url = os.getenv("BACKEND_CONFIG_URL", os.getenv('ADMIN_BACKEND_URL', 'http://localhost:8888'))
+        # 智能检测Docker环境中的admin backend URL
+        admin_backend_url = os.getenv("BACKEND_CONFIG_URL", os.getenv('ADMIN_BACKEND_URL'))
+        if not admin_backend_url:
+            # 如果在Docker环境中且没有设置环境变量，尝试常见的Docker容器名
+            if os.path.exists('/.dockerenv'):  # Docker环境检测
+                admin_backend_url = 'http://yeepay-admin-backend:8888'
+                logger.info(f"检测到Docker环境，使用admin backend URL: {admin_backend_url}")
+            else:
+                admin_backend_url = 'http://localhost:8888'
+                logger.info(f"本地环境，使用admin backend URL: {admin_backend_url}")
+        
+        self.backend_url = admin_backend_url
         self.cache_ttl = int(os.getenv("CONFIG_CACHE_TTL", "300"))  # 5分钟缓存
         self.sync_interval = int(os.getenv("CONFIG_SYNC_INTERVAL", "60"))  # 1分钟同步间隔
         
@@ -49,7 +61,8 @@ class ConfigClient:
         
         # 启动后台同步任务
         self._sync_task = None
-        self._start_sync_task()
+        # 暂时禁用后台同步任务，避免在Docker环境中产生连接错误
+        # self._start_sync_task()
     
     def _start_sync_task(self):
         """启动后台同步任务"""
@@ -403,8 +416,8 @@ _config_client: Optional[ConfigClient] = None
 def get_config_client() -> ConfigClient:
     """获取配置客户端实例"""
     global _config_client
-    if _config_client is None:
-        _config_client = ConfigClient()
+    # 每次都重新创建配置客户端，确保使用最新的配置
+    _config_client = ConfigClient()
     return _config_client
 
 

@@ -24,6 +24,12 @@ class LoraManager:
         self._config_client = None
         self._local_loras_cache = {}
         self._last_local_scan = None
+        self.model_mapping = {
+            "flux-dev": "flux-dev",
+            "qwen-image": "qwen-image",
+            "gemini-image": "gemini-image",
+            "wan2.2-video": "wan2.2-video"
+        }
     
     def _get_config_client(self):
         """获取配置客户端"""

@@ -137,8 +137,12 @@ class ModelManager:
                 config = await config_client.get_models_config()
                 models = config.get("models", [])
                 
+                # 过滤掉不可用的模型
+                available_models = [model for model in models if model.get("available", True)]
+                print(f"🔍 从配置获取模型: 总数 {len(models)}, 可用 {len(available_models)}")
+                
                 # 应用模型排序
-                return self.apply_model_order_config(models)
+                return self.apply_model_order_config(available_models)
             else:
                 # 配置客户端不可用，使用默认方法
                 return self.get_available_models()

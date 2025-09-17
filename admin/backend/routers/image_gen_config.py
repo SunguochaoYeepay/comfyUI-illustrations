@@ -174,8 +174,12 @@ async def get_base_models_for_config(db: Session = Depends(get_db)):
                 model_list.append({
                     "name": model.name,
                     "display_name": model.display_name,
+                    "model_type": model.model_type,
                     "description": model.description,
-                    "available": model.is_available
+                    "available": model.is_available,
+                    "unet_file": model.unet_file,
+                    "clip_file": model.clip_file,
+                    "vae_file": model.vae_file
                 })
         
         return {

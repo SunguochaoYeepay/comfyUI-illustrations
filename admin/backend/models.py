@@ -113,3 +113,58 @@ class Lora(Base):
     is_managed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+# 备份相关模型
+class BackupRecord(Base):
+    """备份记录表"""
+    __tablename__ = "backup_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_id = Column(String(36), unique=True, index=True, nullable=False)
+    backup_name = Column(String(255), nullable=False)
+    backup_type = Column(String(50), nullable=False)  # full, main_service, admin_service
+    backup_size = Column(Integer, nullable=False)
+    file_path = Column(String(500), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # pending, completed, failed
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    checksum = Column(String(64), nullable=True)
+    created_by = Column(String(50), nullable=True)
+    backup_metadata = Column(Text, nullable=True)  # JSON字符串
+
+    # 关联关系
+    tasks = relationship("BackupTask", back_populates="backup_record")
+
+class BackupTask(Base):
+    """备份任务表"""
+    __tablename__ = "backup_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(String(36), unique=True, index=True, nullable=False)
+    backup_id = Column(String(36), ForeignKey("backup_records.backup_id"), nullable=True)
+    task_type = Column(String(50), nullable=False)  # backup, restore, cleanup
+    status = Column(String(20), nullable=False, default="pending")  # pending, running, completed, failed
+    progress = Column(Integer, default=0)
+    started_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # 关联关系
+    backup_record = relationship("BackupRecord", back_populates="tasks")
+
+class BackupSchedule(Base):
+    """自动备份配置表"""
+    __tablename__ = "backup_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    schedule_name = Column(String(255), nullable=False)
+    enabled = Column(Boolean, default=True)
+    frequency = Column(String(20), nullable=False)  # daily, weekly, monthly
+    schedule_time = Column(String(10), nullable=False)  # HH:MM格式
+    backup_type = Column(String(50), nullable=False)  # full, main_service, admin_service
+    retention_days = Column(Integer, default=30)
+    last_run = Column(DateTime, nullable=True)
+    next_run = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

@@ -41,6 +41,11 @@ const routes = [
         path: '/image-gen-config',
         name: 'ImageGenConfig',
         component: () => import('../views/ImageGenConfig.vue')
+      },
+      {
+        path: '/backup-management',
+        name: 'BackupManagement',
+        component: () => import('../views/BackupManagement.vue')
       }
     ]
   }

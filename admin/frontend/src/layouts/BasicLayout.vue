@@ -30,6 +30,10 @@
             <picture-outlined />
             <span>生图配置</span>
           </a-menu-item>
+          <a-menu-item key="/backup-management">
+            <cloud-download-outlined />
+            <span>数据备份</span>
+          </a-menu-item>
         </a-menu>
       </a-layout-sider>
       <a-layout>
@@ -59,6 +63,7 @@ import {
   PieChartOutlined,
   PictureOutlined,
   CloudUploadOutlined,
+  CloudDownloadOutlined,
   DatabaseOutlined,
   SettingOutlined,
 } from '@ant-design/icons-vue';
@@ -70,7 +75,7 @@ const selectedKeys = ref(['/dashboard']);
 const router = useRouter();
 const route = useRoute();
 
-const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management', '/workflow-management', '/image-gen-config'];
+const menuKeys = ['/', '/image-management', '/lora-management', '/base-model-management', '/workflow-management', '/image-gen-config', '/backup-management'];
 
 watch(
   () => route.path,

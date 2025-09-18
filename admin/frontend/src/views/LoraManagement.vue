@@ -98,13 +98,27 @@
           </div>
         </a-form-item>
         <a-form-item label="文件名">
-          <a-auto-complete
-            v-model:value="editForm.new_name"
-            :options="filenameOptions"
-            placeholder="输入新文件名或选择未管理的模型"
-          />
+          <div style="display: flex; gap: 8px;">
+            <a-auto-complete
+              v-model:value="editForm.new_name"
+              :options="filenameOptions"
+              placeholder="输入新文件名或选择未管理的模型"
+              style="flex: 1;"
+            />
+            <a-button 
+              @click="refreshEditFilenameOptions" 
+              :loading="editFilenameLoading"
+              type="default"
+              title="刷新文件名选项"
+            >
+              <template #icon>
+                <ReloadOutlined />
+              </template>
+              刷新
+            </a-button>
+          </div>
           <div style="margin-top: 4px; font-size: 12px; color: #666;">
-            ComfyUI使用的文件名，通常不需要修改
+            ComfyUI使用的文件名，通常不需要修改。点击刷新按钮更新可选文件列表
           </div>
         </a-form-item>
         <a-form-item label="基础模型">
@@ -157,15 +171,32 @@
           </div>
         </a-form-item>
         <a-form-item label="模型文件" required>
-          <a-select
-            v-model:value="createForm.filename"
-            placeholder="选择模型文件"
-            :loading="unassociatedLoading"
-          >
-            <a-select-option v-for="filename in unassociatedLoras" :key="filename" :value="filename">
-              {{ filename }}
-            </a-select-option>
-          </a-select>
+          <div style="display: flex; gap: 8px;">
+            <a-select
+              v-model:value="createForm.filename"
+              placeholder="选择模型文件"
+              :loading="unassociatedLoading"
+              style="flex: 1;"
+            >
+              <a-select-option v-for="filename in unassociatedLoras" :key="filename" :value="filename">
+                {{ filename }}
+              </a-select-option>
+            </a-select>
+            <a-button 
+              @click="refreshUnassociatedLoras" 
+              :loading="unassociatedLoading"
+              type="default"
+              title="刷新LoRA文件列表"
+            >
+              <template #icon>
+                <ReloadOutlined />
+              </template>
+              刷新
+            </a-button>
+          </div>
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            点击刷新按钮检测新增的LoRA文件
+          </div>
         </a-form-item>
         <a-form-item label="显示名称" required>
           <a-input v-model:value="createForm.display_name" placeholder="用户友好的名称" />
@@ -203,7 +234,7 @@ import { ref, reactive, onMounted, computed } from 'vue';
     import { getLoras, deleteLora, updateLoraMeta, uploadLoraPreview, getUnassociatedLoras, createLoraRecord } from '@/api/lora';
     import { getBaseModels } from '@/api/baseModel';
 import { message, Image as AImage, Space as ASpace, Upload, Popconfirm, Modal, Form, Input, Textarea, Button, Select, Tag, AutoComplete as AAutoComplete } from 'ant-design-vue';
-import { UploadOutlined, PlusOutlined } from '@ant-design/icons-vue';
+import { UploadOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue';
 
 export default {
   name: 'LoraManagement',
@@ -276,6 +307,7 @@ export default {
     // Edit Modal State
     const editModalOpen = ref(false);
     const editModalLoading = ref(false);
+    const editFilenameLoading = ref(false);
     const editForm = reactive({ code: '', name: '', new_name: '', display_name: '', base_model: '', description: '' });
     const fileList = ref([]);
     const filenameOptions = ref([]);
@@ -390,6 +422,39 @@ export default {
       }
     };
 
+    // 刷新编辑对话框的文件名选项
+    const refreshEditFilenameOptions = async () => {
+      editFilenameLoading.value = true;
+      try {
+        const response = await getUnassociatedLoras();
+        if (response.code === 200) {
+          const options = response.data.map(name => ({ value: name }));
+          // 确保当前文件名在选项中
+          if (!options.some(opt => opt.value === editForm.name)) {
+            options.unshift({ value: editForm.name });
+          }
+          const oldCount = filenameOptions.value.length;
+          filenameOptions.value = options;
+          const newCount = filenameOptions.value.length;
+          
+          if (newCount > oldCount) {
+            message.success(`发现 ${newCount - oldCount} 个新的LoRA文件`);
+          } else if (newCount === oldCount) {
+            message.info('没有发现新的LoRA文件');
+          } else {
+            message.info(`文件名选项已更新，当前有 ${newCount} 个可选文件`);
+          }
+        } else {
+          message.error(response.message || '刷新失败');
+        }
+      } catch (error) {
+        console.error('Error refreshing edit filename options:', error);
+        message.error('刷新文件名选项失败');
+      } finally {
+        editFilenameLoading.value = false;
+      }
+    };
+
     const handleEdit = async () => {
       editModalLoading.value = true;
       try {
@@ -445,6 +510,34 @@ export default {
       } catch (error) {
         console.error('Error fetching unassociated models:', error);
         message.error('Error fetching unassociated models');
+      } finally {
+        unassociatedLoading.value = false;
+      }
+    };
+
+    // 刷新未关联的LoRA文件列表
+    const refreshUnassociatedLoras = async () => {
+      unassociatedLoading.value = true;
+      try {
+        const response = await getUnassociatedLoras();
+        if (response.code === 200) {
+          const oldCount = unassociatedLoras.value.length;
+          unassociatedLoras.value = response.data;
+          const newCount = unassociatedLoras.value.length;
+          
+          if (newCount > oldCount) {
+            message.success(`发现 ${newCount - oldCount} 个新的LoRA文件`);
+          } else if (newCount === oldCount) {
+            message.info('没有发现新的LoRA文件');
+          } else {
+            message.info(`LoRA文件列表已更新，当前有 ${newCount} 个未关联文件`);
+          }
+        } else {
+          message.error(response.message || '刷新失败');
+        }
+      } catch (error) {
+        console.error('Error refreshing unassociated models:', error);
+        message.error('刷新LoRA文件列表失败');
       } finally {
         unassociatedLoading.value = false;
       }
@@ -557,6 +650,7 @@ export default {
       handleTableChange,
       editModalOpen,
       editModalLoading,
+      editFilenameLoading,
       editForm,
       showEditModal,
       handleEdit,
@@ -564,6 +658,7 @@ export default {
       beforeUpload,
       handleRemove,
       filenameOptions,
+      refreshEditFilenameOptions,
       createModalOpen,
       createModalLoading,
       createForm,
@@ -578,6 +673,7 @@ export default {
       fetchBaseModels,
       baseModelFilter,
       onBaseModelFilter,
+      refreshUnassociatedLoras,
     };
   },
 };

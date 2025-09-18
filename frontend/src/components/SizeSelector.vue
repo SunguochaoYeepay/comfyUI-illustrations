@@ -270,7 +270,7 @@ const fetchSizes = async () => {
               description: ratio.description || '',
               isPreset: true
             })
-          } else if (ratio && typeof ratio === 'string' && ratio.includes(':')) {
+          } else if (ratio && typeof ratio === 'string' && ratio.includes && ratio.includes(':')) {
             // 旧格式：字符串格式如 "1:1"
             const [widthRatio, heightRatio] = ratio.split(':').map(Number)
             if (widthRatio && heightRatio) {

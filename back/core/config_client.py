@@ -151,8 +151,11 @@ class ConfigClient:
         if backend_data and self._backend_healthy:
             self._cache[config_type] = backend_data
             self._cache_timestamps[config_type] = datetime.now()
-            backend_data["config_source"] = ConfigSource.BACKEND.value
-            backend_data["last_updated"] = datetime.now().isoformat()
+            # 保持原有的config_source，不要覆盖
+            if "config_source" not in backend_data:
+                backend_data["config_source"] = ConfigSource.BACKEND.value
+            if "last_updated" not in backend_data:
+                backend_data["last_updated"] = datetime.now().isoformat()
             return backend_data
         
         # 2. 使用缓存配置
@@ -267,20 +270,45 @@ class ConfigClient:
     async def get_image_gen_config(self) -> Dict[str, Any]:
         """获取生图配置"""
         try:
+            logger.info(f"尝试从admin后端获取生图配置: {self.backend_url}/api/admin/image-gen-config")
             # 尝试从admin后端获取生图配置
             backend_data = await self._make_request("/api/admin/image-gen-config")
             if backend_data:
+                logger.info(f"成功从admin后端获取生图配置: {backend_data}")
                 # 处理新的尺寸比例配置格式
                 size_ratios_data = backend_data.get("size_ratios", [])
                 supported_ratios = []
+                
+                # 默认尺寸映射
+                default_sizes = {
+                    '1:1': {'width': 1024, 'height': 1024},
+                    '4:3': {'width': 1024, 'height': 768},
+                    '3:4': {'width': 768, 'height': 1024},
+                    '16:9': {'width': 1024, 'height': 576},
+                    '9:16': {'width': 576, 'height': 1024},
+                    '21:9': {'width': 1024, 'height': 439},
+                    '3:2': {'width': 1024, 'height': 683},
+                    '2:3': {'width': 683, 'height': 1024}
+                }
                 
                 if isinstance(size_ratios_data, list) and len(size_ratios_data) > 0:
                     # 新格式：每个比例包含ratio, width, height等信息
                     if isinstance(size_ratios_data[0], dict):
                         supported_ratios = [ratio.get("ratio", "1:1") for ratio in size_ratios_data]
                     else:
-                        # 旧格式：直接是比例字符串列表
-                        supported_ratios = size_ratios_data
+                        # 旧格式：直接是比例字符串列表，需要转换为对象数组
+                        converted_ratios = []
+                        for ratio in size_ratios_data:
+                            if isinstance(ratio, str):
+                                default_size = default_sizes.get(ratio, {'width': 1024, 'height': 1024})
+                                converted_ratios.append({
+                                    'ratio': ratio,
+                                    'width': default_size['width'],
+                                    'height': default_size['height'],
+                                    'description': ''
+                                })
+                        size_ratios_data = converted_ratios
+                        supported_ratios = [ratio['ratio'] for ratio in converted_ratios]
                 else:
                     # 默认配置
                     supported_ratios = ["1:1", "4:3", "3:4", "16:9", "9:16"]
@@ -290,14 +318,17 @@ class ConfigClient:
                     "default_size": backend_data.get("default_size", {"width": 1024, "height": 1024}),
                     "size_ratios": size_ratios_data,  # 保持原始格式，供前端使用
                     "supported_ratios": supported_ratios,  # 兼容旧格式的字段
+                    "base_model_order": backend_data.get("base_model_order", []),  # 添加基础模型顺序
                     "lora_order": backend_data.get("lora_order", {}),  # 添加LoRA排序配置
                     "default_steps": 20,
                     "default_count": 1,
                     "config_source": "admin_backend",
                     "last_updated": datetime.now().isoformat()
                 }
+                logger.info(f"转换后的生图配置: {image_gen_data}")
                 return self._get_config_with_fallback("image_gen", image_gen_data)
             else:
+                logger.warning("admin后端返回的生图配置数据为空")
                 raise Exception("admin后端返回的生图配置数据为空")
         except Exception as e:
             logger.error(f"获取生图配置失败: {e}")

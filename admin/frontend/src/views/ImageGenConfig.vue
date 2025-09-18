@@ -478,8 +478,13 @@ export default {
     
     // 更新尺寸比例配置
     const updateSizeRatiosConfig = () => {
-      // 将sizeRatiosConfig转换为size_ratios格式
-      config.value.size_ratios = sizeRatiosConfig.value.map(ratio => ratio.ratio)
+      // 将sizeRatiosConfig转换为size_ratios格式，保留所有字段
+      config.value.size_ratios = sizeRatiosConfig.value.map(ratio => ({
+        ratio: ratio.ratio,
+        width: ratio.width,
+        height: ratio.height,
+        description: ratio.description || ''
+      }))
       
       // 更新默认尺寸为第一个比例
       if (sizeRatiosConfig.value.length > 0) {

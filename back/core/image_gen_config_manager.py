@@ -89,14 +89,56 @@ class ImageGenConfigManager:
             logger.error(f"获取默认数量失败: {e}")
             return 1
     
-    async def get_supported_ratios(self) -> List[str]:
+    async def get_supported_ratios(self) -> List[Dict[str, Any]]:
         """获取支持的尺寸比例"""
         try:
             config = await self.get_image_gen_config()
-            return config.get("size_ratios", ["1:1", "4:3", "3:4", "16:9", "9:16"])
+            size_ratios = config.get("size_ratios", [])
+            
+            # 默认尺寸映射
+            default_sizes = {
+                '1:1': {'width': 1024, 'height': 1024},
+                '4:3': {'width': 1024, 'height': 768},
+                '3:4': {'width': 768, 'height': 1024},
+                '16:9': {'width': 1024, 'height': 576},
+                '9:16': {'width': 576, 'height': 1024},
+                '21:9': {'width': 1024, 'height': 439},
+                '3:2': {'width': 1024, 'height': 683},
+                '2:3': {'width': 683, 'height': 1024}
+            }
+            
+            # 如果size_ratios为空，尝试从supported_ratios获取
+            if not size_ratios:
+                supported_ratios = config.get("supported_ratios", ["1:1", "4:3", "3:4", "16:9", "9:16"])
+                size_ratios = supported_ratios
+            
+            # 统一处理：将字符串数组转换为对象数组
+            result_ratios = []
+            for ratio in size_ratios:
+                if isinstance(ratio, str):
+                    # 字符串格式，需要转换为对象
+                    default_size = default_sizes.get(ratio, {'width': 1024, 'height': 1024})
+                    result_ratios.append({
+                        'ratio': ratio,
+                        'width': default_size['width'],
+                        'height': default_size['height'],
+                        'description': ''
+                    })
+                elif isinstance(ratio, dict) and 'ratio' in ratio:
+                    # 已经是对象格式，直接使用
+                    result_ratios.append(ratio)
+            
+            return result_ratios
         except Exception as e:
             logger.error(f"获取支持的尺寸比例失败: {e}")
-            return ["1:1", "4:3", "3:4", "16:9", "9:16"]
+            # 返回默认配置
+            return [
+                {'ratio': '1:1', 'width': 1024, 'height': 1024, 'description': ''},
+                {'ratio': '4:3', 'width': 1024, 'height': 768, 'description': ''},
+                {'ratio': '3:4', 'width': 768, 'height': 1024, 'description': ''},
+                {'ratio': '16:9', 'width': 1024, 'height': 576, 'description': ''},
+                {'ratio': '9:16', 'width': 576, 'height': 1024, 'description': ''}
+            ]
     
     async def get_supported_formats(self) -> List[str]:
         """获取支持的图像格式"""
@@ -224,6 +266,7 @@ class ImageGenConfigManager:
         try:
             config = await self.get_image_gen_config()
             default_width, default_height = await self.get_default_image_size()
+            supported_ratios = await self.get_supported_ratios()
             
             return {
                 "default_size": {
@@ -233,9 +276,12 @@ class ImageGenConfigManager:
                 },
                 "default_steps": await self.get_default_steps(),
                 "default_count": await self.get_default_count(),
-                "supported_ratios": await self.get_supported_ratios(),
+                "supported_ratios": supported_ratios,  # 现在是对象数组
+                "size_ratios": supported_ratios,  # 添加size_ratios字段，与supported_ratios保持一致
                 "supported_formats": await self.get_supported_formats(),
                 "quality_settings": await self.get_quality_settings(),
+                "base_model_order": config.get("base_model_order", []),  # 添加基础模型顺序
+                "lora_order": config.get("lora_order", {}),  # 添加LoRA排序配置
                 "config_source": config.get("config_source", "unknown"),
                 "last_updated": config.get("last_updated", "unknown")
             }
@@ -245,13 +291,28 @@ class ImageGenConfigManager:
                 "default_size": {"width": 1024, "height": 1024, "string": "1024x1024"},
                 "default_steps": 20,
                 "default_count": 1,
-                "supported_ratios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+                "supported_ratios": [
+                    {'ratio': '1:1', 'width': 1024, 'height': 1024, 'description': ''},
+                    {'ratio': '4:3', 'width': 1024, 'height': 768, 'description': ''},
+                    {'ratio': '3:4', 'width': 768, 'height': 1024, 'description': ''},
+                    {'ratio': '16:9', 'width': 1024, 'height': 576, 'description': ''},
+                    {'ratio': '9:16', 'width': 576, 'height': 1024, 'description': ''}
+                ],
+                "size_ratios": [
+                    {'ratio': '1:1', 'width': 1024, 'height': 1024, 'description': ''},
+                    {'ratio': '4:3', 'width': 1024, 'height': 768, 'description': ''},
+                    {'ratio': '3:4', 'width': 768, 'height': 1024, 'description': ''},
+                    {'ratio': '16:9', 'width': 1024, 'height': 576, 'description': ''},
+                    {'ratio': '9:16', 'width': 576, 'height': 1024, 'description': ''}
+                ],
                 "supported_formats": ["png", "jpg", "jpeg", "webp"],
                 "quality_settings": {
                     "low": {"steps": 10, "cfg": 7.0},
                     "medium": {"steps": 20, "cfg": 8.0},
                     "high": {"steps": 30, "cfg": 9.0}
                 },
+                "base_model_order": [],
+                "lora_order": {},
                 "config_source": "error",
                 "error": str(e)
             }

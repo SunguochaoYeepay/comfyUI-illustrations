@@ -38,8 +38,8 @@
               @click="selectSize(size)"
             >
               <div class="size-info">
-                <span class="size-dimensions">{{ size.width }} × {{ size.height }}</span>
-                <span class="size-ratio">{{ size.ratio }}</span>
+                <span class="size-dimensions">{{ size.ratio }}（{{ size.width }}x{{ size.height }}）</span>
+                <span class="size-description" v-if="size.description">{{ size.description }}</span>
               </div>
               <div class="size-preview">
                 <div 
@@ -153,7 +153,7 @@ const emit = defineEmits([
 // API基础URL
 const API_BASE = (() => {
   if (import.meta.env.DEV) {
-    return import.meta.env.VITE_ADMIN_BACKEND_URL || 'http://localhost:8888'  // admin后端运行在8888端口
+    return import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000'  // 主服务运行在9000端口
   }
   return import.meta.env.VITE_API_BASE_URL || ''
 })()
@@ -183,7 +183,7 @@ const selectedSizeDisplay = computed(() => {
   const [width, height] = localSize.value.split('x').map(Number)
   if (width && height) {
     const ratio = getAspectRatio(width, height)
-    return `${width} × ${height} (${ratio})`
+    return `${ratio}（${width}x${height}）`
   }
   return localSize.value
 })
@@ -241,7 +241,7 @@ const handleCountDropdownVisibleChange = (visible) => {
 const fetchSizes = async () => {
   try {
     loading.value = true
-    const response = await fetch(`${API_BASE}/api/admin/image-gen-config`)
+    const response = await fetch(`${API_BASE}/api/config/image-gen`)
     if (response.ok) {
       const data = await response.json()
       
@@ -260,12 +260,21 @@ const fetchSizes = async () => {
       
       // 添加比例选项
       if (data.size_ratios && Array.isArray(data.size_ratios)) {
-        const baseSize = data.default_size ? Math.min(data.default_size.width, data.default_size.height) : 1024
-        
         data.size_ratios.forEach(ratio => {
-          if (ratio && ratio.includes(':')) {
+          if (ratio && typeof ratio === 'object' && ratio.ratio && ratio.width && ratio.height) {
+            // 新格式：对象包含ratio, width, height, description
+            sizes.push({
+              width: ratio.width,
+              height: ratio.height,
+              ratio: ratio.ratio,
+              description: ratio.description || '',
+              isPreset: true
+            })
+          } else if (ratio && typeof ratio === 'string' && ratio.includes(':')) {
+            // 旧格式：字符串格式如 "1:1"
             const [widthRatio, heightRatio] = ratio.split(':').map(Number)
             if (widthRatio && heightRatio) {
+              const baseSize = data.default_size ? Math.min(data.default_size.width, data.default_size.height) : 1024
               const width = Math.round(baseSize * widthRatio / Math.max(widthRatio, heightRatio))
               const height = Math.round(baseSize * heightRatio / Math.max(widthRatio, heightRatio))
               
@@ -284,10 +293,19 @@ const fetchSizes = async () => {
         })
       }
       
-      // 去重并排序
-      const uniqueSizes = sizes.filter((size, index, self) => 
-        index === self.findIndex(s => s.width === size.width && s.height === size.height)
-      ).sort((a, b) => {
+      // 去重并排序 - 优先保留有描述的尺寸
+      const uniqueSizes = sizes.filter((size, index, self) => {
+        const existingIndex = self.findIndex(s => s.width === size.width && s.height === size.height)
+        if (existingIndex === index) return true
+        // 如果找到重复的尺寸，优先保留有描述的
+        const existing = self[existingIndex]
+        if (size.description && !existing.description) {
+          // 用有描述的替换没有描述的
+          self[existingIndex] = size
+          return false
+        }
+        return false
+      }).sort((a, b) => {
         // 默认尺寸排在前面
         if (a.isDefault && !b.isDefault) return -1
         if (!a.isDefault && b.isDefault) return 1
@@ -296,11 +314,17 @@ const fetchSizes = async () => {
       })
       
       availableSizes.value = uniqueSizes
-      configSource.value = 'backend'
+      configSource.value = data.config_source || 'unknown'
       lastUpdated.value = new Date().toISOString()
       
       console.log('📐 获取到尺寸配置:', availableSizes.value)
       console.log('📊 配置来源:', configSource.value)
+      
+      // 调试：检查第一个尺寸的描述
+      if (availableSizes.value.length > 0) {
+        console.log('🔍 第一个尺寸的详细信息:', availableSizes.value[0])
+        console.log('🔍 第一个尺寸的描述:', availableSizes.value[0].description)
+      }
     } else {
       console.error('❌ 获取尺寸配置失败:', response.status)
       message.error('获取尺寸配置失败')
@@ -504,6 +528,14 @@ onMounted(() => {
   font-weight: 500;
 }
 
+.size-description {
+  color: #999;
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 2px;
+  display: block;
+}
+
 .size-ratio {
   color: #999;
   font-size: 11px;
@@ -515,9 +547,15 @@ onMounted(() => {
 
 .preview-box {
   width: 24px;
-  height: 18px;
   border-radius: 2px;
   border: 1px solid #666;
+  /* 让aspect-ratio完全控制高度，移除固定高度 */
+  min-width: 12px;
+  max-width: 32px;
+  min-height: 8px;
+  max-height: 24px;
+  /* 确保aspect-ratio生效 */
+  height: auto;
 }
 
 .custom-size-section {

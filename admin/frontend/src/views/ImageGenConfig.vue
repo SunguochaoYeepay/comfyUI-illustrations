@@ -297,8 +297,8 @@ export default {
         if (config.value.lora_order[baseModel]) {
           const customOrder = config.value.lora_order[baseModel]
           sortedLoras.sort((a, b) => {
-            const indexA = customOrder.indexOf(a.name)
-            const indexB = customOrder.indexOf(b.name)
+            const indexA = customOrder.indexOf(a.code || a.name)
+            const indexB = customOrder.indexOf(b.code || b.name)
             if (indexA === -1 && indexB === -1) return 0
             if (indexA === -1) return 1
             if (indexB === -1) return -1
@@ -371,7 +371,7 @@ export default {
               // 找到对应的组，获取更新后的LoRA顺序
               const group = loraGroupsReactive.value.find(g => g.baseModel === baseModel)
               if (group) {
-                const newOrder = group.loras.map(lora => lora.name)
+                const newOrder = group.loras.map(lora => lora.code || lora.name)
                 
                 // 更新配置
                 if (!config.value.lora_order) {

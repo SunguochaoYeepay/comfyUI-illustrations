@@ -186,47 +186,6 @@ class ConfigClient:
             logger.error(f"加载本地配置失败: {e}")
             return None
     
-    def _get_default_config(self, config_type: str) -> Dict[str, Any]:
-        """获取默认配置"""
-        default_configs = {
-            "models": {
-                "models": [
-                    {
-                        "name": "qwen-image",
-                        "display_name": "Qwen",
-                        "model_type": "qwen",
-                        "available": True,
-                        "sort_order": 1
-                    },
-                    {
-                        "name": "flux1-dev",
-                        "display_name": "Flux Kontext",
-                        "model_type": "flux",
-                        "available": True,
-                        "sort_order": 2
-                    }
-                ],
-                "config_source": "default",
-                "last_updated": datetime.now().isoformat()
-            },
-            "loras": {
-                "loras": [],
-                "grouped_by_model": {},
-                "config_source": "default"
-            },
-            "workflows": {
-                "workflows": [],
-                "config_source": "default"
-            },
-            "image_gen": {
-                "default_size": {"width": 1024, "height": 1024},
-                "size_ratios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
-                "default_steps": 20,
-                "config_source": "default"
-            }
-        }
-        
-        return default_configs.get(config_type, {"config_source": "default"})
     
     async def get_models_config(self) -> Dict[str, Any]:
         """获取模型配置"""
@@ -250,9 +209,18 @@ class ConfigClient:
     async def get_loras_config(self) -> Dict[str, Any]:
         """获取LoRA配置"""
         try:
-            # 尝试从后台获取所有LoRA数据（设置大的page_size）
-            backend_data = await self._make_request("/api/loras?page=1&page_size=100")
-            return self._get_config_with_fallback("loras", backend_data)
+            # 尝试从admin后端获取LoRA配置
+            backend_data = await self._make_request("/api/admin/config-sync/loras")
+            if backend_data and "loras" in backend_data:
+                # 转换admin后端的格式到主服务需要的格式
+                loras_data = {
+                    "loras": backend_data["loras"],
+                    "config_source": "admin_backend",
+                    "last_updated": datetime.now().isoformat()
+                }
+                return self._get_config_with_fallback("loras", loras_data)
+            else:
+                raise Exception("admin后端返回的LoRA数据格式不正确")
         except Exception as e:
             logger.error(f"获取LoRA配置失败: {e}")
             return self._get_config_with_fallback("loras")
@@ -260,9 +228,18 @@ class ConfigClient:
     async def get_workflows_config(self) -> Dict[str, Any]:
         """获取工作流配置"""
         try:
-            # 尝试从后台获取
-            backend_data = await self._make_request("/workflows")
-            return self._get_config_with_fallback("workflows", backend_data)
+            # 尝试从admin后端获取工作流配置
+            backend_data = await self._make_request("/api/admin/config-sync/workflows")
+            if backend_data and "workflows" in backend_data:
+                # 转换admin后端的格式到主服务需要的格式
+                workflows_data = {
+                    "workflows": backend_data["workflows"],
+                    "config_source": "admin_backend",
+                    "last_updated": datetime.now().isoformat()
+                }
+                return self._get_config_with_fallback("workflows", workflows_data)
+            else:
+                raise Exception("admin后端返回的工作流数据格式不正确")
         except Exception as e:
             logger.error(f"获取工作流配置失败: {e}")
             return self._get_config_with_fallback("workflows")
@@ -355,14 +332,7 @@ class ConfigClient:
             }
         except Exception as e:
             logger.error(f"获取所有配置失败: {e}")
-            return {
-                "models": self._get_default_config("models"),
-                "loras": self._get_default_config("loras"),
-                "workflows": self._get_default_config("workflows"),
-                "image_gen": self._get_default_config("image_gen"),
-                "config_source": "default",
-                "last_updated": datetime.now().isoformat()
-            }
+            raise Exception(f"无法获取配置，admin后端不可用: {e}")
     
     async def _sync_models_config(self):
         """同步模型配置"""

@@ -118,9 +118,11 @@ async def get_available_models():
         # 优先使用配置客户端获取模型
         try:
             models = await get_available_models_async()
+            # 从配置客户端返回的数据中获取config_source
+            config_source = models.get("config_source", "backend")
             return {
                 "models": models,
-                "config_source": "backend",
+                "config_source": config_source,
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as config_error:
@@ -151,9 +153,11 @@ async def get_available_loras(model: str = Query(..., description="基础模型�
         # 优先使用配置客户端获取LoRA
         try:
             loras = await get_loras_from_config(model)
+            # 从配置客户端返回的数据中获取config_source
+            config_source = loras.get("config_source", "backend")
             return {
                 "loras": loras,
-                "config_source": "backend",
+                "config_source": config_source,
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as config_error:
@@ -1469,6 +1473,27 @@ async def config_status():
             "config_source": "error",
             "last_config_update": "unknown",
             "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.post("/api/config/refresh")
+async def refresh_config():
+    """刷新配置缓存"""
+    try:
+        # 导入配置客户端
+        from core.config_client import refresh_config_cache
+        
+        # 清除配置缓存
+        refresh_config_cache()
+        
+        return {
+            "message": "配置缓存已刷新",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "error": f"刷新配置缓存失败: {str(e)}",
             "timestamp": datetime.now().isoformat()
         }
 

@@ -49,8 +49,11 @@ class LoraManager:
                 try:
                     image_gen_config = await config_client.get_image_gen_config()
                     lora_order = image_gen_config.get("lora_order", {})
+                    logger.info(f"🔍 获取到LoRA排序配置: {lora_order}")
+                    print(f"🔍 获取到LoRA排序配置: {lora_order}")
                 except Exception as e:
                     logger.warning(f"获取LoRA排序配置失败: {e}")
+                    print(f"❌ 获取LoRA排序配置失败: {e}")
                     lora_order = {}
                 
                 # 如果指定了基础模型，进行过滤
@@ -67,14 +70,26 @@ class LoraManager:
                     # 应用排序配置
                     if lora_order and base_model in lora_order:
                         model_lora_order = lora_order[base_model]
+                        logger.info(f"🔧 应用LoRA排序配置，模型: {base_model}, 排序列表: {model_lora_order}")
+                        print(f"🔧 应用LoRA排序配置，模型: {base_model}, 排序列表: {model_lora_order}")
+                        print(f"🔍 排序列表长度: {len(model_lora_order)}")
+                        for i, item in enumerate(model_lora_order):
+                            print(f"  {i}: '{item}'")
                         # 按配置的排序重新排列
                         def sort_key(lora):
-                            # 优先使用code字段，如果没有则使用name字段
+                            # 尝试匹配code字段和name字段
                             lora_code = lora.get("code")
                             lora_name = lora.get("name", "")
-                            identifier = lora_code or lora_name
-                            if identifier in model_lora_order:
-                                return model_lora_order.index(identifier)
+                            
+                            # 首先尝试匹配code字段
+                            if lora_code and lora_code in model_lora_order:
+                                order = model_lora_order.index(lora_code)
+                                print(f"✅ 匹配code字段: {lora_code} -> 排序: {order}")
+                                return order
+                            
+                           
+                            
+                            print(f"❌ 未找到匹配: code={lora_code}, name={lora_name}")
                             return 999  # 未配置的排在最后
                         filtered_loras.sort(key=sort_key)
                     

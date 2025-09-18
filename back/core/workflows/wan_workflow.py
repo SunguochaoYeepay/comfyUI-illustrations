@@ -84,7 +84,7 @@ class WanWorkflow(BaseWorkflow):
             
             # 查找WAN工作流
             for workflow_data in workflows:
-                if workflow_data.get("name") == "wan2.2_video_generation_workflow":
+                if workflow_data.get("code") == "wan2.2_video_generation_workflow":
                     workflow_json = workflow_data.get("workflow_json")
                     if workflow_json:
                         workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json

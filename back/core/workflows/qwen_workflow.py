@@ -155,11 +155,11 @@ class QwenWorkflow(BaseWorkflow):
             
             # 查找Qwen工作流
             for workflow_data in workflows:
-                if workflow_data.get("name") == "qwen_image_generation":
+                if workflow_data.get("code") == "qwen_image_generation_workflow":
                     workflow_json = workflow_data.get("workflow_json")
                     if workflow_json:
                         workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
-                        print(f"✅ 通过admin API加载Qwen工作流模板: qwen_image_generation")
+                        print(f"✅ 通过admin API加载Qwen工作流模板: qwen_image_generation_workflow")
                         return workflow
             
             print(f"⚠️ admin API中未找到Qwen工作流，使用内置模板")

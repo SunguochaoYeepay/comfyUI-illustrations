@@ -111,6 +111,10 @@ async def get_image_gen_config(db: Session = Depends(get_db)):
         if not isinstance(default_size, list):
             default_size = ["1024", "1024"]
         
+        # 获取默认生图数量配置
+        default_count_config = crud.get_system_config(db, "image_gen_default_count")
+        default_count = int(default_count_config.value) if default_count_config else 1
+        
         return {
             "base_model_order": final_order,
             "lora_order": lora_order,
@@ -118,7 +122,8 @@ async def get_image_gen_config(db: Session = Depends(get_db)):
                 "width": int(default_size[0]) if len(default_size) > 0 else 1024,
                 "height": int(default_size[1]) if len(default_size) > 1 else 1024
             },
-            "size_ratios": size_ratios
+            "size_ratios": size_ratios,
+            "default_count": default_count
         }
     except Exception as e:
         import traceback

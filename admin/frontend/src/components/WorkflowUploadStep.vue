@@ -1,11 +1,25 @@
 <template>
   <a-form layout="vertical">
+    <a-form-item label="工作流编码" required>
+      <a-input 
+        :value="code" 
+        @update:value="$emit('update:code', $event)"
+        placeholder="输入工作流编码（系统标识符，不可修改）" 
+        :disabled="!!code"
+      />
+      <div style="margin-top: 4px; font-size: 12px; color: #666;">
+        工作流编码是系统内部标识符，用于主服务匹配工作流，创建后不可修改
+      </div>
+    </a-form-item>
     <a-form-item label="工作流名称" required>
       <a-input 
         :value="name" 
         @update:value="$emit('update:name', $event)"
-        placeholder="输入工作流名称" 
+        placeholder="输入工作流名称（显示名称，可修改）" 
       />
+      <div style="margin-top: 4px; font-size: 12px; color: #666;">
+        工作流名称用于显示，可以随时修改
+      </div>
     </a-form-item>
     <a-form-item label="描述">
       <a-textarea 
@@ -68,6 +82,10 @@ import { message } from 'ant-design-vue'
 import { UploadOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
+  code: {
+    type: String,
+    default: ''
+  },
   name: {
     type: String,
     default: ''

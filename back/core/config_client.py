@@ -321,7 +321,7 @@ class ConfigClient:
                     "base_model_order": backend_data.get("base_model_order", []),  # 添加基础模型顺序
                     "lora_order": backend_data.get("lora_order", {}),  # 添加LoRA排序配置
                     "default_steps": 20,
-                    "default_count": 1,
+                    "default_count": backend_data.get("default_count", 1),  # 从admin后端获取默认数量
                     "config_source": "admin_backend",
                     "last_updated": datetime.now().isoformat()
                 }

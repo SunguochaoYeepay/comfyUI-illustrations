@@ -42,7 +42,8 @@ class Workflow(Base):
     __tablename__ = "workflows"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False)
+    code = Column(String(100), nullable=False, unique=True)  # 不可变的系统标识符
+    name = Column(String(100), nullable=False)  # 可变的显示名称
     description = Column(Text, nullable=True)
     workflow_json = Column(JSON, nullable=False)
     base_model_type = Column(String(50), nullable=True)  # 主要关联的基础模型类型

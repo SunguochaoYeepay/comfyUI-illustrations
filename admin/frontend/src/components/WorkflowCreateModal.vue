@@ -17,6 +17,7 @@
     <!-- 步骤1: 上传JSON -->
     <div v-if="currentStep === 0">
       <WorkflowUploadStep 
+        v-model:code="createForm.code"
         v-model:name="createForm.name"
         v-model:description="createForm.description"
         v-model:method="createMethod"
@@ -105,6 +106,7 @@ const validationResult = ref(null)
 
 // 创建表单数据
 const createForm = reactive({
+  code: '',
   name: '',
   description: '',
   workflow_json: {}
@@ -122,7 +124,7 @@ const workflowConfig = reactive({
 // 计算属性
 const canProceedToNext = computed(() => {
   if (currentStep.value === 0) {
-    return createForm.name && (uploadedWorkflowJson.value || workflowJsonString.value)
+    return createForm.code && createForm.name && (uploadedWorkflowJson.value || workflowJsonString.value)
   }
   if (currentStep.value === 1) {
     return validationResult.value && validationResult.value.valid
@@ -147,6 +149,7 @@ watch(visible, (newVal) => {
 
 // 重置表单
 const resetForm = () => {
+  createForm.code = ''
   createForm.name = ''
   createForm.description = ''
   createForm.workflow_json = {}

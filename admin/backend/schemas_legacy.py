@@ -72,7 +72,8 @@ class ModelInfo(BaseModel):
     size: int
 
 class WorkflowBase(BaseModel):
-    name: str
+    code: str  # 不可变的系统标识符
+    name: str  # 可变的显示名称
     description: Optional[str] = None
     workflow_json: dict
     base_model_type: Optional[str] = None
@@ -81,6 +82,7 @@ class WorkflowCreate(WorkflowBase):
     pass
 
 class WorkflowUpdate(BaseModel):
+    code: Optional[str] = None  # 通常不允许修改，但保留字段
     name: Optional[str] = None
     description: Optional[str] = None
     workflow_json: Optional[dict] = None

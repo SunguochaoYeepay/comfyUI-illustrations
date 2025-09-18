@@ -120,7 +120,7 @@ const convertPathsToFiles = async (imagePaths) => {
 const prompt = ref('')
 const negativePrompt = ref('blurry, low quality, worst quality, low resolution, pixelated, grainy, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, extra fingers, bad hands, bad face, malformed, disfigured, mutated, fused fingers, cluttered background, extra legs, overexposed, oversaturated, static, motionless, watermark, text, signature, jpeg artifacts, compression artifacts, noise, artifacts, poorly drawn, amateur, sketch, draft')
 const imageSize = ref('1024x1024')
-const imageCount = ref(parseInt(localStorage.getItem('imageCount')) || 4) // 默认生成4张图片，支持持久化
+const imageCount = ref(parseInt(localStorage.getItem('imageCount')) || 1) // 默认生成1张图片，支持持久化，将从API获取
 const isGenerating = ref(false)
 const progress = ref(0)
 const estimatedTime = ref(30)
@@ -1804,7 +1804,7 @@ const handleFilterChange = async (filterParams) => {
 
 // 历史记录现在由后端数据库管理，无需本地存储
 
-// 初始化默认模型
+// 初始化默认模型和配置
 const initializeDefaultModel = async () => {
   try {
     console.log('🔍 正在获取默认模型配置...')
@@ -1819,6 +1819,21 @@ const initializeDefaultModel = async () => {
     } else {
       console.warn('⚠️ 没有可用的模型配置')
       selectedModel.value = 'qwen-image' // 最后的降级方案
+    }
+    
+    // 获取默认生图数量配置
+    try {
+      const response = await fetch('/api/config/image-gen')
+      if (response.ok) {
+        const config = await response.json()
+        const defaultCount = config.default_count || 1
+        if (!localStorage.getItem('imageCount')) {
+          imageCount.value = defaultCount
+          console.log('✅ 默认生图数量已设置:', defaultCount)
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ 获取默认生图数量失败，使用默认值1:', error)
     }
   } catch (error) {
     console.error('❌ 初始化默认模型失败:', error)

@@ -162,7 +162,8 @@ async def get_workflows_config(
             
             workflow_data = {
                 "id": workflow.id,
-                "name": workflow.name,
+                "code": workflow.code,  # 不可变的系统标识符
+                "name": workflow.name,  # 可变的显示名称
                 "display_name": workflow.name,  # 使用name作为display_name
                 "base_model_type": workflow.base_model_type,
                 "workflow_type": workflow.base_model_type,  # 使用base_model_type作为workflow_type

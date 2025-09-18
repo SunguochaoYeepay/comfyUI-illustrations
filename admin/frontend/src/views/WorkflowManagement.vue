@@ -96,8 +96,12 @@
     >
       <div v-if="viewWorkflowData">
         <a-descriptions :column="2" bordered>
+          <a-descriptions-item label="编码">{{ viewWorkflowData.code }}</a-descriptions-item>
           <a-descriptions-item label="名称">{{ viewWorkflowData.name }}</a-descriptions-item>
+          <a-descriptions-item label="基础模型">{{ viewWorkflowData.base_model_type || '未设置' }}</a-descriptions-item>
+          <a-descriptions-item label="状态">{{ viewWorkflowData.status === 'enabled' ? '启用' : '禁用' }}</a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ formatDate(viewWorkflowData.created_at) }}</a-descriptions-item>
+          <a-descriptions-item label="更新时间">{{ formatDate(viewWorkflowData.updated_at) }}</a-descriptions-item>
           <a-descriptions-item label="描述" :span="2">{{ viewWorkflowData.description || '无' }}</a-descriptions-item>
         </a-descriptions>
         <a-divider>工作流JSON</a-divider>
@@ -125,6 +129,7 @@ const router = useRouter()
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
+  { title: '编码', dataIndex: 'code', key: 'code', width: 200, ellipsis: true },
   { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
   { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
   { title: '基础模型', dataIndex: 'base_model_type', key: 'base_model_type', width: 120 },

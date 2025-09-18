@@ -111,7 +111,7 @@ class QwenFusionWorkflow(BaseWorkflow):
             
             # 查找对应的工作流
             for workflow_data in workflows:
-                if workflow_data.get("name") == workflow_name:
+                if workflow_data.get("code") == workflow_name:
                     workflow_json = workflow_data.get("workflow_json")
                     if workflow_json:
                         workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json

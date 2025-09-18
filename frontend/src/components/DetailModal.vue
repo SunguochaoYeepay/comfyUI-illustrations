@@ -326,7 +326,7 @@ const getImageSize = () => {
   if (props.item?.parameters?.width && props.item?.parameters?.height) {
     return `${props.item.parameters.width} × ${props.item.parameters.height}`
   }
-  return '512 × 512' // 默认尺寸
+  return '1024 × 1024' // 默认尺寸
 }
 
 const getModelName = () => {

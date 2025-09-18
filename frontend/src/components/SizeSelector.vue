@@ -89,12 +89,7 @@
               </a-button>
             </div>
           </div>
-          
-          <!-- 配置来源信息 -->
-          <div v-if="configSource" class="config-info">
-            <span class="config-source">配置来源: {{ getConfigSourceText(configSource) }}</span>
-            <span v-if="lastUpdated" class="config-time">{{ formatTime(lastUpdated) }}</span>
-          </div>
+  
         </div>
       </template>
     </a-dropdown>

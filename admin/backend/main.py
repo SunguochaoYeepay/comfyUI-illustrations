@@ -13,24 +13,45 @@ def kill_process_on_port(port):
         result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, shell=True)
         lines = result.stdout.split('\n')
         
+        pids_to_kill = []
         for line in lines:
             if f':{port}' in line and 'LISTENING' in line:
                 parts = line.split()
                 if len(parts) >= 5:
                     pid = parts[-1]
-                    try:
-                        # 终止进程
-                        subprocess.run(['taskkill', '/f', '/pid', pid], capture_output=True, shell=True)
-                        print(f"✅ 已清理端口 {port} 上的进程 PID: {pid}")
-                        time.sleep(1)  # 等待进程完全终止
-                    except Exception as e:
-                        print(f"⚠️ 清理进程 {pid} 失败: {e}")
+                    pids_to_kill.append(pid)
+        
+        if pids_to_kill:
+            print(f"🔧 发现端口 {port} 上的进程: {pids_to_kill}")
+            for pid in pids_to_kill:
+                try:
+                    # 终止进程
+                    subprocess.run(['taskkill', '/f', '/pid', pid], capture_output=True, shell=True)
+                    print(f"✅ 已清理端口 {port} 上的进程 PID: {pid}")
+                except Exception as e:
+                    print(f"⚠️ 清理进程 {pid} 失败: {e}")
+            
+            # 等待所有进程完全终止
+            print("⏳ 等待进程完全终止...")
+            time.sleep(3)
+            
+            # 验证端口是否已释放
+            result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, shell=True)
+            remaining = [line for line in result.stdout.split('\n') if f':{port}' in line and 'LISTENING' in line]
+            if remaining:
+                print(f"⚠️ 端口 {port} 仍有进程在监听: {remaining}")
+            else:
+                print(f"✅ 端口 {port} 已完全释放")
+        else:
+            print(f"✅ 端口 {port} 没有被占用")
+            
     except Exception as e:
         print(f"⚠️ 清理端口 {port} 失败: {e}")
 
-# 启动前清理8888端口
-print("🔧 正在清理端口8888上的其他进程...")
-kill_process_on_port(8888)
+# 启动前清理8888端口（仅在直接启动时，不在热重载时）
+if __name__ == "__main__":
+    print("🔧 正在清理端口8888上的其他进程...")
+    kill_process_on_port(8888)
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -104,7 +125,7 @@ async def read_users_me(current_user: schemas.AdminUser = Depends(get_current_us
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World"}
+    return {"Hello": "World", "Hot Reload": "Working!", "Timestamp": "2024-01-01", "Test": "热重载测试成功！"}
 
 if __name__ == "__main__":
     import uvicorn
@@ -125,5 +146,8 @@ if __name__ == "__main__":
         reload_dirs=["./"],
         # Windows特定的配置
         workers=1,  # 单进程模式，避免多进程问题
-        loop="asyncio"  # 使用asyncio事件循环
+        loop="asyncio",  # 使用asyncio事件循环
+        # 添加进程管理配置
+        reload_delay=1.0,  # 文件变化后延迟1秒重载
+        reload_excludes=["*.pyc", "*.pyo", "__pycache__"],  # 排除不需要监控的文件
     )

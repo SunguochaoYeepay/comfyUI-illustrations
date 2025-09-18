@@ -270,10 +270,26 @@ class ConfigClient:
             # 尝试从admin后端获取生图配置
             backend_data = await self._make_request("/api/admin/image-gen-config")
             if backend_data:
+                # 处理新的尺寸比例配置格式
+                size_ratios_data = backend_data.get("size_ratios", [])
+                supported_ratios = []
+                
+                if isinstance(size_ratios_data, list) and len(size_ratios_data) > 0:
+                    # 新格式：每个比例包含ratio, width, height等信息
+                    if isinstance(size_ratios_data[0], dict):
+                        supported_ratios = [ratio.get("ratio", "1:1") for ratio in size_ratios_data]
+                    else:
+                        # 旧格式：直接是比例字符串列表
+                        supported_ratios = size_ratios_data
+                else:
+                    # 默认配置
+                    supported_ratios = ["1:1", "4:3", "3:4", "16:9", "9:16"]
+                
                 # 转换admin后端的格式到主服务需要的格式
                 image_gen_data = {
                     "default_size": backend_data.get("default_size", {"width": 1024, "height": 1024}),
-                    "size_ratios": backend_data.get("size_ratios", ["1:1", "4:3", "3:4", "16:9", "9:16"]),
+                    "size_ratios": size_ratios_data,  # 保持原始格式，供前端使用
+                    "supported_ratios": supported_ratios,  # 兼容旧格式的字段
                     "lora_order": backend_data.get("lora_order", {}),  # 添加LoRA排序配置
                     "default_steps": 20,
                     "default_count": 1,

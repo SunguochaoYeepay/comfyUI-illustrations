@@ -23,12 +23,20 @@ router = APIRouter()
 async def get_image_gen_config(db: Session = Depends(get_db)):
     """获取生图配置 - 智能过滤可用模型"""
     try:
+        print("🔍 开始获取生图配置...")
         # 1. 获取所有可用模型
+        print("🔍 获取可用模型...")
         available_models = crud.get_available_base_models(db)
+        print(f"🔍 获取到{len(available_models)}个可用模型")
         
         # 2. 获取当前生图配置排序
+        print("🔍 获取基础模型排序配置...")
         base_model_order_config = crud.get_system_config(db, "image_gen_base_model_order")
-        configured_order = base_model_order_config.value.split(",") if base_model_order_config else []
+        if base_model_order_config and base_model_order_config.value:
+            configured_order = str(base_model_order_config.value).split(",")
+        else:
+            configured_order = []
+        print(f"🔍 配置的模型排序: {configured_order}")
         
         # 3. 智能合并：保留配置的排序，过滤掉不可用的模型
         final_order = []
@@ -53,11 +61,55 @@ async def get_image_gen_config(db: Session = Depends(get_db)):
         
         # 获取默认尺寸配置
         default_size_config = crud.get_system_config(db, "image_gen_default_size")
-        default_size = default_size_config.value.split(",") if default_size_config else ["1024", "1024"]
+        if default_size_config and default_size_config.value:
+            default_size = str(default_size_config.value).split(",")
+        else:
+            default_size = ["1024", "1024"]
         
-        # 获取支持的尺寸比例
+        # 获取支持的尺寸比例配置
         size_ratios_config = crud.get_system_config(db, "image_gen_size_ratios")
-        size_ratios = size_ratios_config.value.split(",") if size_ratios_config else ["1:1", "4:3", "3:4", "16:9", "9:16"]
+        if size_ratios_config and size_ratios_config.value:
+            try:
+                # 尝试解析为JSON格式（新格式）
+                size_ratios_data = json.loads(size_ratios_config.value)
+                size_ratios = size_ratios_data
+            except:
+                # 降级到旧格式（逗号分隔的字符串）
+                size_ratios_list = size_ratios_config.value.split(",")
+                # 转换为新格式
+                default_sizes = {
+                    '1:1': {'width': 1024, 'height': 1024},
+                    '4:3': {'width': 1024, 'height': 768},
+                    '3:4': {'width': 768, 'height': 1024},
+                    '16:9': {'width': 1024, 'height': 576},
+                    '9:16': {'width': 576, 'height': 1024},
+                    '21:9': {'width': 1024, 'height': 439},
+                    '3:2': {'width': 1024, 'height': 683},
+                    '2:3': {'width': 683, 'height': 1024}
+                }
+                size_ratios = []
+                for ratio in size_ratios_list:
+                    if ratio.strip():
+                        default_size = default_sizes.get(ratio.strip(), {'width': 1024, 'height': 1024})
+                        size_ratios.append({
+                            'ratio': ratio.strip(),
+                            'width': default_size['width'],
+                            'height': default_size['height'],
+                            'description': ''
+                        })
+        else:
+            # 默认配置
+            size_ratios = [
+                {'ratio': '1:1', 'width': 1024, 'height': 1024, 'description': ''},
+                {'ratio': '4:3', 'width': 1024, 'height': 768, 'description': ''},
+                {'ratio': '3:4', 'width': 768, 'height': 1024, 'description': ''},
+                {'ratio': '16:9', 'width': 1024, 'height': 576, 'description': ''},
+                {'ratio': '9:16', 'width': 576, 'height': 1024, 'description': ''}
+            ]
+        
+        # 确保default_size是列表格式
+        if not isinstance(default_size, list):
+            default_size = ["1024", "1024"]
         
         return {
             "base_model_order": final_order,
@@ -69,7 +121,9 @@ async def get_image_gen_config(db: Session = Depends(get_db)):
             "size_ratios": size_ratios
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取生图配置失败: {str(e)}")
+        import traceback
+        error_detail = f"获取生图配置失败: {str(e)}\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @router.put("/image-gen-config", summary="更新生图配置")
 async def update_image_gen_config(
@@ -120,13 +174,15 @@ async def update_image_gen_config(
             )
             crud.update_system_config(db, "image_gen_default_size", config_update)
         
-        # 更新支持的尺寸比例
+        # 更新支持的尺寸比例配置
         if "size_ratios" in config_data:
-            size_ratios = ",".join(config_data["size_ratios"])
+            size_ratios_data = config_data["size_ratios"]
+            # 保存为JSON格式
+            size_ratios_json = json.dumps(size_ratios_data, ensure_ascii=False)
             config_update = system_config.SystemConfigUpdate(
                 key="image_gen_size_ratios",
-                value=size_ratios,
-                description="支持的图片比例，逗号分隔"
+                value=size_ratios_json,
+                description="支持的图片比例配置，JSON格式，包含比例名称和像素尺寸"
             )
             crud.update_system_config(db, "image_gen_size_ratios", config_update)
         

@@ -119,7 +119,7 @@ const convertPathsToFiles = async (imagePaths) => {
 // 响应式数据
 const prompt = ref('')
 const negativePrompt = ref('blurry, low quality, worst quality, low resolution, pixelated, grainy, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, extra fingers, bad hands, bad face, malformed, disfigured, mutated, fused fingers, cluttered background, extra legs, overexposed, oversaturated, static, motionless, watermark, text, signature, jpeg artifacts, compression artifacts, noise, artifacts, poorly drawn, amateur, sketch, draft')
-const imageSize = ref('512x512')
+const imageSize = ref('1024x1024')
 const imageCount = ref(parseInt(localStorage.getItem('imageCount')) || 4) // 默认生成4张图片，支持持久化
 const isGenerating = ref(false)
 const progress = ref(0)

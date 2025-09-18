@@ -24,9 +24,7 @@
           <div class="model-dropdown-header">
             <span class="model-dropdown-title">选择基础模型</span>
             <div class="model-dropdown-actions">
-              <span v-if="configSource" class="config-source-indicator" :class="`config-source-${configSource}`">
-                {{ getConfigSourceText(configSource) }}
-              </span>
+         
               <a-button 
                 type="link" 
                 size="small" 

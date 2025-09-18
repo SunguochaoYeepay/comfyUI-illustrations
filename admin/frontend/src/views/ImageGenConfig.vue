@@ -119,80 +119,118 @@
 
     <a-card title="生图尺寸配置" class="config-card">
       <template #extra>
-        <a-tooltip title="配置默认生图尺寸和比例选项">
+        <a-tooltip title="配置图片比例选项，支持拖拽排序和像素设置">
           <info-circle-outlined />
         </a-tooltip>
       </template>
       
       <div class="size-config-section">
-        <p class="section-desc">设置默认生图尺寸和可用的比例选项，建议与工作流尺寸配置保持一致</p>
+        <p class="section-desc">配置图片比例选项，第一个比例将作为默认比例。拖拽调整排序，点击编辑设置具体像素值。</p>
         
-        <a-form layout="vertical">
-          <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item label="默认尺寸">
-                <a-row :gutter="8">
-                  <a-col :span="12">
-                    <a-input-number 
-                      v-model:value="config.default_size.width"
-                      placeholder="宽度"
-                      :min="256"
-                      :max="4096"
-                      style="width: 100%"
-                    />
-                  </a-col>
-                  <a-col :span="12">
-                    <a-input-number 
-                      v-model:value="config.default_size.height"
-                      placeholder="高度"
-                      :min="256"
-                      :max="4096"
-                      style="width: 100%"
-                    />
-                  </a-col>
-                </a-row>
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="比例锁定">
-                <a-switch 
-                  v-model:checked="sizeLocked"
-                  @change="onSizeLockChange"
-                />
-                <span class="switch-label">锁定宽高比</span>
-              </a-form-item>
-            </a-col>
-          </a-row>
+        <div class="size-ratios-config">
+          <div class="ratios-header">
+            <span class="header-title">图片比例配置</span>
+            <a-button type="primary" size="small" @click="addNewRatio">
+              <plus-outlined /> 添加比例
+            </a-button>
+          </div>
           
-          <a-form-item label="支持的图片比例">
-            <div class="ratio-tags">
-              <a-tag 
-                v-for="ratio in config.size_ratios" 
-                :key="ratio"
-                :closable="config.size_ratios.length > 1"
-                @close="removeRatio(ratio)"
-                class="ratio-tag"
-              >
-                {{ ratio }}
-              </a-tag>
-              <a-input
-                v-if="inputVisible"
-                ref="inputRef"
-                v-model:value="inputValue"
-                type="text"
-                size="small"
-                style="width: 78px; margin-right: 8px; vertical-align: bottom;"
-                @blur="handleInputConfirm"
-                @keyup.enter="handleInputConfirm"
-              />
-              <a-tag v-else @click="showInput" style="background: #fff; border-style: dashed;">
-                <plus-outlined /> 添加比例
-              </a-tag>
-            </div>
-          </a-form-item>
-        </a-form>
+          <draggable 
+            v-model="sizeRatiosConfig" 
+            group="sizeRatios"
+            item-key="id"
+            :animation="200"
+            :force-fallback="false"
+            :fallback-tolerance="0"
+            @start="onDragStart"
+            @end="onSizeRatioDragEnd"
+            class="size-ratios-list"
+          >
+            <template #item="{ element: ratio, index }">
+              <div class="size-ratio-item" :class="{ 'is-default': index === 0 }">
+                <div class="ratio-drag-handle">
+                  <drag-outlined class="drag-icon" />
+                  <span class="ratio-index">{{ index + 1 }}</span>
+                </div>
+                
+                <div class="ratio-content">
+                  <div class="ratio-info">
+                    <div class="ratio-name">
+                      <span class="ratio-label">{{ ratio.ratio }}</span>
+                      <a-tag v-if="index === 0" color="green" size="small">默认</a-tag>
+                    </div>
+                    <div class="ratio-pixels">
+                      <span class="pixel-info">{{ ratio.width }} × {{ ratio.height }}</span>
+                    </div>
+                  </div>
+                  
+                  <div class="ratio-actions">
+                    <a-button 
+                      type="text" 
+                      size="small" 
+                      @click="editRatio(ratio)"
+                      class="edit-btn"
+                    >
+                      编辑
+                    </a-button>
+                    <a-button 
+                      type="text" 
+                      size="small" 
+                      danger
+                      @click="removeRatio(ratio)"
+                      :disabled="sizeRatiosConfig.length <= 1"
+                      class="remove-btn"
+                    >
+                      删除
+                    </a-button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </draggable>
+        </div>
       </div>
     </a-card>
+
+    <!-- 比例编辑模态框 -->
+    <a-modal
+      v-model:open="ratioEditModalOpen"
+      title="编辑图片比例"
+      @ok="saveRatioEdit"
+      @cancel="cancelRatioEdit"
+      :confirm-loading="ratioEditLoading"
+    >
+      <a-form :model="editingRatio" layout="vertical">
+        <a-form-item label="比例名称" required>
+          <a-input v-model:value="editingRatio.ratio" placeholder="如: 1:1, 4:3, 16:9" />
+        </a-form-item>
+        <a-form-item label="像素尺寸" required>
+          <a-row :gutter="8">
+            <a-col :span="12">
+              <a-input-number 
+                v-model:value="editingRatio.width"
+                placeholder="宽度"
+                :min="64"
+                :max="4096"
+                style="width: 100%"
+              />
+            </a-col>
+            <a-col :span="12">
+              <a-input-number 
+                v-model:value="editingRatio.height"
+                placeholder="高度"
+                :min="64"
+                :max="4096"
+                style="width: 100%"
+              />
+            </a-col>
+          </a-row>
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-input v-model:value="editingRatio.description" placeholder="可选：比例描述" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -220,14 +258,20 @@ export default {
     const inputRef = ref(null)
     const activeLoraTab = ref('')
     
+    // 尺寸比例配置相关
+    const sizeRatiosConfig = ref([])
+    const ratioEditModalOpen = ref(false)
+    const ratioEditLoading = ref(false)
+    const editingRatio = ref({})
+    const editingRatioIndex = ref(-1)
+    
     const config = ref({
       base_model_order: [],
       lora_order: {}, // 改为对象，按基础模型存储排序
       default_size: {
         width: 1024,
         height: 1024
-      },
-      size_ratios: ['1:1', '4:3', '3:4', '16:9', '9:16']
+      }
     })
     
     const baseModels = ref([])
@@ -345,6 +389,17 @@ export default {
       }
     }
     
+    // 尺寸比例拖拽结束
+    const onSizeRatioDragEnd = (evt) => {
+      try {
+        console.log('尺寸比例拖拽结束', evt)
+        // 拖拽后自动更新配置，第一个比例作为默认
+        updateSizeRatiosConfig()
+      } catch (error) {
+        console.warn('尺寸比例拖拽结束处理出错:', error)
+      }
+    }
+    
     
     // 尺寸锁定变化
     const onSizeLockChange = (checked) => {
@@ -372,11 +427,149 @@ export default {
       inputValue.value = ''
     }
     
-    // 移除比例
+    // 初始化尺寸比例配置
+    const initSizeRatiosConfig = (sizeRatios) => {
+      const defaultSizes = {
+        '1:1': { width: 1024, height: 1024 },
+        '4:3': { width: 1024, height: 768 },
+        '3:4': { width: 768, height: 1024 },
+        '16:9': { width: 1024, height: 576 },
+        '9:16': { width: 576, height: 1024 },
+        '21:9': { width: 1024, height: 439 },
+        '3:2': { width: 1024, height: 683 },
+        '2:3': { width: 683, height: 1024 }
+      }
+      
+      // 检查sizeRatios的格式
+      if (sizeRatios && sizeRatios.length > 0) {
+        if (typeof sizeRatios[0] === 'object' && sizeRatios[0].ratio) {
+          // 新格式：已经是对象数组，包含ratio, width, height等字段
+          sizeRatiosConfig.value = sizeRatios.map((ratio, index) => ({
+            id: Date.now() + index,
+            ratio: ratio.ratio,
+            width: ratio.width || 1024,
+            height: ratio.height || 1024,
+            description: ratio.description || ''
+          }))
+        } else {
+          // 旧格式：字符串数组，需要根据比例设置默认尺寸
+          sizeRatiosConfig.value = sizeRatios.map((ratio, index) => ({
+            id: Date.now() + index,
+            ratio: ratio,
+            width: defaultSizes[ratio]?.width || 1024,
+            height: defaultSizes[ratio]?.height || 1024,
+            description: ''
+          }))
+        }
+      } else {
+        // 默认配置
+        sizeRatiosConfig.value = [
+          { id: Date.now(), ratio: '1:1', width: 1024, height: 1024, description: '' },
+          { id: Date.now() + 1, ratio: '4:3', width: 1024, height: 768, description: '' },
+          { id: Date.now() + 2, ratio: '3:4', width: 768, height: 1024, description: '' },
+          { id: Date.now() + 3, ratio: '16:9', width: 1024, height: 576, description: '' },
+          { id: Date.now() + 4, ratio: '9:16', width: 576, height: 1024, description: '' }
+        ]
+      }
+      
+      // 更新配置
+      updateSizeRatiosConfig()
+    }
+    
+    // 更新尺寸比例配置
+    const updateSizeRatiosConfig = () => {
+      // 将sizeRatiosConfig转换为size_ratios格式
+      config.value.size_ratios = sizeRatiosConfig.value.map(ratio => ratio.ratio)
+      
+      // 更新默认尺寸为第一个比例
+      if (sizeRatiosConfig.value.length > 0) {
+        const defaultRatio = sizeRatiosConfig.value[0]
+        config.value.default_size.width = defaultRatio.width
+        config.value.default_size.height = defaultRatio.height
+      }
+    }
+    
+    // 添加新比例
+    const addNewRatio = () => {
+      const newRatio = {
+        id: Date.now(),
+        ratio: '1:1',
+        width: 1024,
+        height: 1024,
+        description: ''
+      }
+      editingRatio.value = { ...newRatio }
+      editingRatioIndex.value = -1
+      ratioEditModalOpen.value = true
+    }
+    
+    // 编辑比例
+    const editRatio = (ratio) => {
+      editingRatio.value = { ...ratio }
+      editingRatioIndex.value = sizeRatiosConfig.value.findIndex(r => r.id === ratio.id)
+      ratioEditModalOpen.value = true
+    }
+    
+    // 保存比例编辑
+    const saveRatioEdit = async () => {
+      try {
+        ratioEditLoading.value = true
+        
+        // 验证输入
+        if (!editingRatio.value.ratio || !editingRatio.value.width || !editingRatio.value.height) {
+          message.error('请填写完整的比例信息')
+          return
+        }
+        
+        // 检查比例名称是否重复
+        const existingIndex = sizeRatiosConfig.value.findIndex(r => 
+          r.ratio === editingRatio.value.ratio && r.id !== editingRatio.value.id
+        )
+        if (existingIndex !== -1) {
+          message.error('比例名称已存在')
+          return
+        }
+        
+        if (editingRatioIndex.value === -1) {
+          // 新增
+          sizeRatiosConfig.value.push({ ...editingRatio.value })
+        } else {
+          // 编辑
+          sizeRatiosConfig.value[editingRatioIndex.value] = { ...editingRatio.value }
+        }
+        
+        // 更新配置
+        updateSizeRatiosConfig()
+        
+        ratioEditModalOpen.value = false
+        message.success(editingRatioIndex.value === -1 ? '添加比例成功' : '编辑比例成功')
+      } catch (error) {
+        console.error('保存比例失败:', error)
+        message.error('保存比例失败')
+      } finally {
+        ratioEditLoading.value = false
+      }
+    }
+    
+    // 取消比例编辑
+    const cancelRatioEdit = () => {
+      ratioEditModalOpen.value = false
+      editingRatio.value = {}
+      editingRatioIndex.value = -1
+    }
+    
+    // 删除比例
     const removeRatio = (ratio) => {
-      const index = config.value.size_ratios.indexOf(ratio)
+      if (sizeRatiosConfig.value.length <= 1) {
+        message.warning('至少需要保留一个比例')
+        return
+      }
+      
+      const index = sizeRatiosConfig.value.findIndex(r => r.id === ratio.id)
       if (index > -1) {
-        config.value.size_ratios.splice(index, 1)
+        sizeRatiosConfig.value.splice(index, 1)
+        updateSizeRatiosConfig()
+        message.success('删除比例成功')
       }
     }
     
@@ -400,12 +593,14 @@ export default {
             const newConfig = {
               base_model_order: [...(configData.base_model_order || [])],
               lora_order: configData.lora_order || {},
-              default_size: { ...(configData.default_size || { width: 1024, height: 1024 }) },
-              size_ratios: [...(configData.size_ratios || ['1:1', '4:3', '3:4', '16:9', '9:16'])]
+              default_size: { ...(configData.default_size || { width: 1024, height: 1024 }) }
             }
             
             // 一次性更新整个配置对象
             config.value = newConfig
+            
+            // 初始化尺寸比例配置
+            initSizeRatiosConfig(configData.size_ratios || ['1:1', '4:3', '3:4', '16:9', '9:16'])
             
             message.success('配置加载成功')
           } catch (error) {
@@ -478,13 +673,22 @@ export default {
         loras,
         loraGroups,
         loraGroupsReactive,
+        sizeRatiosConfig,
+        ratioEditModalOpen,
+        ratioEditLoading,
+        editingRatio,
         getModelDisplayName,
         getModelStatus,
         onDragStart,
         onDragEnd,
+        onSizeRatioDragEnd,
         onSizeLockChange,
         showInput,
         handleInputConfirm,
+        addNewRatio,
+        editRatio,
+        saveRatioEdit,
+        cancelRatioEdit,
         removeRatio,
         saveConfig
       }
@@ -572,6 +776,139 @@ export default {
 .item-name {
   flex: 1;
   font-weight: 500;
+}
+
+/* 尺寸比例配置样式 */
+.section-desc {
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.size-ratios-config {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ratios-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.size-ratios-list {
+  min-height: 100px;
+}
+
+.size-ratio-item {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: move;
+  transition: all 0.3s;
+}
+
+.size-ratio-item:hover {
+  border-color: #40a9ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.size-ratio-item.is-default {
+  border-color: #52c41a;
+  background: rgba(82, 196, 26, 0.1);
+}
+
+.ratio-drag-handle {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drag-icon {
+  color: rgba(255, 255, 255, 0.45);
+  cursor: grab;
+}
+
+.drag-icon:active {
+  cursor: grabbing;
+}
+
+.ratio-index {
+  background: #1890ff;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ratio-content {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.ratio-info {
+  flex: 1;
+}
+
+.ratio-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ratio-label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 16px;
+}
+
+.ratio-pixels {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 14px;
+}
+
+.ratio-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn, .remove-btn {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.edit-btn:hover {
+  color: #40a9ff;
+}
+
+.remove-btn:hover {
+  color: #ff4d4f;
 }
 
 /* LoRA排序样式 */

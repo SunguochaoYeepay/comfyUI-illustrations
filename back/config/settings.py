@@ -77,7 +77,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 # =============================================================================
 # 应用常量
 # =============================================================================
-DEFAULT_IMAGE_SIZE = "512x512"
+DEFAULT_IMAGE_SIZE = "1024x1024"
 DEFAULT_STEPS = 20
 DEFAULT_COUNT = 1
 MAX_WAIT_TIME = 300  # 秒

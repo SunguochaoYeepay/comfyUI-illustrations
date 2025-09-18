@@ -70,8 +70,7 @@ class FluxWorkflow(BaseWorkflow):
                 print("📝 无参考图像，使用文生图工作流")
                 workflow = self._load_text_to_image_workflow_template()
         
-        # 更新基础模型
-        workflow = self._update_base_model(workflow, validated_params)
+        # 基础模型已在工作流模板中配置，无需强制更新
         
         # 处理LoRA配置和文本描述更新
         loras = validated_params.get("loras", [])
@@ -94,15 +93,6 @@ class FluxWorkflow(BaseWorkflow):
         print(f"✅ Flux工作流创建完成，包含 {len(workflow)} 个节点")
         return workflow
     
-    def _update_base_model(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """更新基础模型"""
-        base_model = parameters.get("base_model", self.model_config.unet_file)
-        
-        if "37" in workflow:  # UNETLoader节点
-            workflow["37"]["inputs"]["unet_name"] = base_model
-            print(f"🔄 更新基础模型: {base_model}")
-        
-        return workflow
     
     def _add_lora_nodes(self, workflow: Dict[str, Any], loras: list, description: str) -> Dict[str, Any]:
         """添加LoRA节点"""
@@ -265,27 +255,25 @@ class FluxWorkflow(BaseWorkflow):
             response = requests.get(admin_url, timeout=5)
             
             if response.status_code != 200:
-                print(f"⚠️ admin API调用失败: {response.status_code}，使用默认模板")
-                return self._get_default_text_to_image_template()
+                raise Exception(f"admin API调用失败: {response.status_code}")
             
             data = response.json()
             workflows = data.get("workflows", [])
             
             # 查找文生图工作流
             for workflow_data in workflows:
-                if workflow_data.get("name") == "文生图工作流":
+                if workflow_data.get("code") == "flux_text_to_image_workflow":
                     workflow_json = workflow_data.get("workflow_json")
                     if workflow_json:
                         workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
-                        print(f"✅ 通过admin API加载Flux文生图工作流模板: 文生图工作流")
+                        print(f"✅ 通过admin API加载Flux工作流模板: flux_text_to_image_workflow")
                         return workflow
             
-            print(f"⚠️ admin API中未找到文生图工作流，使用默认模板")
-            return self._get_default_text_to_image_template()
+            raise ValueError(f"admin API中未找到文生图工作流: flux_text_to_image_workflow")
             
         except Exception as e:
-            print(f"❌ 通过admin API加载文生图工作流失败: {e}，使用默认模板")
-            return self._get_default_text_to_image_template()
+            print(f"❌ 通过admin API加载文生图工作流失败: {e}")
+            raise
     
     def _load_image_to_image_workflow_template(self) -> Dict[str, Any]:
         """加载图生图工作流模板"""
@@ -298,27 +286,25 @@ class FluxWorkflow(BaseWorkflow):
             response = requests.get(admin_url, timeout=5)
             
             if response.status_code != 200:
-                print(f"⚠️ admin API调用失败: {response.status_code}，使用默认模板")
-                return self._get_default_image_to_image_template()
+                raise Exception(f"admin API调用失败: {response.status_code}")
             
             data = response.json()
             workflows = data.get("workflows", [])
             
             # 查找图生图工作流
             for workflow_data in workflows:
-                if workflow_data.get("name") == "图生图工作流":
+                if workflow_data.get("code") == "flux_image_to_image_workflow":
                     workflow_json = workflow_data.get("workflow_json")
                     if workflow_json:
                         workflow = json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
-                        print(f"✅ 通过admin API加载Flux图生图工作流模板: 图生图工作流")
+                        print(f"✅ 通过admin API加载Flux工作流模板: flux_image_to_image_workflow")
                         return workflow
             
-            print(f"⚠️ admin API中未找到图生图工作流，使用默认模板")
-            return self._get_default_image_to_image_template()
+            raise ValueError(f"admin API中未找到图生图工作流: flux_image_to_image_workflow")
             
         except Exception as e:
-            print(f"❌ 通过admin API加载图生图工作流失败: {e}，使用默认模板")
-            return self._get_default_image_to_image_template()
+            print(f"❌ 通过admin API加载图生图工作流失败: {e}")
+            raise
     
     def _update_final_parameters(self, workflow: Dict[str, Any], parameters: Dict[str, Any], description: str = "") -> Dict[str, Any]:
         """更新最终参数（安全更新，检查节点是否存在）"""

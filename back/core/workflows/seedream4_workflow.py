@@ -123,100 +123,27 @@ class Seedream4Workflow(BaseWorkflow):
                             config = response.json()
                             print("✅ 直接调用admin API成功")
                         else:
-                            print(f"⚠️ admin API调用失败: {response.status_code}，使用默认模板")
-                            return self._get_default_workflow_template()
+                            raise Exception(f"admin API调用失败: {response.status_code}")
                     except Exception as api_error:
-                        print(f"⚠️ admin API调用异常: {api_error}，使用默认模板")
-                        return self._get_default_workflow_template()
+                        print(f"⚠️ admin API调用异常: {api_error}")
+                        raise
                 
                 workflows = config.get("workflows", [])
                 print(f"📋 找到 {len(workflows)} 个工作流配置")
                 
                 # 查找Seedream4工作流
                 for workflow in workflows:
-                    if (workflow.get("base_model_type") == "seedream4" and 
-                        workflow.get("available", True)):
+                    if workflow.get("code") == "seedream4_volcano_engine":
                         workflow_json = workflow.get("workflow_json")
                         if workflow_json:
-                            print("✅ 从admin数据库加载Seedream4工作流模板")
+                            print(f"✅ 通过admin API加载Seedream4工作流模板: seedream4_volcano_engine")
                             return json.loads(workflow_json) if isinstance(workflow_json, str) else workflow_json
                 
-                print("⚠️ 未找到Seedream4工作流配置，使用默认模板")
+                raise ValueError(f"admin API中未找到Seedream4工作流: seedream4_volcano_engine")
         except Exception as e:
             print(f"❌ 从admin数据库加载工作流模板失败: {e}")
-        
-        # 如果加载失败，使用默认模板
-        print("📋 使用默认Seedream4工作流模板")
-        return self._get_default_workflow_template()
+            raise
     
-    def _get_default_workflow_template(self) -> Dict[str, Any]:
-        """获取默认的Seedream4工作流模板"""
-        return {
-            "11": {
-                "inputs": {
-                    "image": "generated-image-1758020573908.png"
-                },
-                "class_type": "LoadImage",
-                "_meta": {
-                    "title": "加载图像"
-                }
-            },
-            "12": {
-                "inputs": {
-                    "filename_prefix": "ComfyUI",
-                    "images": [
-                        "22",
-                        0
-                    ]
-                },
-                "class_type": "SaveImage",
-                "_meta": {
-                    "title": "保存图像"
-                }
-            },
-            "22": {
-                "inputs": {
-                    "prompt": "图1与图2合并，坐在一起由歌和福吉",
-                    "size_preset": "2304x1728 (4:3)",
-                    "width": 2048,
-                    "height": 2048,
-                    "seed": 559718440,
-                    "image_input": [
-                        "24",
-                        0
-                    ]
-                },
-                "class_type": "Seedream4_VolcEngine",
-                "_meta": {
-                    "title": "Seedream4 Volcano Engine"
-                }
-            },
-            "24": {
-                "inputs": {
-                    "image1": [
-                        "11",
-                        0
-                    ],
-                    "image2": [
-                        "25",
-                        0
-                    ]
-                },
-                "class_type": "ImageBatch",
-                "_meta": {
-                    "title": "图像组合批处理"
-                }
-            },
-            "25": {
-                "inputs": {
-                    "image": "generated-image-1758020573908.png"
-                },
-                "class_type": "LoadImage",
-                "_meta": {
-                    "title": "加载图像"
-                }
-            }
-        }
     
     def _update_image_inputs(self, workflow: Dict[str, Any], image_paths: List[str]) -> Dict[str, Any]:
         """更新工作流中的图像输入

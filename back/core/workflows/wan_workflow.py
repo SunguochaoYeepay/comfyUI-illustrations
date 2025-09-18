@@ -76,8 +76,7 @@ class WanWorkflow(BaseWorkflow):
             response = requests.get(admin_url, timeout=5)
             
             if response.status_code != 200:
-                print(f"⚠️ admin API调用失败: {response.status_code}，使用内置模板")
-                return self._get_builtin_template()
+                raise Exception(f"admin API调用失败: {response.status_code}")
             
             data = response.json()
             workflows = data.get("workflows", [])
@@ -91,109 +90,12 @@ class WanWorkflow(BaseWorkflow):
                         print(f"✅ 通过admin API加载WAN工作流模板: wan2.2_video_generation_workflow")
                         return workflow
             
-            print(f"⚠️ admin API中未找到WAN工作流，使用内置模板")
-            return self._get_builtin_template()
+            raise ValueError(f"admin API中未找到WAN工作流: wan2.2_video_generation_workflow")
             
         except Exception as e:
-            print(f"❌ 通过admin API加载WAN工作流失败: {e}，使用内置模板")
-            return self._get_builtin_template()
+            print(f"❌ 通过admin API加载WAN工作流失败: {e}")
+            raise
     
-    def _get_builtin_template(self) -> Dict[str, Any]:
-        """获取内置模板（降级方案）"""
-        print("⚠️ 使用WAN工作流内置模板")
-        # 返回一个简化的模板，避免与admin模板冲突
-        return {
-            "6": {
-                "inputs": {"text": "{{description}}", "clip": ["38", 0]},
-                "class_type": "CLIPTextEncode",
-                "_meta": {"title": "CLIP文本编码器"}
-            },
-            "7": {
-                "inputs": {"text": "blurry, low quality, worst quality", "clip": ["38", 0]},
-                "class_type": "CLIPTextEncode", 
-                "_meta": {"title": "CLIP文本编码器"}
-            },
-            "37": {
-                "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors", "weight_dtype": "default"},
-                "class_type": "UNETLoader",
-                "_meta": {"title": "UNET加载器"}
-            },
-            "38": {
-                "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"},
-                "class_type": "CLIPLoader",
-                "_meta": {"title": "CLIP加载器"}
-            },
-            "39": {
-                "inputs": {"vae_name": "wan_2.1_vae.safetensors"},
-                "class_type": "VAELoader",
-                "_meta": {"title": "VAE加载器"}
-            },
-            "54": {
-                "inputs": {"shift": 5, "model": ["91", 0]},
-                "class_type": "ModelSamplingSD3",
-                "_meta": {"title": "模型采样算法SD3"}
-            },
-            "55": {
-                "inputs": {"shift": 5, "model": ["92", 0]},
-                "class_type": "ModelSamplingSD3",
-                "_meta": {"title": "模型采样算法SD3"}
-            },
-            "56": {
-                "inputs": {"unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors", "weight_dtype": "default"},
-                "class_type": "UNETLoader",
-                "_meta": {"title": "UNET加载器"}
-            },
-            "8": {
-                "inputs": {"samples": ["58", 0], "vae": ["39", 0]},
-                "class_type": "VAEDecode",
-                "_meta": {"title": "VAE解码"}
-            },
-            "57": {
-                "inputs": {"add_noise": "enable", "noise_seed": 57936518952277, "steps": 4, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0, "end_at_step": 2, "return_with_leftover_noise": "enable", "model": ["54", 0], "positive": ["67", 0], "negative": ["67", 1], "latent_image": ["67", 2]},
-                "class_type": "KSamplerAdvanced",
-                "_meta": {"title": "K采样器(高级)"}
-            },
-            "58": {
-                "inputs": {"add_noise": "disable", "noise_seed": 788333148344562, "steps": 4, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "start_at_step": 2, "end_at_step": 10000, "return_with_leftover_noise": "disable", "model": ["55", 0], "positive": ["67", 0], "negative": ["67", 1], "latent_image": ["57", 0]},
-                "class_type": "KSamplerAdvanced",
-                "_meta": {"title": "K采样器(高级)"}
-            },
-            "60": {
-                "inputs": {"fps": 16, "images": ["8", 0]},
-                "class_type": "CreateVideo",
-                "_meta": {"title": "创建视频"}
-            },
-            "62": {
-                "inputs": {"image": "generated-image-1758020573908.png"},
-                "class_type": "LoadImage",
-                "_meta": {"title": "结束图"}
-            },
-            "68": {
-                "inputs": {"image": "generated-image-1757490119660.png"},
-                "class_type": "LoadImage",
-                "_meta": {"title": "开始图"}
-            },
-            "61": {
-                "inputs": {"filename_prefix": "video/ComfyUI", "format": "auto", "codec": "auto", "video": ["60", 0]},
-                "class_type": "SaveVideo",
-                "_meta": {"title": "保存视频"}
-            },
-            "67": {
-                "inputs": {"width": 640, "height": 640, "length": 81, "batch_size": 1, "positive": ["6", 0], "negative": ["7", 0], "vae": ["39", 0], "start_image": ["68", 0], "end_image": ["62", 0]},
-                "class_type": "WanFirstLastFrameToVideo",
-                "_meta": {"title": "WanFirstLastFrameToVideo"}
-            },
-            "91": {
-                "inputs": {"lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors", "strength_model": 1, "model": ["37", 0]},
-                "class_type": "LoraLoaderModelOnly",
-                "_meta": {"title": "LoRA加载器(仅模型)"}
-            },
-            "92": {
-                "inputs": {"lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors", "strength_model": 1, "model": ["56", 0]},
-                "class_type": "LoraLoaderModelOnly",
-                "_meta": {"title": "LoRA加载器(仅模型)"}
-            }
-        }
     
     
     def _validate_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:

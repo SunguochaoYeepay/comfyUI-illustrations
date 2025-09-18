@@ -147,8 +147,7 @@ class QwenWorkflow(BaseWorkflow):
             response = requests.get(admin_url, timeout=5)
             
             if response.status_code != 200:
-                print(f"⚠️ admin API调用失败: {response.status_code}，使用内置模板")
-                return self._get_builtin_template()
+                raise Exception(f"admin API调用失败: {response.status_code}")
             
             data = response.json()
             workflows = data.get("workflows", [])
@@ -162,87 +161,12 @@ class QwenWorkflow(BaseWorkflow):
                         print(f"✅ 通过admin API加载Qwen工作流模板: qwen_image_generation_workflow")
                         return workflow
             
-            print(f"⚠️ admin API中未找到Qwen工作流，使用内置模板")
-            return self._get_builtin_template()
+            raise ValueError(f"admin API中未找到Qwen工作流: qwen_image_generation_workflow")
             
         except Exception as e:
-            print(f"❌ 通过admin API加载Qwen工作流失败: {e}，使用内置模板")
-            return self._get_builtin_template()
+            print(f"❌ 通过admin API加载Qwen工作流失败: {e}")
+            raise
     
-    def _get_builtin_template(self) -> Dict[str, Any]:
-        """获取内置模板"""
-        from config.settings import TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT
-        
-        return {
-            "20": {
-                "class_type": "KSampler",
-                "inputs": {
-                    "seed": 287237245922212,
-                    "steps": 8,
-                    "cfg": 3,
-                    "sampler_name": "euler",
-                    "scheduler": "normal",
-                    "denoise": 1
-                }
-            },
-            "22": {
-                "class_type": "VAELoader", 
-                "inputs": {
-                    "vae_name": "qwen_image_vae.safetensors"
-                }
-            },
-            "23": {
-                "class_type": "UNETLoader",
-                "inputs": {
-                    "unet_name": "Qwen-Image_1.0",
-                    "weight_dtype": "default"
-                }
-            },
-            "24": {
-                "class_type": "CLIPLoader",
-                "inputs": {
-                    "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-                    "clip_type": "qwen_image",
-                    "weight_dtype": "default"
-                }
-            },
-            "25": {
-                "class_type": "CLIPTextEncode",
-                "inputs": {
-                    "text": "{{description}}"
-                }
-            },
-            "27": {
-                "class_type": "CR SDXL Aspect Ratio",
-                "inputs": {
-                    "width": TARGET_IMAGE_WIDTH,
-                    "height": TARGET_IMAGE_HEIGHT,
-                    "aspect_ratio": "custom",
-                    "swap_dimensions": "Off",
-                    "upscale_factor": 1,
-                    "batch_size": 1
-                }
-            },
-            "28": {
-                "class_type": "SaveImage",
-                "inputs": {
-                    "filename_prefix": "yeepay/yeepay"
-                }
-            },
-            "33": {
-                "class_type": "Lora Loader Stack (rgthree)",
-                "inputs": {
-                    "lora_01": "None",
-                    "strength_01": 0.8,
-                    "lora_02": "None",
-                    "strength_02": 0.1,
-                    "lora_03": "None",
-                    "strength_03": 0.1,
-                    "lora_04": "None",
-                    "strength_04": 0.1
-                }
-            }
-        }
     
     def _update_model_config(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
         """更新模型配置"""

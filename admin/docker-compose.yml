@@ -29,6 +29,11 @@ services:
       - admin-logs:/app/logs
       - E:/AI-Image/ComfyUI-aki-v1.4/models:/app/comfyui/models:ro
       - E:/AI-Image/YeePay/back/models:/app/yeepay_models:ro
+      # 主服务数据挂载 - 支持备份恢复
+      - E:/AI-Image/YeePay/back:/app/back
+      - E:/AI-Image/YeePay/uploads:/app/uploads
+      - E:/AI-Image/YeePay/outputs:/app/outputs
+      - E:/AI-Image/YeePay/thumbnails:/app/thumbnails
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8888/"]

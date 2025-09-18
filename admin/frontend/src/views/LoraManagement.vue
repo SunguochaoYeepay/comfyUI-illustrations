@@ -605,7 +605,7 @@ export default {
     const toggleAvailability = async (record) => {
       try {
         const newStatus = !record.is_available;
-        await updateLoraMeta(record.id, { is_available: newStatus });
+        await updateLoraMeta(record.code, { is_available: newStatus });
         message.success(`LoRA ${newStatus ? '启用' : '禁用'}成功`);
         fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModelFilter.value);
       } catch (error) {

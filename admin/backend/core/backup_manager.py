@@ -27,35 +27,79 @@ class BackupManager:
     def __init__(self):
         self.backup_dir = Path("backups")
         self.temp_dir = Path("temp_backups")
-        self.project_root = Path(__file__).parent.parent.parent.parent
+        
+        # 检测是否在Docker环境中运行
+        self.is_docker = os.path.exists("/.dockerenv") or os.environ.get("ENVIRONMENT") == "production"
+        
+        if self.is_docker:
+            # Docker环境中的路径
+            self.project_root = Path("/app")
+            self.main_service_paths = {
+                "database": Path("/app/back/tasks.db"),
+                "uploads": Path("/app/uploads"),
+                "outputs": Path("/app/outputs"),
+                "workflows": Path("/app/back/workflows"),
+                "thumbnails": Path("/app/thumbnails"),
+                "config": Path("/app/back/config")
+            }
+        else:
+            # 本地开发环境中的路径
+            self.project_root = Path(__file__).parent.parent.parent.parent
+            self.main_service_paths = {
+                "database": self.project_root / "back" / "tasks.db",
+                "uploads": self.project_root / "back" / "uploads",
+                "outputs": self.project_root / "back" / "outputs",
+                "workflows": self.project_root / "back" / "workflows",
+                "thumbnails": self.project_root / "back" / "thumbnails",
+                "config": self.project_root / "back" / "config"
+            }
+        
+        # 配置admin服务路径
+        if self.is_docker:
+            # Docker环境中的admin服务路径
+            self.admin_service_paths = {
+                "database": Path("/app/data/admin.db"),
+                "uploads": Path("/app/data/uploads"),
+                "outputs": Path("/app/data/outputs"),
+                "config": Path("/app/config")
+            }
+        else:
+            # 本地开发环境中的admin服务路径
+            self.admin_service_paths = {
+                "database": self.project_root / "admin" / "backend" / "admin.db",
+                "uploads": self.project_root / "admin" / "uploads",
+                "outputs": self.project_root / "admin" / "outputs",
+                "config": self.project_root / "admin" / "backend" / "config.py"
+            }
+        
+        # 配置系统路径
+        if self.is_docker:
+            # Docker环境中的系统路径
+            self.system_paths = {
+                "docker_compose": Path("/app/docker-compose.yml"),
+                "docker_compose_prod": Path("/app/docker-compose.prod.yml"),
+                "env_production": Path("/app/env.production"),
+                "nginx": Path("/app/nginx")
+            }
+        else:
+            # 本地开发环境中的系统路径
+            self.system_paths = {
+                "docker_compose": self.project_root / "docker-compose.yml",
+                "docker_compose_prod": self.project_root / "docker-compose.prod.yml",
+                "env_production": self.project_root / "env.production",
+                "nginx": self.project_root / "nginx"
+            }
         
         # 创建必要目录
         self.backup_dir.mkdir(exist_ok=True)
         self.temp_dir.mkdir(exist_ok=True)
         
-        # 备份路径配置
-        self.main_service_paths = {
-            "database": self.project_root / "back" / "tasks.db",
-            "uploads": self.project_root / "back" / "uploads",
-            "outputs": self.project_root / "back" / "outputs",
-            "workflows": self.project_root / "back" / "workflows",
-            "thumbnails": self.project_root / "back" / "thumbnails",
-            "config": self.project_root / "back" / "config"
-        }
-        
-        self.admin_service_paths = {
-            "database": self.project_root / "admin" / "backend" / "admin.db",
-            "uploads": self.project_root / "admin" / "uploads",
-            "outputs": self.project_root / "admin" / "outputs",
-            "config": self.project_root / "admin" / "backend" / "config.py"
-        }
-        
-        self.system_paths = {
-            "docker_compose": self.project_root / "docker-compose.yml",
-            "docker_compose_prod": self.project_root / "docker-compose.prod.yml",
-            "env_production": self.project_root / "env.production",
-            "nginx": self.project_root / "nginx"
-        }
+        # 输出环境信息
+        print(f"🔧 备份管理器初始化完成")
+        print(f"🐳 Docker环境: {self.is_docker}")
+        print(f"📁 项目根目录: {self.project_root}")
+        print(f"💾 主服务路径: {self.main_service_paths}")
+        print(f"⚙️ Admin服务路径: {self.admin_service_paths}")
 
     async def create_backup(self, backup_type: str, backup_name: str, 
                           description: str = "", compression_level: int = 6, 

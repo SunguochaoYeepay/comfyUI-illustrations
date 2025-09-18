@@ -44,6 +44,7 @@ async def get_models_config(db: Session = Depends(get_db)):
         models = []
         for model in base_models:
             models.append({
+                "code": model.code,
                 "name": model.name,
                 "display_name": model.display_name,
                 "model_type": model.model_type,
@@ -100,6 +101,7 @@ async def get_loras_config(
                 continue
             
             lora_data = {
+                "code": lora.code,
                 "name": lora.name,
                 "display_name": lora.display_name,
                 "base_model": lora.base_model,
@@ -110,9 +112,10 @@ async def get_loras_config(
                 "updated_at": lora.updated_at.isoformat() if lora.updated_at else None
             }
             
-            # 应用排序
-            if lora.base_model in lora_order and lora.name in lora_order[lora.base_model]:
-                lora_data["sort_order"] = lora_order[lora.base_model].index(lora.name) + 1
+            # 应用排序 - 优先使用code字段，如果没有则使用name字段
+            lora_identifier = lora.code or lora.name
+            if lora.base_model in lora_order and lora_identifier in lora_order[lora.base_model]:
+                lora_data["sort_order"] = lora_order[lora.base_model].index(lora_identifier) + 1
             else:
                 lora_data["sort_order"] = 999
             

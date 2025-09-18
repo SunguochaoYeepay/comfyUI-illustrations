@@ -54,12 +54,25 @@
       @close="handleDrawerClose"
     >
       <a-form :model="formState" layout="vertical" class="model-form">
+        <a-form-item label="系统编码" required>
+          <a-input v-model:value="formState.code" placeholder="不可变的系统标识符" :disabled="isEdit" />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            系统内部使用的唯一标识符，创建后不可修改 (如: flux-dev, qwen-image)
+          </div>
+        </a-form-item>
+        
         <a-form-item label="模型名称" required>
-          <a-input v-model:value="formState.name" placeholder="唯一标识符" />
+          <a-input v-model:value="formState.name" placeholder="模型显示名称" />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            在管理界面中显示的名称 (如: Flux开发版, Qwen图像模型)
+          </div>
         </a-form-item>
         
         <a-form-item label="显示名称" required>
-          <a-input v-model:value="formState.display_name" placeholder="用户看到的名称" />
+          <a-input v-model:value="formState.display_name" placeholder="用户友好的名称" />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            在前端用户界面中显示的名称 (如: Flux 1.0 开发版)
+          </div>
         </a-form-item>
         
         <a-form-item label="模型类型" required>
@@ -175,7 +188,8 @@ import { message } from 'ant-design-vue';
 import { PlusOutlined } from '@ant-design/icons-vue';
 
 const columns = [
-  { title: '模型名称', dataIndex: 'name', key: 'name', width: 120 },
+  { title: '系统编码', dataIndex: 'code', key: 'code', width: 120 },
+  { title: '模型名称', dataIndex: 'name', key: 'name', width: 150 },
   { title: '显示名称', dataIndex: 'display_name', key: 'display_name', width: 150 },
   { title: '类型', dataIndex: 'model_type', key: 'model_type', width: 100 },
   { title: '状态', key: 'status', width: 80 },
@@ -220,6 +234,7 @@ const isEdit = ref(false);
 const currentModelId = ref(null);
 
 const formState = reactive({
+  code: '',
   name: '',
   display_name: '',
   model_type: '',

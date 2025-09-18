@@ -24,12 +24,8 @@ class LoraManager:
         self._config_client = None
         self._local_loras_cache = {}
         self._last_local_scan = None
-        self.model_mapping = {
-            "flux-dev": "flux-dev",
-            "qwen-image": "qwen-image",
-            "gemini-image": "gemini-image",
-            "wan2.2-video": "wan2.2-video"
-        }
+        # 模型映射已移除，现在完全依赖配置客户端动态获取
+        # 所有模型配置都通过配置客户端从admin后端获取
     
     def _get_config_client(self):
         """获取配置客户端"""
@@ -59,40 +55,33 @@ class LoraManager:
                 
                 # 如果指定了基础模型，进行过滤
                 if base_model:
-                    # 模型名称映射：处理模型名称的变体
-                    model_mapping = {
-                        "flux-dev": "flux-dev",
-                        "qwen-image": "qwen-image",
-                        "gemini-image": "gemini-image",
-                        "wan2.2-video": "wan2.2-video"
-                    }
-                    
-                    # 获取实际的基础模型名称
-                    actual_base_model = model_mapping.get(base_model, base_model)
-                    
+                    # 使用code字段进行模型匹配，如果没有则使用name字段
                     # 更宽松的过滤逻辑：如果base_model是"未知"或空，也包含进来
                     filtered_loras = [
                         lora for lora in config.get("loras", [])
-                        if (lora.get("base_model") == actual_base_model or 
+                        if (lora.get("base_model") == base_model or 
                             lora.get("base_model") in ["未知", "", None] or
-                            actual_base_model in lora.get("base_model", ""))
+                            base_model in lora.get("base_model", ""))
                     ]
                     
                     # 应用排序配置
-                    if lora_order and actual_base_model in lora_order:
-                        model_lora_order = lora_order[actual_base_model]
+                    if lora_order and base_model in lora_order:
+                        model_lora_order = lora_order[base_model]
                         # 按配置的排序重新排列
                         def sort_key(lora):
-                            name = lora.get("name", "")
-                            if name in model_lora_order:
-                                return model_lora_order.index(name)
+                            # 优先使用code字段，如果没有则使用name字段
+                            lora_code = lora.get("code")
+                            lora_name = lora.get("name", "")
+                            identifier = lora_code or lora_name
+                            if identifier in model_lora_order:
+                                return model_lora_order.index(identifier)
                             return 999  # 未配置的排在最后
                         filtered_loras.sort(key=sort_key)
                     
                     config["loras"] = filtered_loras
                     config["filtered_by_model"] = base_model
-                    config["actual_base_model"] = actual_base_model
-                    config["sort_applied"] = bool(lora_order and actual_base_model in lora_order)
+                    config["actual_base_model"] = base_model
+                    config["sort_applied"] = bool(lora_order and base_model in lora_order)
                 
                 return config
             else:

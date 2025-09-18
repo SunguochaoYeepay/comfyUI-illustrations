@@ -85,8 +85,17 @@
       :confirm-loading="editModalLoading"
     >
       <a-form :model="editForm" layout="vertical">
+        <a-form-item label="系统编码">
+          <a-input v-model:value="editForm.code" placeholder="不可变的系统标识符" disabled />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            系统内部使用的唯一标识符，不可修改
+          </div>
+        </a-form-item>
         <a-form-item label="显示名称">
-          <a-input v-model:value="editForm.display_name" />
+          <a-input v-model:value="editForm.display_name" placeholder="用户友好的名称" />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            在前端用户界面中显示的名称
+          </div>
         </a-form-item>
         <a-form-item label="文件名">
           <a-auto-complete
@@ -94,6 +103,9 @@
             :options="filenameOptions"
             placeholder="输入新文件名或选择未管理的模型"
           />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            ComfyUI使用的文件名，通常不需要修改
+          </div>
         </a-form-item>
         <a-form-item label="基础模型">
           <a-select 
@@ -138,6 +150,12 @@
       :confirm-loading="createModalLoading"
     >
       <a-form :model="createForm" layout="vertical">
+        <a-form-item label="系统编码" required>
+          <a-input v-model:value="createForm.code" placeholder="不可变的系统标识符" />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            系统内部使用的唯一标识符，创建后不可修改 (如: flux-logo-v1, qwen-poster-v1)
+          </div>
+        </a-form-item>
         <a-form-item label="模型文件" required>
           <a-select
             v-model:value="createForm.filename"
@@ -150,7 +168,10 @@
           </a-select>
         </a-form-item>
         <a-form-item label="显示名称" required>
-          <a-input v-model:value="createForm.display_name" />
+          <a-input v-model:value="createForm.display_name" placeholder="用户友好的名称" />
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            在前端用户界面中显示的名称 (如: 品牌LOGO设计, 电商海报)
+          </div>
         </a-form-item>
         <a-form-item label="基础模型">
           <a-select 
@@ -209,6 +230,7 @@ export default {
 
     const columns = [
       { title: '预览', key: 'preview', width: 100 },
+      { title: '系统编码', dataIndex: 'code', key: 'code', width: 120, ellipsis: true },
       { title: '显示名称', dataIndex: 'display_name', key: 'display_name', ellipsis: true },
       { title: '文件名', dataIndex: 'name', key: 'name', ellipsis: true },
       { title: '状态', key: 'is_available', width: 120 },
@@ -254,7 +276,7 @@ export default {
     // Edit Modal State
     const editModalOpen = ref(false);
     const editModalLoading = ref(false);
-    const editForm = reactive({ name: '', new_name: '', display_name: '', base_model: '', description: '' });
+    const editForm = reactive({ code: '', name: '', new_name: '', display_name: '', base_model: '', description: '' });
     const fileList = ref([]);
     const filenameOptions = ref([]);
 
@@ -263,7 +285,7 @@ export default {
     const createModalLoading = ref(false);
     const unassociatedLoras = ref([]);
     const unassociatedLoading = ref(false);
-    const createForm = reactive({ filename: null, display_name: '', base_model: '', description: '' });
+    const createForm = reactive({ code: '', filename: null, display_name: '', base_model: '', description: '' });
 
     const searchQuery = ref('');
     const baseModelFilter = ref('');
@@ -334,6 +356,7 @@ export default {
 
     // --- Edit Logic ---
     const showEditModal = async (record) => {
+      editForm.code = record.code;
       editForm.name = record.name;
       editForm.new_name = record.name;
       editForm.display_name = record.display_name;
@@ -376,7 +399,7 @@ export default {
           description: editForm.description,
           new_name: editForm.new_name,
         };
-        await updateLoraMeta(editForm.name, metaData);
+        await updateLoraMeta(editForm.code, metaData);
 
         if (fileList.value.length > 0) {
           const formData = new FormData();
@@ -428,14 +451,15 @@ export default {
     };
 
     const handleCreate = async () => {
-      if (!createForm.filename || !createForm.display_name) {
-        message.warning('Model File and Display Name are required.');
+      if (!createForm.code || !createForm.filename || !createForm.display_name) {
+        message.warning('系统编码、模型文件和显示名称都是必需的。');
         return;
       }
       createModalLoading.value = true;
       try {
         // 转换数据格式以匹配后端schema
         const loraData = {
+          code: createForm.code, // 添加code字段
           name: createForm.filename, // 将filename映射为name
           display_name: createForm.display_name,
           base_model: createForm.base_model,

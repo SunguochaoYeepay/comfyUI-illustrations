@@ -2003,7 +2003,7 @@ onMounted(async () => {
   gap: 30px;
   position: relative;
   z-index: 1;
-  padding: 0 0 140px 0; /* 为底部固定控制面板预留空间 */
+  padding: 0 0 180px 0; /* 为底部固定控制面板预留空间 */
 }
 
 

@@ -233,6 +233,7 @@ async def get_base_models_for_config(db: Session = Depends(get_db)):
             model = next((m for m in available_models if m.name == model_name), None)
             if model:
                 model_list.append({
+                    "code": model.code,
                     "name": model.name,
                     "display_name": model.display_name,
                     "model_type": model.model_type,

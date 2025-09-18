@@ -34,9 +34,9 @@ export function deleteLora(loraId) {
   })
 }
 
-export function updateLoraMeta(loraId, data) {
+export function updateLoraMeta(loraCode, data) {
   return request({
-    url: `/loras/${loraId}`,
+    url: `/loras/code/${loraCode}`,
     method: 'put',
     data
   })

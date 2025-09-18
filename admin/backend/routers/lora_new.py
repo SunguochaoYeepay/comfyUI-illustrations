@@ -41,6 +41,7 @@ async def get_loras(
         for lora in db_loras:
             lora_dict = {
                 "id": lora.id,
+                "code": lora.code,
                 "name": lora.name,
                 "display_name": lora.display_name,
                 "base_model": lora.base_model,
@@ -117,6 +118,46 @@ async def update_lora(
         # 手动序列化数据
         lora_dict = {
             "id": updated_lora.id,
+            "code": updated_lora.code,
+            "name": updated_lora.name,
+            "display_name": updated_lora.display_name,
+            "base_model": updated_lora.base_model,
+            "description": updated_lora.description,
+            "file_path": updated_lora.file_path,
+            "file_size": updated_lora.file_size,
+            "is_available": updated_lora.is_available,
+            "is_managed": updated_lora.is_managed,
+            "created_at": updated_lora.created_at.isoformat() if updated_lora.created_at else None,
+            "updated_at": updated_lora.updated_at.isoformat() if updated_lora.updated_at else None
+        }
+        
+        return {
+            "code": 200,
+            "message": "更新成功",
+            "data": lora_dict
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新LoRA失败: {str(e)}")
+
+@router.put("/loras/code/{lora_code}", response_model=dict)
+async def update_lora_by_code(
+    lora_code: str,
+    lora_data: lora.LoraUpdate,
+    db: Session = Depends(get_db),
+    # current_user: models.AdminUser = Depends(get_current_user)  # 暂时移除认证
+):
+    """通过code字段更新LoRA信息"""
+    try:
+        updated_lora = crud.update_lora_by_code(db, lora_code, lora_data)
+        if not updated_lora:
+            raise HTTPException(status_code=404, detail="LoRA不存在")
+        
+        # 手动序列化数据
+        lora_dict = {
+            "id": updated_lora.id,
+            "code": updated_lora.code,
             "name": updated_lora.name,
             "display_name": updated_lora.display_name,
             "base_model": updated_lora.base_model,

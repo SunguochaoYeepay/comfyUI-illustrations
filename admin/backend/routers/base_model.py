@@ -33,6 +33,7 @@ def read_base_models(page: int = 1, size: int = 10, db: Session = Depends(get_db
     for model in base_models:
         model_dict = {
             "id": model.id,
+            "code": model.code,
             "name": model.name,
             "display_name": model.display_name,
             "model_type": model.model_type,

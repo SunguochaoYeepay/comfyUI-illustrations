@@ -3,6 +3,7 @@ from typing import Optional
 import datetime
 
 class LoraBase(BaseModel):
+    code: str = Field(..., description="不可变的系统标识符")
     name: str = Field(..., description="LoRA文件名（唯一标识）")
     display_name: str = Field(..., description="显示名称")
     base_model: str = Field(..., description="基础模型名称")
@@ -16,6 +17,7 @@ class LoraCreate(LoraBase):
     pass
 
 class LoraUpdate(BaseModel):
+    code: Optional[str] = Field(None, description="不可变的系统标识符")
     name: Optional[str] = Field(None, description="LoRA文件名（唯一标识）")
     display_name: Optional[str] = Field(None, description="显示名称")
     base_model: Optional[str] = Field(None, description="基础模型名称")

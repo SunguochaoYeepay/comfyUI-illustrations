@@ -156,7 +156,10 @@ class WorkflowTemplate:
                 models_config = await config_client.get_models_config()
                 models = models_config.get("models", [])
                 for model in models:
-                    if model.get("name") == model_name:
+                    # 优先使用code字段匹配，如果没有则使用name字段
+                    model_code = model.get("code")
+                    model_name_field = model.get("name")
+                    if model_code == model_name or model_name_field == model_name:
                         return model
             return None
         except Exception as e:
@@ -210,9 +213,11 @@ class WorkflowTemplate:
                 # 查找匹配的工作流
                 for workflow in workflows:
                     print(f"🔍 检查工作流: {workflow.get('name')}, base_model_type: {workflow.get('base_model_type')}, available: {workflow.get('available')}")
+                    # 优先使用code字段匹配，如果没有则使用name字段
+                    workflow_code = workflow.get("code") or workflow.get("name")
                     if (workflow.get("base_model_type") == model_name and 
                         workflow.get("available", True)):
-                        print(f"✅ 找到匹配的工作流: {workflow.get('name')}")
+                        print(f"✅ 找到匹配的工作流: {workflow.get('name')} (code: {workflow_code})")
                         if workflow_type is None or workflow.get("workflow_type") == workflow_type:
                             return workflow
                 

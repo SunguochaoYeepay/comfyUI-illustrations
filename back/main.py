@@ -598,8 +598,15 @@ async def generate_image_fusion(
             models_config = await config_client.get_models_config()
             available_models = [m.get("name") for m in models_config.get("models", []) if m.get("available", True)]
             
-            # 检查模型是否支持融合功能（这里可以根据实际需求调整）
-            fusion_supported_models = [m for m in available_models if m in ['qwen-image', 'gemini-image']]
+            # 检查模型是否支持融合功能（使用code字段匹配）
+            fusion_supported_codes = ['qwen-image', 'gemini-image']
+            fusion_supported_models = []
+            
+            for m in models_config.get("models", []):
+                model_code = m.get("code")
+                model_name = m.get("name")
+                if model_code in fusion_supported_codes or model_name in fusion_supported_codes:
+                    fusion_supported_models.append(model_name)
             
             if model not in fusion_supported_models:
                 raise HTTPException(

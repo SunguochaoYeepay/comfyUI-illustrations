@@ -268,6 +268,23 @@ def update_lora(db: Session, lora_id: int, lora_data: lora.LoraUpdate):
         db.refresh(db_lora)
     return db_lora
 
+def update_lora_by_code(db: Session, lora_code: str, lora_data: lora.LoraUpdate):
+    """通过code字段更新LoRA"""
+    db_lora = db.query(models.Lora).filter(models.Lora.code == lora_code).first()
+    if db_lora:
+        # 使用model_dump()替代dict()以兼容新版本Pydantic
+        try:
+            update_data = lora_data.model_dump(exclude_unset=True)
+        except AttributeError:
+            update_data = lora_data.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_lora, key, value)
+        # 手动设置updated_at
+        db_lora.updated_at = datetime.datetime.utcnow()
+        db.commit()
+        db.refresh(db_lora)
+    return db_lora
+
 def delete_lora(db: Session, lora_id: int):
     db_lora = db.query(models.Lora).filter(models.Lora.id == lora_id).first()
     if db_lora:

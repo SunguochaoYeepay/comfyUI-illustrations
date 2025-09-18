@@ -123,8 +123,8 @@
                             <span class="lora-icon">🎨</span>
                           </div>
                           <div class="lora-dropdown-item-info">
-                            <div class="lora-dropdown-item-name">{{ lora.name.replace('.safetensors', '') }}</div>
-                            <div class="lora-dropdown-item-desc">{{ getLoraDescription(lora.name) }}</div>
+                            <div class="lora-dropdown-item-name">{{ lora.display_name || lora.name.replace('.safetensors', '') }}</div>
+                            <div class="lora-dropdown-item-desc">{{ getLoraDescription(lora) }}</div>
                           </div>
                                                      <div class="lora-dropdown-item-status">
                              <a-checkbox 
@@ -503,7 +503,14 @@ const fetchLoras = async () => {
  }
 
    // 获取LoRA描述
-  const getLoraDescription = (loraName) => {
+  const getLoraDescription = (lora) => {
+    // 如果传入的是LoRA对象，优先使用其description字段
+    if (typeof lora === 'object' && lora.description) {
+      return lora.description
+    }
+    
+    // 如果传入的是字符串（向后兼容），使用原来的逻辑
+    const loraName = typeof lora === 'string' ? lora : lora.name
     const name = loraName.toLowerCase()
     
     // 根据LoRA名称关键词判断特点
@@ -577,7 +584,7 @@ const fetchLoras = async () => {
    left: 50%;
    transform: translateX(-50%);
    z-index: 1000;
-   max-width: 900px;
+   max-width: 1000px;
    width: 90%;
    border-radius: 16px;
    overflow: hidden;

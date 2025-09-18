@@ -210,7 +210,10 @@ class ModelManager:
             
             # 查找指定名称的模型
             for model_data in models_config:
-                if model_data.get("name") == model_name:
+                # 优先使用code字段匹配，如果没有则使用name字段
+                model_code = model_data.get("code")
+                model_name_field = model_data.get("name")
+                if model_code == model_name or model_name_field == model_name:
                     return self._convert_dict_to_model_config(model_data)
             
             print(f"⚠️ 未找到模型配置: {model_name}")

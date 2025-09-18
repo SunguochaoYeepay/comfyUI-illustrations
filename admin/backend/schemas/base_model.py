@@ -3,6 +3,7 @@ from typing import Optional
 import datetime
 
 class BaseModelBase(BaseModel):
+    code: str = Field(..., description="不可变的系统标识符")
     name: str = Field(..., description="模型名称（唯一标识）")
     display_name: str = Field(..., description="显示名称")
     model_type: str = Field(..., description="模型类型：flux, qwen, wan, gemini, seedream4")
@@ -21,6 +22,7 @@ class BaseModelCreate(BaseModelBase):
     pass
 
 class BaseModelUpdate(BaseModel):
+    code: Optional[str] = Field(None, description="不可变的系统标识符")
     name: Optional[str] = Field(None, description="模型名称（唯一标识）")
     display_name: Optional[str] = Field(None, description="显示名称")
     model_type: Optional[str] = Field(None, description="模型类型：flux, qwen, wan, gemini")

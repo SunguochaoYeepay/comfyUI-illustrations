@@ -67,7 +67,8 @@ class BaseModel(Base):
     __tablename__ = "base_models"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), unique=True, index=True, nullable=False)
+    code = Column(String(100), unique=True, index=True, nullable=False)  # 不可变的系统标识符
+    name = Column(String(100), unique=True, index=True, nullable=False)  # 保持向后兼容
     display_name = Column(String(200), nullable=False)  # 显示名称
     model_type = Column(String(50), nullable=False)     # 模型类型：flux, qwen, wan, gemini, seedream4
     description = Column(Text, nullable=True)
@@ -101,7 +102,8 @@ class Lora(Base):
     __tablename__ = "loras"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), unique=True, index=True, nullable=False)
+    code = Column(String(255), unique=True, index=True, nullable=False)  # 不可变的系统标识符
+    name = Column(String(255), unique=True, index=True, nullable=False)  # 保持向后兼容
     display_name = Column(String(255), nullable=False)
     base_model = Column(String(100), nullable=False, index=True)
     description = Column(Text, nullable=True)

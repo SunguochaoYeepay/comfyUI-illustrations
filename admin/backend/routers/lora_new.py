@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud
@@ -6,8 +6,91 @@ import models
 from schemas import lora
 from dependencies import get_db, get_current_user
 from config import settings
+import os
+import uuid
+from pathlib import Path
 
 router = APIRouter()
+
+# LoRA分类常量
+LORA_CATEGORIES = [
+    "LOGO设计",
+    "字体设计", 
+    "ICON设计",
+    "Banner设计",
+    "海报设计",
+    "角色设计"
+]
+
+@router.get("/lora-categories", response_model=dict)
+async def get_lora_categories():
+    """获取LoRA分类列表"""
+    return {
+        "code": 200,
+        "message": "获取成功",
+        "data": LORA_CATEGORIES
+    }
+
+@router.post("/loras/{lora_id}/preview", response_model=dict)
+async def upload_lora_preview(
+    lora_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    # current_user: models.AdminUser = Depends(get_current_user)  # 暂时移除认证
+):
+    """上传LoRA预览图片"""
+    try:
+        # 检查LoRA是否存在
+        lora_data = crud.get_lora(db, lora_id)
+        if not lora_data:
+            raise HTTPException(status_code=404, detail="LoRA不存在")
+        
+        # 验证文件类型
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        if file.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="只支持 JPG、PNG、GIF、WebP 格式的图片")
+        
+        # 验证文件大小 (5MB)
+        file_size = 0
+        content = await file.read()
+        file_size = len(content)
+        if file_size > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="图片大小不能超过 5MB")
+        
+        # 创建上传目录
+        upload_dir = Path("uploads/lora_previews")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 生成唯一文件名
+        file_extension = Path(file.filename).suffix.lower()
+        unique_filename = f"{lora_data.code}_{uuid.uuid4().hex}{file_extension}"
+        file_path = upload_dir / unique_filename
+        
+        # 保存文件
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+        
+        # 更新LoRA记录中的预览图片路径
+        from schemas.lora import LoraUpdate
+        # 使用正斜杠确保跨平台兼容性
+        normalized_path = str(file_path).replace('\\', '/')
+        update_data = LoraUpdate(preview_image_path=normalized_path)
+        crud.update_lora(db, lora_id, update_data)
+        
+        return {
+            "code": 200,
+            "message": "图片上传成功",
+            "data": {
+                "file_path": str(file_path),
+                "file_size": file_size,
+                "content_type": file.content_type
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"图片上传失败: {str(e)}")
 
 @router.get("/loras", response_model=dict)
 async def get_loras(
@@ -15,6 +98,7 @@ async def get_loras(
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     base_model_filter: Optional[str] = Query(None, description="基础模型过滤"),
     name_filter: Optional[str] = Query(None, description="名称搜索"),
+    category_filter: Optional[str] = Query(None, description="分类过滤"),
     db: Session = Depends(get_db),
     # current_user: models.AdminUser = Depends(get_current_user)  # 暂时移除认证
 ):
@@ -26,7 +110,7 @@ async def get_loras(
         
         # 从数据库获取已管理的LoRA记录
         db_loras = crud.get_loras(db, skip=(page-1)*page_size, limit=page_size, 
-                                 base_model=base_model_filter, name=name_filter)
+                                 base_model=base_model_filter, name=name_filter, category=category_filter)
         
         # 获取总数
         total_query = db.query(models.Lora)
@@ -34,6 +118,8 @@ async def get_loras(
             total_query = total_query.filter(models.Lora.base_model == base_model_filter)
         if name_filter:
             total_query = total_query.filter(models.Lora.name.contains(name_filter))
+        if category_filter:
+            total_query = total_query.filter(models.Lora.category == category_filter)
         total = total_query.count()
         
         # 转换为前端需要的格式
@@ -44,12 +130,14 @@ async def get_loras(
                 "code": lora.code,
                 "name": lora.name,
                 "display_name": lora.display_name,
-                "base_model": lora.base_model,
-                "description": lora.description,
-                "file_path": lora.file_path,
-                "file_size": lora.file_size,
-                "is_available": lora.is_available,
-                "is_managed": lora.is_managed,
+            "base_model": lora.base_model,
+            "category": lora.category,
+            "description": lora.description,
+            "file_path": lora.file_path,
+            "file_size": lora.file_size,
+            "preview_image_path": lora.preview_image_path,
+            "is_available": lora.is_available,
+            "is_managed": lora.is_managed,
                 "created_at": lora.created_at.isoformat() if lora.created_at else None,
                 "updated_at": lora.updated_at.isoformat() if lora.updated_at else None
             }
@@ -83,6 +171,7 @@ async def get_lora(
             "name": lora_data.name,
             "display_name": lora_data.display_name,
             "base_model": lora_data.base_model,
+            "category": lora_data.category,
             "description": lora_data.description,
             "file_path": lora_data.file_path,
             "file_size": lora_data.file_size,
@@ -122,6 +211,7 @@ async def update_lora(
             "name": updated_lora.name,
             "display_name": updated_lora.display_name,
             "base_model": updated_lora.base_model,
+            "category": updated_lora.category,
             "description": updated_lora.description,
             "file_path": updated_lora.file_path,
             "file_size": updated_lora.file_size,
@@ -161,6 +251,7 @@ async def update_lora_by_code(
             "name": updated_lora.name,
             "display_name": updated_lora.display_name,
             "base_model": updated_lora.base_model,
+            "category": updated_lora.category,
             "description": updated_lora.description,
             "file_path": updated_lora.file_path,
             "file_size": updated_lora.file_size,
@@ -264,6 +355,7 @@ async def create_lora(
             "name": new_lora.name,
             "display_name": new_lora.display_name,
             "base_model": new_lora.base_model,
+            "category": new_lora.category,
             "description": new_lora.description,
             "file_path": new_lora.file_path,
             "file_size": new_lora.file_size,

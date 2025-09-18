@@ -25,6 +25,21 @@
             {{ model.display_name }}
           </a-select-option>
         </a-select>
+        <a-select
+          v-model:value="categoryFilter"
+          placeholder="选择分类"
+          style="width: 150px; margin-left: 8px;"
+          @change="onCategoryFilter"
+          allow-clear
+        >
+          <a-select-option 
+            v-for="category in loraCategories" 
+            :key="category" 
+            :value="category"
+          >
+            {{ category }}
+          </a-select-option>
+        </a-select>
         <a-button type="primary" @click="showCreateModal" style="margin-left: 8px;">
           <plus-outlined /> 创建新LoRA
         </a-button>
@@ -39,13 +54,19 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'preview'">
-          <a-image
-            v-if="record.preview_url"
-            :width="64"
-            :src="`${baseURL}${record.preview_url}?t=${new Date().getTime()}`"
-            :preview="{ src: `${baseURL}${record.preview_url}?t=${new Date().getTime()}` }"
-          />
-          <span v-else>N/A</span>
+          <div v-if="record.preview_image_path">
+            <a-image
+              :width="64"
+              :src="`/api/${record.preview_image_path}?t=${new Date().getTime()}`"
+              :preview="{ src: `/api/${record.preview_image_path}?t=${new Date().getTime()}` }"
+              style="border-radius: 4px;"
+              @error="(e) => console.error('图片加载失败:', e.target.src, '原始路径:', record.preview_image_path)"
+            />
+            <div style="font-size: 10px; color: #999; margin-top: 2px;">
+              {{ record.preview_image_path.split('/').pop() }}
+            </div>
+          </div>
+          <span v-else style="color: #999;">无预览</span>
         </template>
         <template v-else-if="column.key === 'is_available'">
           <a-tag :color="record.is_available ? 'green' : 'red'">
@@ -77,12 +98,13 @@
       show-less-items
     />
 
-    <!-- Edit Modal -->
-    <a-modal
+    <!-- Edit Drawer -->
+    <a-drawer
       v-model:open="editModalOpen"
       title="编辑LoRA元数据"
-      @ok="handleEdit"
-      :confirm-loading="editModalLoading"
+      placement="right"
+      width="600px"
+      @close="editModalOpen = false"
     >
       <a-form :model="editForm" layout="vertical">
         <a-form-item label="系统编码">
@@ -138,30 +160,64 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="分类">
+          <a-select 
+            v-model:value="editForm.category" 
+            placeholder="选择分类"
+            :loading="loraCategoriesLoading"
+            allow-clear
+          >
+            <a-select-option 
+              v-for="category in loraCategories" 
+              :key="category" 
+              :value="category"
+            >
+              {{ category }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="editForm.description" :rows="4" />
         </a-form-item>
-        <a-form-item label="Upload Preview">
+        <a-form-item label="预览图片">
           <a-upload
             :file-list="fileList"
             :before-upload="beforeUpload"
             @remove="handleRemove"
+            @change="handleUploadChange"
             :max-count="1"
+            accept="image/*"
+            list-type="picture-card"
+            :show-upload-list="true"
           >
-            <a-button>
-              <upload-outlined /> Select File
-            </a-button>
+            <div v-if="fileList.length < 1">
+              <upload-outlined />
+              <div style="margin-top: 8px;">上传图片</div>
+              <div style="font-size: 12px; color: #999;">支持 JPG、PNG、GIF 格式</div>
+            </div>
           </a-upload>
         </a-form-item>
       </a-form>
-    </a-modal>
+      
+      <template #footer>
+        <div style="text-align: right;">
+          <a-button style="margin-right: 8px;" @click="editModalOpen = false">
+            取消
+          </a-button>
+          <a-button type="primary" @click="handleEdit" :loading="editModalLoading">
+            保存
+          </a-button>
+        </div>
+      </template>
+    </a-drawer>
 
-    <!-- Create Modal -->
-    <a-modal
+    <!-- Create Drawer -->
+    <a-drawer
       v-model:open="createModalOpen"
       title="创建新LoRA记录"
-      @ok="handleCreate"
-      :confirm-loading="createModalLoading"
+      placement="right"
+      width="600px"
+      @close="createModalOpen = false"
     >
       <a-form :model="createForm" layout="vertical">
         <a-form-item label="系统编码" required>
@@ -221,19 +277,54 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="分类">
+          <a-select 
+            v-model:value="createForm.category" 
+            placeholder="选择分类"
+            :loading="loraCategoriesLoading"
+            allow-clear
+          >
+            <a-select-option 
+              v-for="category in loraCategories" 
+              :key="category" 
+              :value="category"
+            >
+              {{ category }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="createForm.description" :rows="4" />
         </a-form-item>
       </a-form>
-    </a-modal>
+      
+      <template #footer>
+        <div style="text-align: right;">
+          <a-button style="margin-right: 8px;" @click="createModalOpen = false">
+            取消
+          </a-button>
+          <a-button type="primary" @click="handleCreate" :loading="createModalLoading">
+            创建
+          </a-button>
+        </div>
+      </template>
+    </a-drawer>
   </div>
 </template>
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue';
-    import { getLoras, deleteLora, updateLoraMeta, uploadLoraPreview, getUnassociatedLoras, createLoraRecord } from '@/api/lora';
+    import { 
+      getLoras, 
+      deleteLora, 
+      updateLoraMeta, 
+      uploadLoraPreview, 
+      getUnassociatedLoras, 
+      createLoraRecord, 
+      getLoraCategories 
+    } from '@/api/lora';
     import { getBaseModels } from '@/api/baseModel';
-import { message, Image as AImage, Space as ASpace, Upload, Popconfirm, Modal, Form, Input, Textarea, Button, Select, Tag, AutoComplete as AAutoComplete } from 'ant-design-vue';
+import { message, Image as AImage, Space as ASpace, Upload, Popconfirm, Modal, Form, Input, Textarea, Button, Select, Tag, AutoComplete as AAutoComplete, Drawer } from 'ant-design-vue';
 import { UploadOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue';
 
 export default {
@@ -254,6 +345,7 @@ export default {
     ASelect: Select,
     ASelectOption: Select.Option,
     ATag: Tag,
+    ADrawer: Drawer,
   },
   setup() {
     const baseURL = import.meta.env.VITE_API_BASE_URL || '';
@@ -264,6 +356,7 @@ export default {
       { title: '系统编码', dataIndex: 'code', key: 'code', width: 120, ellipsis: true },
       { title: '显示名称', dataIndex: 'display_name', key: 'display_name', ellipsis: true },
       { title: '文件名', dataIndex: 'name', key: 'name', ellipsis: true },
+      { title: '分类', dataIndex: 'category', key: 'category', width: 120 },
       { title: '状态', key: 'is_available', width: 120 },
       { title: '大小 (MB)', dataIndex: 'size', key: 'size', customRender: ({ text }) => `${(text / 1024 / 1024).toFixed(2)} MB` },
       { title: '基础模型', dataIndex: 'base_model', key: 'base_model' },
@@ -308,7 +401,8 @@ export default {
     const editModalOpen = ref(false);
     const editModalLoading = ref(false);
     const editFilenameLoading = ref(false);
-    const editForm = reactive({ code: '', name: '', new_name: '', display_name: '', base_model: '', description: '' });
+    const editForm = reactive({ code: '', name: '', new_name: '', display_name: '', base_model: '', category: '', description: '' });
+    const currentEditId = ref(null); // 当前编辑的LoRA ID
     const fileList = ref([]);
     const filenameOptions = ref([]);
 
@@ -317,19 +411,24 @@ export default {
     const createModalLoading = ref(false);
     const unassociatedLoras = ref([]);
     const unassociatedLoading = ref(false);
-    const createForm = reactive({ code: '', filename: null, display_name: '', base_model: '', description: '' });
+    const createForm = reactive({ code: '', filename: null, display_name: '', base_model: '', category: '', description: '' });
 
     const searchQuery = ref('');
     const baseModelFilter = ref('');
+    const categoryFilter = ref('');
     
     // Base models for selection
     const baseModels = ref([]);
     const baseModelsLoading = ref(false);
+    
+    // LoRA categories for selection
+    const loraCategories = ref([]);
+    const loraCategoriesLoading = ref(false);
 
-    const fetchLoras = async (page = 1, pageSize = 10, name = null, baseModel = null) => {
+    const fetchLoras = async (page = 1, pageSize = 10, name = null, baseModel = null, category = null) => {
       loading.value = true;
       try {
-        const response = await getLoras(page, pageSize, name, baseModel);
+        const response = await getLoras(page, pageSize, name, baseModel, category);
         console.log('LoRA API Response:', response); // 调试日志
         
         if (response && response.loras && Array.isArray(response.loras)) {
@@ -359,12 +458,17 @@ export default {
 
     const onSearch = (searchValue) => {
       pagination.current = 1; // Reset to first page on new search
-      fetchLoras(pagination.current, pagination.pageSize, searchValue, baseModelFilter.value);
+      fetchLoras(pagination.current, pagination.pageSize, searchValue, baseModelFilter.value, categoryFilter.value);
     };
 
     const onBaseModelFilter = (baseModel) => {
       pagination.current = 1; // Reset to first page on new filter
-      fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModel);
+      fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModel, categoryFilter.value);
+    };
+
+    const onCategoryFilter = (category) => {
+      pagination.current = 1; // Reset to first page on new filter
+      fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModelFilter.value, category);
     };
 
     // Fetch base models for selection
@@ -386,6 +490,24 @@ export default {
       }
     };
 
+    // 获取LoRA分类列表
+    const fetchLoraCategories = async () => {
+      loraCategoriesLoading.value = true;
+      try {
+        const response = await getLoraCategories();
+        if (response && response.code === 200 && response.data) {
+          loraCategories.value = response.data;
+        } else {
+          console.warn('Failed to fetch LoRA categories:', response);
+        }
+      } catch (error) {
+        console.error('Error fetching LoRA categories:', error);
+        loraCategories.value = [];
+      } finally {
+        loraCategoriesLoading.value = false;
+      }
+    };
+
     // --- Edit Logic ---
     const showEditModal = async (record) => {
       editForm.code = record.code;
@@ -393,13 +515,20 @@ export default {
       editForm.new_name = record.name;
       editForm.display_name = record.display_name;
       editForm.base_model = record.base_model;
+      editForm.category = record.category;
       editForm.description = record.description;
+      currentEditId.value = record.id; // 保存当前编辑的LoRA ID
       fileList.value = [];
       editModalOpen.value = true;
 
       // Fetch base models if not already loaded
       if (baseModels.value.length === 0) {
         await fetchBaseModels();
+      }
+      
+      // Fetch LoRA categories if not already loaded
+      if (loraCategories.value.length === 0) {
+        await fetchLoraCategories();
       }
 
       // Fetch unassociated models for the autocomplete
@@ -461,21 +590,22 @@ export default {
         const metaData = {
           display_name: editForm.display_name,
           base_model: editForm.base_model,
+          category: editForm.category,
           description: editForm.description,
           new_name: editForm.new_name,
         };
         await updateLoraMeta(editForm.code, metaData);
 
-        if (fileList.value.length > 0) {
+        // 上传预览图片
+        if (fileList.value.length > 0 && currentEditId.value) {
           const formData = new FormData();
-          formData.append('file', fileList.value[0].originFileObj);
-          const nameForPreview = editForm.new_name || editForm.name;
-          await uploadLoraPreview(nameForPreview, formData);
+          formData.append('file', fileList.value[0].originFileObj || fileList.value[0]);
+          await uploadLoraPreview(currentEditId.value, formData);
         }
         
-        message.success('LoRA meta updated successfully');
+        message.success('LoRA信息更新成功');
         editModalOpen.value = false;
-        fetchLoras(pagination.current, pagination.pageSize);
+        fetchLoras(pagination.current, pagination.pageSize, searchQuery.value, baseModelFilter.value, categoryFilter.value);
       } catch (error) {
         console.error('Error updating LoRA meta:', error);
         message.error(error.response?.data?.detail || 'Error updating LoRA meta');
@@ -493,6 +623,11 @@ export default {
       // Fetch base models if not already loaded
       if (baseModels.value.length === 0) {
         await fetchBaseModels();
+      }
+      
+      // Fetch LoRA categories if not already loaded
+      if (loraCategories.value.length === 0) {
+        await fetchLoraCategories();
       }
       
       try {
@@ -620,12 +755,29 @@ export default {
     };
 
     const beforeUpload = (file) => {
-      const isPng = file.type === 'image/png';
-      if (!isPng) message.error('You can only upload PNG file!');
-      const isLt2M = file.size / 1024 / 1024 < 2;
-      if (!isLt2M) message.error('Image must smaller than 2MB!');
-      if (isPng && isLt2M) fileList.value = [file];
+      const isImage = file.type.startsWith('image/');
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      
+      if (!isImage || !allowedTypes.includes(file.type)) {
+        message.error('只能上传 JPG、PNG、GIF、WebP 格式的图片文件！');
+        return false;
+      }
+      
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过 5MB！');
+        return false;
+      }
+      
+      // 添加到文件列表
+      fileList.value = [file];
       return false; // Prevent auto upload
+    };
+
+    const handleUploadChange = (info) => {
+      if (info.file.status === 'removed') {
+        fileList.value = [];
+      }
     };
 
     const handleRemove = () => {
@@ -635,6 +787,7 @@ export default {
     onMounted(() => {
       fetchLoras();
       fetchBaseModels();
+      fetchLoraCategories();
     });
 
     return {
@@ -656,6 +809,7 @@ export default {
       handleEdit,
       fileList,
       beforeUpload,
+      handleUploadChange,
       handleRemove,
       filenameOptions,
       refreshEditFilenameOptions,
@@ -673,6 +827,11 @@ export default {
       fetchBaseModels,
       baseModelFilter,
       onBaseModelFilter,
+      categoryFilter,
+      onCategoryFilter,
+      loraCategories,
+      loraCategoriesLoading,
+      fetchLoraCategories,
       refreshUnassociatedLoras,
     };
   },

@@ -60,7 +60,27 @@
       </template>
       
       <div class="lora-order-section">
-        <p class="section-desc">按基础模型分组，手工拖拽调整LoRA在生图界面中的显示顺序</p>
+      
+        
+        <!-- 分类过滤 -->
+        <div class="category-filter" v-if="loraCategories.length > 0">
+          <span class="filter-label">分类过滤：</span>
+          <a-select
+            v-model:value="selectedCategory"
+            placeholder="选择分类"
+            style="width: 200px;"
+            @change="onCategoryFilter"
+            allow-clear
+          >
+            <a-select-option 
+              v-for="category in loraCategories" 
+              :key="category" 
+              :value="category"
+            >
+              {{ category }}
+            </a-select-option>
+          </a-select>
+        </div>
         
         <div v-if="loraGroupsReactive.length > 0">
           <a-tabs 
@@ -75,13 +95,7 @@
               :tab="`${group.baseModel} (${group.loras.length})`"
             >
               <div class="lora-group">
-                <div class="group-header">
-                  <h4 class="group-title">
-                    <a-tag color="blue">{{ group.baseModel }}</a-tag>
-                    <span class="group-count">{{ group.loras.length }} 个LoRA</span>
-                  </h4>
-                  <p class="group-desc">拖拽调整LoRA的显示顺序</p>
-                </div>
+                
                 
                 <draggable 
                   v-model="group.loras" 
@@ -99,8 +113,29 @@
                       <div class="lora-item-content">
                         <drag-outlined class="drag-handle" />
                         <span class="lora-index">{{ index + 1 }}</span>
-                        <span class="lora-name">{{ lora.display_name }}</span>
-                        <a-tag size="small" color="green">{{ lora.name }}</a-tag>
+                        
+                        <!-- 预览图 -->
+                        <div class="lora-preview" v-if="lora.preview_image_path">
+                          <a-image
+                            :width="32"
+                            :height="32"
+                            :src="`/api/${lora.preview_image_path}?t=${new Date().getTime()}`"
+                            :preview="{ src: `/api/${lora.preview_image_path}?t=${new Date().getTime()}` }"
+                            style="border-radius: 4px; object-fit: cover;"
+                          />
+                        </div>
+                        <div class="lora-preview-placeholder" v-else>
+                          <span class="preview-text">无图</span>
+                        </div>
+                        
+                        <!-- LoRA信息 -->
+                        <div class="lora-info">
+                          <div class="lora-name">{{ lora.display_name }}</div>
+                          <div class="lora-meta">
+                            <a-tag size="small" color="green">{{ lora.name }}</a-tag>
+                            <a-tag v-if="lora.category" size="small" color="blue">{{ lora.category }}</a-tag>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </template>
@@ -240,6 +275,7 @@ import { message } from 'ant-design-vue'
 import { SaveOutlined, InfoCircleOutlined, DragOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import draggable from 'vuedraggable'
 import { getImageGenConfig, updateImageGenConfig, getBaseModelsForConfig, getLorasForConfig } from '@/api/imageGenConfig'
+import { getLoraCategories } from '@/api/lora'
 
 export default {
   name: 'ImageGenConfig',
@@ -276,13 +312,22 @@ export default {
     
     const baseModels = ref([])
     const loras = ref([])
+    const loraCategories = ref([])
+    const selectedCategory = ref('')
+    
     // 计算按基础模型分组的LoRA列表
     const loraGroups = computed(() => {
       if (!loras.value.length) return []
       
+      // 先按分类过滤
+      let filteredLoras = loras.value
+      if (selectedCategory.value) {
+        filteredLoras = loras.value.filter(lora => lora.category === selectedCategory.value)
+      }
+      
       // 按基础模型分组
       const groups = {}
-      loras.value.forEach(lora => {
+      filteredLoras.forEach(lora => {
         if (!groups[lora.base_model]) {
           groups[lora.base_model] = []
         }
@@ -353,6 +398,12 @@ export default {
     // 拖拽开始
     const onDragStart = () => {
       console.log('开始拖拽')
+    }
+    
+    // 分类过滤
+    const onCategoryFilter = (category) => {
+      selectedCategory.value = category
+      console.log('分类过滤:', category)
     }
     
     // 拖拽结束
@@ -581,15 +632,17 @@ export default {
     // 加载配置
     const loadConfig = async () => {
       try {
-        const [configData, baseModelsData, lorasData] = await Promise.all([
+        const [configData, baseModelsData, lorasData, categoriesData] = await Promise.all([
           getImageGenConfig(),
           getBaseModelsForConfig(),
-          getLorasForConfig()
+          getLorasForConfig(),
+          getLoraCategories()
         ])
         
         // 先设置基础数据
         baseModels.value = baseModelsData.models || []
         loras.value = lorasData.loras || []
+        loraCategories.value = categoriesData.data || []
         
         // 使用setTimeout确保在下一个事件循环中设置配置数据
         setTimeout(() => {
@@ -686,6 +739,9 @@ export default {
         getModelStatus,
         onDragStart,
         onDragEnd,
+        loraCategories,
+        selectedCategory,
+        onCategoryFilter,
         onSizeRatioDragEnd,
         onSizeLockChange,
         showInput,
@@ -1089,6 +1145,67 @@ export default {
   align-items: center;
   padding: 12px 16px;
   gap: 12px;
+}
+
+.lora-preview {
+  flex-shrink: 0;
+}
+
+.lora-preview-placeholder {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.preview-text {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.lora-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lora-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.2;
+}
+
+.lora-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 分类过滤样式 */
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.filter-label {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .lora-index {

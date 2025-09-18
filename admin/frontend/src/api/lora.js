@@ -1,14 +1,22 @@
 import request from '@/utils/request'
 
-export function getLoras(page, pageSize, name = null, baseModel = null) {
+export function getLoras(page, pageSize, name = null, baseModel = null, category = null) {
   const params = { page, pageSize };
-  if (name) params.name_filter = name;  // 修复：使用name_filter
-  if (baseModel) params.base_model_filter = baseModel;  // 修复：使用base_model_filter
+  if (name) params.name_filter = name;
+  if (baseModel) params.base_model_filter = baseModel;
+  if (category) params.category_filter = category;
   
   return request({
     url: '/loras',
     method: 'get',
     params
+  })
+}
+
+export function getLoraCategories() {
+  return request({
+    url: '/lora-categories',
+    method: 'get'
   })
 }
 
@@ -43,14 +51,12 @@ export function updateLoraMeta(loraCode, data) {
 }
 
 export function uploadLoraPreview(loraId, formData) {
-  // TODO: 后端需要实现这个路由
-  return Promise.reject(new Error('uploadLoraPreview 功能暂未实现'))
-  // return request({
-  //   url: `/loras/${loraId}/preview`,
-  //   method: 'post',
-  //   data: formData,
-  //   headers: {
-  //     'Content-Type': 'multipart/form-data'
-  //   }
-  // })
+  return request({
+    url: `/loras/${loraId}/preview`,
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
 }

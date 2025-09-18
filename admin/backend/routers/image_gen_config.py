@@ -269,8 +269,10 @@ async def get_loras_for_config(db: Session = Depends(get_db)):
                 "name": lora.name,
                 "display_name": lora.display_name,
                 "base_model": lora.base_model,
+                "category": lora.category,
                 "description": lora.description,
                 "file_size": lora.file_size,
+                "preview_image_path": lora.preview_image_path,
                 "created_at": lora.created_at.isoformat() if lora.created_at else None
             })
         

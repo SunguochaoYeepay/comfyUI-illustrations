@@ -232,12 +232,14 @@ def get_lora(db: Session, lora_id: int):
 def get_lora_by_name(db: Session, name: str):
     return db.query(models.Lora).filter(models.Lora.name == name).first()
 
-def get_loras(db: Session, skip: int = 0, limit: int = 100, base_model: str = None, name: str = None):
+def get_loras(db: Session, skip: int = 0, limit: int = 100, base_model: str = None, name: str = None, category: str = None):
     query = db.query(models.Lora)
     if base_model:
         query = query.filter(models.Lora.base_model == base_model)
     if name:
         query = query.filter(models.Lora.name.contains(name))
+    if category:
+        query = query.filter(models.Lora.category == category)
     return query.offset(skip).limit(limit).all()
 
 def create_lora(db: Session, lora_data: lora.LoraCreate):

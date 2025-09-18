@@ -56,6 +56,7 @@ if __name__ == "__main__":
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
@@ -98,6 +99,9 @@ app.include_router(config_sync.router, prefix="/api/admin/config-sync")
 app.include_router(backup.router, prefix="/api/admin")
 app.include_router(backup_schedule.router, prefix="/api/admin")
 
+# 静态文件服务
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = crud.get_user_by_username(db, username=form_data.username)
@@ -128,6 +132,12 @@ async def read_users_me(current_user: schemas.AdminUser = Depends(get_current_us
 @app.get("/")
 def read_root():
     return {"Hello": "World", "Hot Reload": "Working!", "Timestamp": "2024-01-01", "Test": "热重载测试成功！"}
+
+@app.get("/test-image")
+async def test_image():
+    """测试图片访问"""
+    from fastapi.responses import FileResponse
+    return FileResponse("test_image.html")
 
 if __name__ == "__main__":
     import uvicorn

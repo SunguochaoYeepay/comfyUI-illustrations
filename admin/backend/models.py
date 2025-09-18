@@ -106,9 +106,11 @@ class Lora(Base):
     name = Column(String(255), unique=True, index=True, nullable=False)  # 保持向后兼容
     display_name = Column(String(255), nullable=False)
     base_model = Column(String(100), nullable=False, index=True)
+    category = Column(String(50), nullable=True, index=True)  # LoRA分类
     description = Column(Text, nullable=True)
     file_path = Column(String(500), nullable=True)
     file_size = Column(Integer, nullable=True)
+    preview_image_path = Column(String(500), nullable=True)  # 预览图片路径
     is_available = Column(Boolean, default=True)
     is_managed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

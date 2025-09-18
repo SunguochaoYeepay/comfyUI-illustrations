@@ -59,7 +59,7 @@
               {{ record.is_available ? '禁用' : '启用' }}
             </a>
             <a-popconfirm
-              v-if="!record.is_available"
+              v-if="!record.is_available && record.id"
               title="仅删除元数据(.json/.png)？模型文件不会被删除。"
               @confirm="handleDelete(record.id, record.is_managed)"
             >
@@ -434,21 +434,29 @@ export default {
       }
       createModalLoading.value = true;
       try {
-        await createLoraRecord(createForm);
-        message.success('LoRA record created successfully');
+        // 转换数据格式以匹配后端schema
+        const loraData = {
+          name: createForm.filename, // 将filename映射为name
+          display_name: createForm.display_name,
+          base_model: createForm.base_model,
+          description: createForm.description
+        };
+        const response = await createLoraRecord(loraData);
+        message.success(response.message || 'LoRA record created successfully');
         createModalOpen.value = false;
         fetchLoras(1, pagination.pageSize); // Go to first page to see the new record
       } catch (error) {
         console.error('Error creating LoRA record:', error);
-        message.error(error.response?.data?.detail || 'Error creating LoRA record');
+        const errorMessage = error.response?.data?.detail || error.message || 'Error creating LoRA record';
+        message.error(errorMessage);
       } finally {
         createModalLoading.value = false;
       }
     };
 
     const handleUniversalEdit = (record) => {
-      // 如果记录在数据库中，就认为是已管理的，可以编辑
-      if (record.id) {
+      // 如果记录有ID或者是已管理的记录，就认为是可编辑的
+      if (record.id || record.is_managed) {
         showEditModal(record);
       } else {
         // For unmanaged, we pre-fill the create/manage modal
@@ -463,7 +471,7 @@ export default {
 
     // --- Delete Logic ---
     const handleDelete = async (loraId, is_managed) => {
-      if (!is_managed) {
+      if (!loraId) {
         message.info('This LoRA has no metadata to delete.');
         return;
       }

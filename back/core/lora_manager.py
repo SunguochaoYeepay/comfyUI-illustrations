@@ -49,6 +49,14 @@ class LoraManager:
             if config_client:
                 config = await config_client.get_loras_config()
                 
+                # 获取生图配置中的LoRA排序
+                try:
+                    image_gen_config = await config_client.get_image_gen_config()
+                    lora_order = image_gen_config.get("lora_order", {})
+                except Exception as e:
+                    logger.warning(f"获取LoRA排序配置失败: {e}")
+                    lora_order = {}
+                
                 # 如果指定了基础模型，进行过滤
                 if base_model:
                     # 模型名称映射：处理模型名称的变体
@@ -62,13 +70,29 @@ class LoraManager:
                     # 获取实际的基础模型名称
                     actual_base_model = model_mapping.get(base_model, base_model)
                     
+                    # 更宽松的过滤逻辑：如果base_model是"未知"或空，也包含进来
                     filtered_loras = [
                         lora for lora in config.get("loras", [])
-                        if lora.get("base_model") == actual_base_model
+                        if (lora.get("base_model") == actual_base_model or 
+                            lora.get("base_model") in ["未知", "", None] or
+                            actual_base_model in lora.get("base_model", ""))
                     ]
+                    
+                    # 应用排序配置
+                    if lora_order and actual_base_model in lora_order:
+                        model_lora_order = lora_order[actual_base_model]
+                        # 按配置的排序重新排列
+                        def sort_key(lora):
+                            name = lora.get("name", "")
+                            if name in model_lora_order:
+                                return model_lora_order.index(name)
+                            return 999  # 未配置的排在最后
+                        filtered_loras.sort(key=sort_key)
+                    
                     config["loras"] = filtered_loras
                     config["filtered_by_model"] = base_model
                     config["actual_base_model"] = actual_base_model
+                    config["sort_applied"] = bool(lora_order and actual_base_model in lora_order)
                 
                 return config
             else:

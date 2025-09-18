@@ -2,8 +2,8 @@ import request from '@/utils/request'
 
 export function getLoras(page, pageSize, name = null, baseModel = null) {
   const params = { page, pageSize };
-  if (name) params.name = name;
-  if (baseModel) params.base_model = baseModel;
+  if (name) params.name_filter = name;  // 修复：使用name_filter
+  if (baseModel) params.base_model_filter = baseModel;  // 修复：使用base_model_filter
   
   return request({
     url: '/loras',

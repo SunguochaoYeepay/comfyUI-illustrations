@@ -122,7 +122,7 @@ class ConfigClient:
     async def check_backend_health(self) -> bool:
         """检查后台服务健康状态"""
         try:
-            result = await self._make_request("/health")
+            result = await self._make_request("/")
             if result:
                 self._backend_healthy = True
                 self._last_health_check = datetime.now()
@@ -247,8 +247,8 @@ class ConfigClient:
     async def get_loras_config(self) -> Dict[str, Any]:
         """获取LoRA配置"""
         try:
-            # 尝试从后台获取
-            backend_data = await self._make_request("/loras")
+            # 尝试从后台获取所有LoRA数据（设置大的page_size）
+            backend_data = await self._make_request("/api/loras?page=1&page_size=100")
             return self._get_config_with_fallback("loras", backend_data)
         except Exception as e:
             logger.error(f"获取LoRA配置失败: {e}")
@@ -274,6 +274,7 @@ class ConfigClient:
                 image_gen_data = {
                     "default_size": backend_data.get("default_size", {"width": 1024, "height": 1024}),
                     "size_ratios": backend_data.get("size_ratios", ["1:1", "4:3", "3:4", "16:9", "9:16"]),
+                    "lora_order": backend_data.get("lora_order", {}),  # 添加LoRA排序配置
                     "default_steps": 20,
                     "default_count": 1,
                     "config_source": "admin_backend",

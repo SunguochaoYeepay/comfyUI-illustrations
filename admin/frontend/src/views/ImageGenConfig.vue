@@ -62,40 +62,52 @@
       <div class="lora-order-section">
         <p class="section-desc">按基础模型分组，手工拖拽调整LoRA在生图界面中的显示顺序</p>
         
-        <div v-if="loraGroups.length > 0">
-          <div 
-            v-for="group in loraGroups" 
-            :key="group.baseModel"
-            class="lora-group"
+        <div v-if="loraGroupsReactive.length > 0">
+          <a-tabs 
+            v-model:activeKey="activeLoraTab" 
+            type="card"
+            class="lora-tabs"
+            :tabBarStyle="{ marginBottom: '16px' }"
           >
-            <h4 class="group-title">
-              <a-tag color="blue">{{ group.baseModel }}</a-tag>
-              <span class="group-count">({{ group.loras.length }} 个LoRA)</span>
-            </h4>
-            
-            <draggable 
-              v-model="group.loras" 
-              :group="`lora-${group.baseModel}`"
-              item-key="name"
-              :animation="200"
-              :force-fallback="false"
-              :fallback-tolerance="0"
-              @start="onDragStart"
-              @end="onDragEnd"
-              class="lora-draggable-list"
+            <a-tab-pane 
+              v-for="group in loraGroupsReactive" 
+              :key="group.baseModel"
+              :tab="`${group.baseModel} (${group.loras.length})`"
             >
-              <template #item="{ element: lora, index }">
-                <div class="lora-draggable-item">
-                  <div class="lora-item-content">
-                    <drag-outlined class="drag-handle" />
-                    <span class="lora-index">{{ index + 1 }}</span>
-                    <span class="lora-name">{{ lora.display_name }}</span>
-                    <a-tag size="small" color="green">{{ lora.name }}</a-tag>
-                  </div>
+              <div class="lora-group">
+                <div class="group-header">
+                  <h4 class="group-title">
+                    <a-tag color="blue">{{ group.baseModel }}</a-tag>
+                    <span class="group-count">{{ group.loras.length }} 个LoRA</span>
+                  </h4>
+                  <p class="group-desc">拖拽调整LoRA的显示顺序</p>
                 </div>
-              </template>
-            </draggable>
-          </div>
+                
+                <draggable 
+                  v-model="group.loras" 
+                  :group="`lora-${group.baseModel}`"
+                  item-key="name"
+                  :animation="200"
+                  :force-fallback="false"
+                  :fallback-tolerance="0"
+                  @start="onDragStart"
+                  @end="onDragEnd"
+                  class="lora-draggable-list"
+                >
+                  <template #item="{ element: lora, index }">
+                    <div class="lora-draggable-item">
+                      <div class="lora-item-content">
+                        <drag-outlined class="drag-handle" />
+                        <span class="lora-index">{{ index + 1 }}</span>
+                        <span class="lora-name">{{ lora.display_name }}</span>
+                        <a-tag size="small" color="green">{{ lora.name }}</a-tag>
+                      </div>
+                    </div>
+                  </template>
+                </draggable>
+              </div>
+            </a-tab-pane>
+          </a-tabs>
         </div>
         <div v-else class="loading-placeholder">
           <a-spin size="large" />
@@ -206,6 +218,7 @@ export default {
     const inputVisible = ref(false)
     const inputValue = ref('')
     const inputRef = ref(null)
+    const activeLoraTab = ref('')
     
     const config = ref({
       base_model_order: [],
@@ -258,6 +271,17 @@ export default {
         }
       })
     })
+    
+    // 响应式的LoRA组数据，用于拖拽
+    const loraGroupsReactive = ref([])
+    
+    // 监听loraGroups变化，更新响应式数据
+    watch(loraGroups, (newGroups) => {
+      loraGroupsReactive.value = newGroups.map(group => ({
+        baseModel: group.baseModel,
+        loras: [...group.loras] // 创建副本，避免直接修改计算属性
+      }))
+    }, { immediate: true, deep: true })
 
     
     // 获取模型显示名称
@@ -299,18 +323,20 @@ export default {
             const baseModelTag = groupElement.querySelector('.group-title .ant-tag')
             if (baseModelTag) {
               const baseModel = baseModelTag.textContent
-              const newOrder = Array.from(evt.to.children).map(item => {
-                const nameTag = item.querySelector('.ant-tag')
-                return nameTag ? nameTag.textContent : null
-              }).filter(Boolean)
               
-              // 更新配置
-              if (!config.value.lora_order) {
-                config.value.lora_order = {}
+              // 找到对应的组，获取更新后的LoRA顺序
+              const group = loraGroupsReactive.value.find(g => g.baseModel === baseModel)
+              if (group) {
+                const newOrder = group.loras.map(lora => lora.name)
+                
+                // 更新配置
+                if (!config.value.lora_order) {
+                  config.value.lora_order = {}
+                }
+                config.value.lora_order[baseModel] = newOrder
+                
+                console.log(`更新${baseModel}的LoRA排序:`, newOrder)
               }
-              config.value.lora_order[baseModel] = newOrder
-              
-              console.log(`更新${baseModel}的LoRA排序:`, newOrder)
             }
           }
         }
@@ -429,6 +455,13 @@ export default {
       }
     }, { immediate: true })
     
+    // 监听loraGroupsReactive变化，设置默认active tab
+    watch(loraGroupsReactive, (newGroups) => {
+      if (newGroups.length > 0 && !activeLoraTab.value) {
+        activeLoraTab.value = newGroups[0].baseModel
+      }
+    }, { immediate: true })
+    
     onMounted(() => {
       loadConfig()
     })
@@ -439,10 +472,12 @@ export default {
         inputVisible,
         inputValue,
         inputRef,
+        activeLoraTab,
         config,
         baseModels,
         loras,
         loraGroups,
+        loraGroupsReactive,
         getModelDisplayName,
         getModelStatus,
         onDragStart,
@@ -540,6 +575,47 @@ export default {
 }
 
 /* LoRA排序样式 */
+.lora-tabs {
+  margin-top: 16px;
+}
+
+.lora-tabs .ant-tabs-tab {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.lora-tabs .ant-tabs-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #40a9ff;
+}
+
+.lora-tabs .ant-tabs-tab-active {
+  background: rgba(24, 144, 255, 0.1);
+  border-color: #40a9ff;
+  color: #40a9ff;
+}
+
+.lora-tabs .ant-tabs-content-holder {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 16px;
+}
+
+.group-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.group-desc {
+  color: rgba(255, 255, 255, 0.65);
+  margin: 8px 0 0 0;
+  font-size: 13px;
+}
+
 .preview-section {
   margin-top: 16px;
   padding: 16px;

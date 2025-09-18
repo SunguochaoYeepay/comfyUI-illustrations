@@ -18,81 +18,44 @@ async def get_loras(
     db: Session = Depends(get_db),
     # current_user: models.AdminUser = Depends(get_current_user)  # 暂时移除认证
 ):
-    """获取LoRA列表 - 从文件系统扫描"""
+    """获取LoRA列表 - 从数据库获取已管理的记录"""
     try:
         from pathlib import Path
         import time
         import json
         
-        # 检查LoRA目录是否存在
-        if not settings.COMFYUI_LORAS_DIR.exists():
-            return {
-                "code": 200,
-                "message": "获取成功",
-                "data": {
-                    "items": [],
-                    "total": 0,
-                    "page": page,
-                    "pageSize": page_size
-                }
+        # 从数据库获取已管理的LoRA记录
+        db_loras = crud.get_loras(db, skip=(page-1)*page_size, limit=page_size, 
+                                 base_model=base_model_filter, name=name_filter)
+        
+        # 获取总数
+        total_query = db.query(models.Lora)
+        if base_model_filter:
+            total_query = total_query.filter(models.Lora.base_model == base_model_filter)
+        if name_filter:
+            total_query = total_query.filter(models.Lora.name.contains(name_filter))
+        total = total_query.count()
+        
+        # 转换为前端需要的格式
+        lora_list = []
+        for lora in db_loras:
+            lora_dict = {
+                "id": lora.id,
+                "name": lora.name,
+                "display_name": lora.display_name,
+                "base_model": lora.base_model,
+                "description": lora.description,
+                "file_path": lora.file_path,
+                "file_size": lora.file_size,
+                "is_available": lora.is_available,
+                "is_managed": lora.is_managed,
+                "created_at": lora.created_at.isoformat() if lora.created_at else None,
+                "updated_at": lora.updated_at.isoformat() if lora.updated_at else None
             }
-        
-        # 扫描LoRA文件
-        lora_files = []
-        for file_path in settings.COMFYUI_LORAS_DIR.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in ['.safetensors', '.ckpt', '.pt']:
-                # 获取文件元数据
-                stat_info = file_path.stat()
-                json_path = file_path.with_suffix('.json')
-                
-                # 读取JSON元数据
-                meta = {
-                    "display_name": file_path.stem,
-                    "base_model": "未知",
-                    "description": "",
-                    "created_at": stat_info.st_ctime,
-                    "modified_at": stat_info.st_mtime
-                }
-                
-                if json_path.exists():
-                    try:
-                        with open(json_path, 'r', encoding='utf-8') as f:
-                            json_data = json.load(f)
-                            meta.update(json_data)
-                    except:
-                        pass
-                
-                # 应用过滤器
-                if base_model_filter and base_model_filter not in meta.get("base_model", ""):
-                    continue
-                if name_filter and name_filter.lower() not in file_path.name.lower() and name_filter.lower() not in meta.get("display_name", "").lower():
-                    continue
-                
-                lora_files.append({
-                    "id": None,  # 文件系统扫描没有ID
-                    "name": file_path.name,
-                    "display_name": meta.get("display_name", file_path.stem),
-                    "base_model": meta.get("base_model", "未知"),
-                    "description": meta.get("description", ""),
-                    "file_path": str(file_path),
-                    "file_size": stat_info.st_size,
-                    "is_available": True,
-                    "is_managed": json_path.exists(),
-                    "created_at": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(meta.get("created_at", stat_info.st_ctime))),
-                    "updated_at": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(meta.get("modified_at", stat_info.st_mtime)))
-                })
-        
-        # 按修改时间排序
-        lora_files.sort(key=lambda x: x["updated_at"], reverse=True)
-        
-        # 分页
-        total = len(lora_files)
-        start = (page - 1) * page_size
-        end = start + page_size
-        paginated_loras = lora_files[start:end]
+            lora_list.append(lora_dict)
         
         return {
-            "loras": paginated_loras,
+            "loras": lora_list,
             "total": total,
             "directory": str(settings.COMFYUI_LORAS_DIR),
             "model": "flux1-dev",  # 可以从配置或参数获取
@@ -209,14 +172,70 @@ async def create_lora(
         # 检查名称是否已存在
         existing_lora = crud.get_lora_by_name(db, lora_data.name)
         if existing_lora:
-            raise HTTPException(status_code=400, detail="LoRA名称已存在")
+            # 如果LoRA已存在，更新其信息而不是创建新的
+            from schemas.lora import LoraUpdate
+            update_data = LoraUpdate(
+                display_name=lora_data.display_name,
+                base_model=lora_data.base_model,
+                description=lora_data.description,
+                is_available=lora_data.is_available
+            )
+            updated_lora = crud.update_lora(db, existing_lora.id, update_data)
+            
+            # 手动序列化数据
+            lora_dict = {
+                "id": updated_lora.id,
+                "name": updated_lora.name,
+                "display_name": updated_lora.display_name,
+                "base_model": updated_lora.base_model,
+                "description": updated_lora.description,
+                "file_path": updated_lora.file_path,
+                "file_size": updated_lora.file_size,
+                "is_available": updated_lora.is_available,
+                "is_managed": updated_lora.is_managed,
+                "created_at": updated_lora.created_at.isoformat() if updated_lora.created_at else None,
+                "updated_at": updated_lora.updated_at.isoformat() if updated_lora.updated_at else None
+            }
+            
+            return {
+                "code": 200,
+                "message": "LoRA信息已更新",
+                "data": lora_dict
+            }
+        
+        # 自动设置文件路径和文件大小
+        from pathlib import Path
+        lora_file_path = settings.COMFYUI_LORAS_DIR / lora_data.name
+        if lora_file_path.exists():
+            # 如果文件存在，设置文件路径和大小
+            lora_data.file_path = str(lora_file_path)
+            lora_data.file_size = lora_file_path.stat().st_size
+            lora_data.is_managed = True
+        else:
+            # 如果文件不存在，设置为未管理状态
+            lora_data.is_managed = False
         
         new_lora = crud.create_lora(db, lora_data)
+        
+        # 手动序列化数据
+        lora_dict = {
+            "id": new_lora.id,
+            "name": new_lora.name,
+            "display_name": new_lora.display_name,
+            "base_model": new_lora.base_model,
+            "description": new_lora.description,
+            "file_path": new_lora.file_path,
+            "file_size": new_lora.file_size,
+            "is_available": new_lora.is_available,
+            "is_managed": new_lora.is_managed,
+            "created_at": new_lora.created_at.isoformat() if new_lora.created_at else None,
+            "updated_at": new_lora.updated_at.isoformat() if new_lora.updated_at else None
+        }
         
         return {
             "code": 200,
             "message": "创建成功",
-            "data": new_lora
+            "data": lora_dict
         }
     except HTTPException:
         raise

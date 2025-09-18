@@ -108,10 +108,22 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
+    import multiprocessing
+    
+    # 设置Windows多进程启动方法
+    if hasattr(multiprocessing, 'set_start_method'):
+        try:
+            multiprocessing.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass  # 如果已经设置过，忽略错误
+    
     uvicorn.run(
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=True,
-        reload_dirs=["./"]
+        reload_dirs=["./"],
+        # Windows特定的配置
+        workers=1,  # 单进程模式，避免多进程问题
+        loop="asyncio"  # 使用asyncio事件循环
     )

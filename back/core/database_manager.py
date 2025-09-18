@@ -839,4 +839,5 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         
+        # 返回result_path，即使是None也表示删除成功
         return result_path

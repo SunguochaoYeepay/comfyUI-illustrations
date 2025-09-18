@@ -153,6 +153,32 @@ class HistoryCacheManager {
   }
 
   /**
+   * 从缓存中移除特定任务
+   */
+  removeTaskFromCache(taskId) {
+    try {
+      const cached = this.getCacheData()
+      if (cached && cached.data) {
+        const filteredData = cached.data.filter(item => item.task_id !== taskId)
+        
+        if (filteredData.length !== cached.data.length) {
+          // 有任务被移除，更新缓存
+          this.setCacheData(filteredData, {
+            ...cached.meta,
+            lastUpdate: Date.now()
+          })
+          console.log(`🧹 从缓存中移除任务: ${taskId}`)
+          return true
+        }
+      }
+      return false
+    } catch (error) {
+      console.warn('从缓存移除任务失败:', error)
+      return false
+    }
+  }
+
+  /**
    * 计算数据差异，确定是否需要增量更新
    */
   calculateDataDiff(cachedData, newData) {
@@ -263,9 +289,10 @@ class HistoryCacheManager {
   async smartLoad(loadFunction, options = {}) {
     const { forceRefresh = false, useCache = true } = options
     
-    // 如果强制刷新，直接加载
+    // 如果强制刷新，直接加载并清除缓存
     if (forceRefresh) {
       console.log('🔄 强制刷新，跳过缓存')
+      this.clearCache() // 确保清除所有缓存
       const result = await loadFunction()
       this.setCacheData(result.data, {
         lastUpdate: Date.now(),

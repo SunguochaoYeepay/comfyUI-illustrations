@@ -1184,9 +1184,13 @@ async def get_favorite_videos():
 async def delete_task(task_id: str):
     """删除任务"""
     try:
-        result_path = db_manager.delete_task(task_id)
-        if result_path is None:
+        # 先检查任务是否存在
+        existing_task = db_manager.get_task(task_id)
+        if not existing_task:
             raise HTTPException(status_code=404, detail="任务不存在")
+        
+        # 删除任务
+        result_path = db_manager.delete_task(task_id)
         
         # 删除相关的图像文件
         if result_path:

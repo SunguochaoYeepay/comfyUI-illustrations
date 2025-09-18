@@ -199,6 +199,13 @@ watch(imageCount, (newValue) => {
   localStorage.setItem('imageCount', newValue.toString())
 })
 
+// 手动清除缓存功能
+const clearCache = () => {
+  cacheManager.clearCache()
+  message.success('缓存已清除')
+  console.log('🧹 用户手动清除缓存')
+}
+
 // 保存放大状态到localStorage
 const saveUpscaleState = () => {
   if (isUpscaling.value && currentUpscaleTaskId.value) {
@@ -471,6 +478,10 @@ const generateImage = async (options = {}) => {
             progress.value = statusData.progress || 0
             
             if (statusData.status === 'completed' && statusData.result) {
+              // 任务完成，立即清除缓存确保获取最新数据
+              cacheManager.clearCache()
+              console.log('🧹 生图完成，已清除缓存')
+              
               // 任务完成，获取图像
               const imageUrls = statusData.result.image_urls
               const filenames = statusData.result.filenames || []
@@ -495,6 +506,7 @@ const generateImage = async (options = {}) => {
               await new Promise(resolve => setTimeout(resolve, 500))
               
               // 强制刷新历史记录，清除缓存确保获取最新数据
+              cacheManager.clearCache() // 先清除缓存
               await loadHistory(1, false, {}, { forceRefresh: true })
               
               // 再次检查是否成功刷新
@@ -700,6 +712,17 @@ const editImage = async (image) => {
     selectedModel.value = image.parameters.model
   }
   
+  // 回显尺寸信息
+  if (image.parameters?.size) {
+    imageSize.value = image.parameters.size
+    console.log('✅ 回填尺寸:', image.parameters.size)
+  } else if (image.parameters?.width && image.parameters?.height) {
+    // 如果没有size字段，但有width和height，则组合成size
+    const size = `${image.parameters.width}x${image.parameters.height}`
+    imageSize.value = size
+    console.log('✅ 从宽高回填尺寸:', size)
+  }
+  
   // 回显LoRA信息
   if (image.parameters?.loras && image.parameters.loras.length > 0) {
     const lorasToSet = image.parameters.loras.map(lora => ({
@@ -820,6 +843,17 @@ const regenerateImage = async (image) => {
   // 回显模型信息
   if (image.parameters?.model) {
     selectedModel.value = image.parameters.model
+  }
+  
+  // 回显尺寸信息
+  if (image.parameters?.size) {
+    imageSize.value = image.parameters.size
+    console.log('✅ 回填尺寸:', image.parameters.size)
+  } else if (image.parameters?.width && image.parameters?.height) {
+    // 如果没有size字段，但有width和height，则组合成size
+    const size = `${image.parameters.width}x${image.parameters.height}`
+    imageSize.value = size
+    console.log('✅ 从宽高回填尺寸:', size)
   }
   
   // 回显LoRA信息
@@ -943,6 +977,10 @@ const deleteImage = async (image) => {
       // 更新总数
       totalCount.value = Math.max(0, totalCount.value - 1)
       
+      // 从缓存中移除该任务，而不是完全清除缓存
+      cacheManager.removeTaskFromCache(taskIdToDelete)
+      console.log('🧹 删除任务后已从缓存中移除')
+      
       message.success('图像已删除')
     } else if (response.status === 404) {
       // 任务已不存在，直接从前端移除
@@ -950,6 +988,11 @@ const deleteImage = async (image) => {
       const taskIdToDelete = image.task_id
       history.value = history.value.filter(item => item.task_id !== taskIdToDelete)
       totalCount.value = Math.max(0, totalCount.value - 1)
+      
+      // 从缓存中移除该任务，因为缓存中包含了不存在的任务
+      cacheManager.removeTaskFromCache(taskIdToDelete)
+      console.log('🧹 发现过期任务，已从缓存中移除')
+      
       message.warning('该图像记录已过期，已从列表中移除')
     } else {
       throw new Error(`删除失败 (状态码: ${response.status})`)
@@ -1230,16 +1273,17 @@ const pollUpscaleStatus = async (taskId) => {
         await new Promise(resolve => setTimeout(resolve, 500))
         
         // 重新加载历史记录以显示最新的放大结果
-        await loadHistory(1, false)
+        cacheManager.clearCache() // 先清除缓存
+        await loadHistory(1, false, {}, { forceRefresh: true })
         
         // 强制刷新一次，确保显示最新状态
         setTimeout(async () => {
-          await loadHistory(1, false)
+          await loadHistory(1, false, {}, { forceRefresh: true })
         }, 1000)
         
         // 第三次刷新确保万无一失
         setTimeout(async () => {
-          await loadHistory(1, false)
+          await loadHistory(1, false, {}, { forceRefresh: true })
         }, 3000)
         
         // 重置放大状态
@@ -1335,16 +1379,17 @@ const pollVideoStatus = async (taskId) => {
         await new Promise(resolve => setTimeout(resolve, 500))
         
         // 重新加载历史记录以显示最新的视频结果
-        await loadHistory(1, false)
+        cacheManager.clearCache() // 先清除缓存
+        await loadHistory(1, false, {}, { forceRefresh: true })
         
         // 强制刷新一次，确保显示最新状态
         setTimeout(async () => {
-          await loadHistory(1, false)
+          await loadHistory(1, false, {}, { forceRefresh: true })
         }, 1000)
         
         // 第三次刷新确保万无一失
         setTimeout(async () => {
-          await loadHistory(1, false)
+          await loadHistory(1, false, {}, { forceRefresh: true })
         }, 3000)
         
         // 重置视频生成状态
@@ -1862,6 +1907,12 @@ onMounted(async () => {
       // 回填模型
       if (data.model) {
         selectedModel.value = data.model
+      }
+      
+      // 回填尺寸
+      if (data.size) {
+        imageSize.value = data.size
+        console.log('✅ 回填尺寸:', data.size)
       }
       
       // 回填参考图

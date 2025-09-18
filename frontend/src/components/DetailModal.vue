@@ -277,7 +277,9 @@ const regenerateImage = () => {
     model: props.item.model || '',
     referenceImages: referenceImages,
     loras: props.item.loras || [],
-    parameters: props.item.parameters || {}
+    parameters: props.item.parameters || {},
+    // 添加尺寸信息
+    size: props.item.parameters?.size || (props.item.parameters?.width && props.item.parameters?.height ? `${props.item.parameters.width}x${props.item.parameters.height}` : '1024x1024')
   }
   
   console.log('🔄 再次生成数据:', regenerateData)
@@ -324,9 +326,19 @@ const formatDate = (dateString) => {
 
 const getImageSize = () => {
   if (props.item?.parameters?.width && props.item?.parameters?.height) {
-    return `${props.item.parameters.width} × ${props.item.parameters.height}`
+    const width = props.item.parameters.width
+    const height = props.item.parameters.height
+    const ratio = getAspectRatio(width, height)
+    return `${ratio}（${width}x${height}）`
   }
-  return '1024 × 1024' // 默认尺寸
+  return '1:1（1024x1024）' // 默认尺寸
+}
+
+// 获取宽高比
+const getAspectRatio = (width, height) => {
+  const gcd = (a, b) => b === 0 ? a : gcd(b, a % b)
+  const divisor = gcd(width, height)
+  return `${width / divisor}:${height / divisor}`
 }
 
 const getModelName = () => {

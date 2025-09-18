@@ -270,11 +270,9 @@ class ConfigClient:
     async def get_image_gen_config(self) -> Dict[str, Any]:
         """获取生图配置"""
         try:
-            logger.info(f"尝试从admin后端获取生图配置: {self.backend_url}/api/admin/image-gen-config")
             # 尝试从admin后端获取生图配置
             backend_data = await self._make_request("/api/admin/image-gen-config")
             if backend_data:
-                logger.info(f"成功从admin后端获取生图配置: {backend_data}")
                 # 处理新的尺寸比例配置格式
                 size_ratios_data = backend_data.get("size_ratios", [])
                 supported_ratios = []
@@ -325,7 +323,6 @@ class ConfigClient:
                     "config_source": "admin_backend",
                     "last_updated": datetime.now().isoformat()
                 }
-                logger.info(f"转换后的生图配置: {image_gen_data}")
                 return self._get_config_with_fallback("image_gen", image_gen_data)
             else:
                 logger.warning("admin后端返回的生图配置数据为空")

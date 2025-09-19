@@ -73,6 +73,24 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+# 设置文件上传大小限制
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # 检查是否是文件大小超限错误
+    if "413" in str(exc) or "Request Entity Too Large" in str(exc):
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "文件大小超过限制，请选择小于5MB的图片文件"}
+        )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,

@@ -50,12 +50,12 @@ async def upload_lora_preview(
         if file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="只支持 JPG、PNG、GIF、WebP 格式的图片")
         
-        # 验证文件大小 (5MB)
+        # 验证文件大小 (20MB)
         file_size = 0
         content = await file.read()
         file_size = len(content)
-        if file_size > 5 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="图片大小不能超过 5MB")
+        if file_size > 20 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="图片大小不能超过 20MB")
         
         # 创建上传目录
         upload_dir = Path("uploads/lora_previews")

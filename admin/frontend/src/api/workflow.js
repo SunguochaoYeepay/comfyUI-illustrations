@@ -8,6 +8,8 @@ export function getWorkflows(params = {}) {
     params: {
       skip: (params.page - 1) * params.pageSize || 0,
       limit: params.pageSize || 10,
+      search: params.search || '',
+      base_model_type: params.base_model_type || '',
       ...params
     }
   })

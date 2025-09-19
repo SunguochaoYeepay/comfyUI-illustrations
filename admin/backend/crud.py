@@ -55,7 +55,7 @@ def delete_inspiration(db: Session, inspiration_id: int):
 def get_audit_logs(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.AdminAuditLog).order_by(models.AdminAuditLog.timestamp.desc()).offset(skip).limit(limit).all()
 
-def get_workflows(db: Session, skip: int = 0, limit: int = 100, search: str = ""):
+def get_workflows(db: Session, skip: int = 0, limit: int = 100, search: str = "", base_model_type: str = None):
     query = db.query(models.Workflow)
     
     # 如果有搜索条件，添加搜索过滤
@@ -65,9 +65,13 @@ def get_workflows(db: Session, skip: int = 0, limit: int = 100, search: str = ""
             models.Workflow.description.contains(search)
         )
     
+    # 如果有基础模型类型过滤条件，添加过滤
+    if base_model_type:
+        query = query.filter(models.Workflow.base_model_type == base_model_type)
+    
     return query.order_by(models.Workflow.created_at.desc()).offset(skip).limit(limit).all()
 
-def get_workflows_count(db: Session, search: str = ""):
+def get_workflows_count(db: Session, search: str = "", base_model_type: str = None):
     """获取工作流总数（用于分页）"""
     query = db.query(models.Workflow)
     
@@ -77,6 +81,10 @@ def get_workflows_count(db: Session, search: str = ""):
             models.Workflow.name.contains(search) |
             models.Workflow.description.contains(search)
         )
+    
+    # 如果有基础模型类型过滤条件，添加过滤
+    if base_model_type:
+        query = query.filter(models.Workflow.base_model_type == base_model_type)
     
     return query.count()
 

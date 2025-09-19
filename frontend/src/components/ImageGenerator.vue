@@ -1217,7 +1217,7 @@ onMounted(async () => {
   bottom: 0px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  z-index: 9999 !important;
+  z-index: 1999 !important;
   pointer-events: auto !important;
 }
 

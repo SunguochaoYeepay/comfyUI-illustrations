@@ -10,6 +10,20 @@
           @search="onSearch"
           allow-clear
         />
+        <a-select
+          v-model:value="baseModelFilter"
+          placeholder="选择基础模型"
+          style="width: 150px; margin-left: 8px;"
+          allow-clear
+          @change="onBaseModelChange"
+        >
+          <a-select-option value="">全部模型</a-select-option>
+          <a-select-option value="qwen-image">Qwen</a-select-option>
+          <a-select-option value="flux">Flux</a-select-option>
+          <a-select-option value="wan2.2-video">Wan2.2</a-select-option>
+          <a-select-option value="seedream4">Seedream4</a-select-option>
+          <a-select-option value="gemini-image">Gemini</a-select-option>
+        </a-select>
         <a-button type="primary" @click="showCreateModal" style="margin-left: 8px;">
           <plus-outlined /> 创建工作流
         </a-button>
@@ -142,6 +156,7 @@ const columns = [
 const data = ref([])
 const loading = ref(false)
 const searchQuery = ref('')
+const baseModelFilter = ref('')
 const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
 
 // 计算属性确保数据始终是数组
@@ -160,14 +175,15 @@ const viewModalOpen = ref(false)
 const viewWorkflowData = ref(null)
 
 // 获取工作流列表
-const fetchWorkflows = async (page = 1, pageSize = 10, search = '') => {
+const fetchWorkflows = async (page = 1, pageSize = 10, search = '', baseModelType = '') => {
   loading.value = true
   try {
-    console.log('正在获取工作流列表...', { page, pageSize, search })
+    console.log('正在获取工作流列表...', { page, pageSize, search, baseModelType })
     const response = await getWorkflows({
       page,
       pageSize,
-      search
+      search,
+      base_model_type: baseModelType
     })
     
     console.log('API响应:', response)
@@ -203,12 +219,18 @@ const fetchWorkflows = async (page = 1, pageSize = 10, search = '') => {
 // 搜索功能
 const onSearch = (searchValue) => {
   pagination.current = 1
-  fetchWorkflows(1, pagination.pageSize, searchValue)
+  fetchWorkflows(1, pagination.pageSize, searchValue, baseModelFilter.value)
+}
+
+// 基础模型过滤
+const onBaseModelChange = (value) => {
+  pagination.current = 1
+  fetchWorkflows(1, pagination.pageSize, searchQuery.value, value)
 }
 
 // 分页处理
 const handleTableChange = (page, pageSize) => {
-  fetchWorkflows(page, pageSize, searchQuery.value)
+  fetchWorkflows(page, pageSize, searchQuery.value, baseModelFilter.value)
 }
 
 // 创建工作流
@@ -225,12 +247,12 @@ const editWorkflow = (record) => {
 
 // 处理编辑保存
 const handleEditSaved = () => {
-  fetchWorkflows(pagination.current, pagination.pageSize, searchQuery.value)
+  fetchWorkflows(pagination.current, pagination.pageSize, searchQuery.value, baseModelFilter.value)
 }
 
 // 处理创建保存
 const handleCreateSaved = () => {
-  fetchWorkflows(pagination.current, pagination.pageSize, searchQuery.value)
+  fetchWorkflows(pagination.current, pagination.pageSize, searchQuery.value, baseModelFilter.value)
 }
 
 

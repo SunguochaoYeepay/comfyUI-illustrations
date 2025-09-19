@@ -11,6 +11,7 @@
         <WorkflowBasicInfo 
           v-model:name="editForm.name"
           v-model:description="editForm.description"
+          v-model:baseModelType="editForm.base_model_type"
         />
       </a-tab-pane>
 
@@ -74,6 +75,7 @@ const editForm = reactive({
   id: null,
   name: '',
   description: '',
+  base_model_type: '',
   workflow_json: {}
 })
 
@@ -97,6 +99,7 @@ const initEditData = async () => {
   editForm.id = props.workflowData.id
   editForm.name = props.workflowData.name
   editForm.description = props.workflowData.description || ''
+  editForm.base_model_type = props.workflowData.base_model_type || ''
   editForm.workflow_json = props.workflowData.workflow_json || {}
   editWorkflowJsonString.value = JSON.stringify(props.workflowData.workflow_json, null, 2)
   
@@ -347,6 +350,7 @@ const handleSave = async () => {
     await updateWorkflow(editForm.id, {
       name: editForm.name,
       description: editForm.description,
+      base_model_type: editForm.base_model_type,
       workflow_json: workflowJson
     })
     message.success('工作流更新成功')

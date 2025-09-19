@@ -2,9 +2,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 
 import crud
@@ -28,9 +28,15 @@ def create_workflow(
 
 
 @router.get("/")
-def read_workflows(skip: int = 0, limit: int = 100, search: str = "", db: Session = Depends(get_db)):
-    workflows = crud.get_workflows(db, skip=skip, limit=limit, search=search)
-    total = crud.get_workflows_count(db, search=search)
+def read_workflows(
+    skip: int = 0, 
+    limit: int = 100, 
+    search: str = "", 
+    base_model_type: Optional[str] = Query(None, description="按基础模型类型过滤"),
+    db: Session = Depends(get_db)
+):
+    workflows = crud.get_workflows(db, skip=skip, limit=limit, search=search, base_model_type=base_model_type)
+    total = crud.get_workflows_count(db, search=search, base_model_type=base_model_type)
     
     return {
         "data": workflows,

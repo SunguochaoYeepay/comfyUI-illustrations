@@ -349,7 +349,7 @@ const handleLoraDropdownVisibleChange = (visible) => {
    bottom: 0px;
    left: 52%;
    transform: translateX(-50%);
-   z-index: 9999;
+   z-index: 1999;
    max-width: 1000px;
    width: 90%;
    border-radius: 16px;

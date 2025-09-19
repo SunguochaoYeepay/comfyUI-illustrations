@@ -115,7 +115,7 @@ defineProps({
 .images-grid[data-count="1"] {
   grid-template-columns: 1fr;
   max-width: 300px;
-  margin: 0 auto;
+  margin: 0; /* 改为左对齐 */
 }
 
 .images-grid[data-count="2"] {

@@ -20,14 +20,14 @@
         :cache-status="cacheStatus"
         @edit-image="editImage"
         @regenerate-image="regenerateImage"
-        @delete-image="deleteImage"
-        @download-image="downloadImage"
+        @delete-image="deleteImageWrapper"
+        @download-image="downloadImageWrapper"
         @load-more="loadMoreHistory"
-        @toggle-favorite="toggleFavorite"
-        @toggle-video-favorite="toggleVideoFavorite"
+        @toggle-favorite="toggleFavoriteWrapper"
+        @toggle-video-favorite="toggleVideoFavoriteWrapper"
         @filter-change="handleFilterChange"
         @upscale="handleUpscale"
-        @refreshHistory="(options) => loadHistory(1, false, {}, options)"
+        @refreshHistory="(options) => loadHistoryWrapper(1, false, {}, options)"
         @video-task-created="handleVideoTaskCreated"
       />
 
@@ -40,7 +40,7 @@
         v-model:size="imageSize"
         v-model:count="imageCount"
         :is-generating="isGenerating"
-        @generate="generateImage"
+        @generate="generateImageWrapper"
         @preview="handlePreview"
       />
     </div>
@@ -54,6 +54,11 @@ import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
 import cacheManager from '../utils/cacheManager.js'
 import modelManager from '../utils/modelManager.js'
+// 导入提取的工具函数和服务
+import { convertPathsToFiles, processTaskImages, downloadImage, downloadAllImages, shareImage } from '../utils/imageUtils.js'
+import { formatTime, debounce, scrollToNewContent, safeScrollTo, scrollToBottom, maintainScrollPosition } from '../utils/formatUtils.js'
+import { pollUpscaleStatus, pollVideoStatus, pollTaskStatus } from '../services/pollingService.js'
+import { generateImage, loadHistory, deleteImage, toggleFavorite, toggleVideoFavorite, clearHistory } from '../services/imageService.js'
 
 // API基础URL - 自动检测环境
 const API_BASE = (() => {
@@ -65,52 +70,7 @@ const API_BASE = (() => {
   return import.meta.env.VITE_API_BASE_URL || ''
 })()
 
-// 将文件路径转换为文件对象的函数
-const convertPathsToFiles = async (imagePaths) => {
-  const files = []
-  
-  for (const path of imagePaths) {
-    try {
-      const imageUrl = `${API_BASE}/api/image/upload/${path}`
-      console.log('正在获取参考图:', imageUrl)
-      
-      // 获取图片数据
-      const response = await fetch(imageUrl)
-      if (!response.ok) {
-        console.error('获取参考图失败:', response.status, response.statusText)
-        continue
-      }
-      
-      const blob = await response.blob()
-      
-      // 创建文件对象
-      const file = new File([blob], path.split('/').pop() || 'reference.png', {
-        type: blob.type || 'image/png'
-      })
-      
-      // 创建预览URL
-      const preview = URL.createObjectURL(blob)
-      
-      // 创建符合ant-design-vue Upload组件格式的对象
-      const fileObj = {
-        uid: `reference-${Date.now()}-${Math.random()}`,
-        name: file.name,
-        status: 'done',
-        url: preview,
-        preview: preview,
-        originFileObj: file
-      }
-      
-      files.push(fileObj)
-      console.log('✅ 参考图转换成功:', file.name)
-      
-    } catch (error) {
-      console.error('转换参考图失败:', error, '路径:', path)
-    }
-  }
-  
-  return files
-}
+// convertPathsToFiles 函数已提取到 utils/imageUtils.js
 
 
 
@@ -128,7 +88,7 @@ const generatedImages = ref([])
 // 历史记录和分页状态
 const history = ref([])
 const currentPage = ref(1)
-const pageSize = ref(10) // 改为10个任务组一页，便于测试翻页功能
+const pageSize = ref(20) // 改为20个任务组一页，提高加载效率
 const totalCount = ref(0)
 const hasMore = ref(false)
 const isLoadingHistory = ref(false)
@@ -270,7 +230,41 @@ const restoreUpscaleState = async () => {
       upscalingPrompt.value = `放大图片 - ${upscaleState.scaleFactor}倍`
       
       // 重新开始轮询
-      await pollUpscaleStatus(upscaleState.taskId)
+      await pollUpscaleStatus(upscaleState.taskId, API_BASE, {
+        onProgress: (progress) => {
+          upscalingProgress.value = progress
+          saveUpscaleState()
+        },
+        onSuccess: async (status) => {
+          upscalingProgress.value = 100
+          message.success('图片放大完成！')
+          
+          // 等待一下确保数据库更新
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          // 重新加载历史记录以显示最新的放大结果
+          cacheManager.clearCache()
+          await loadHistoryWrapper(1, false, {}, { forceRefresh: true, silent: true })
+          
+          // 重置放大状态
+          isUpscaling.value = false
+          currentUpscaleTaskId.value = null
+          saveUpscaleState()
+        },
+        onError: (error) => {
+          message.error(error)
+          isUpscaling.value = false
+          currentUpscaleTaskId.value = null
+          saveUpscaleState()
+        },
+        onTimeout: async () => {
+          message.warning('放大任务超时，请稍后查看结果')
+          await loadHistoryWrapper(1, false)
+          isUpscaling.value = false
+          currentUpscaleTaskId.value = null
+          saveUpscaleState()
+        }
+      })
       return true
     }
     
@@ -282,315 +276,64 @@ const restoreUpscaleState = async () => {
   }
 }
 
-// 生成图像
-const generateImage = async (options = {}) => {
+// 生成图像 - 使用提取的服务
+const generateImageWrapper = async (options = {}) => {
   const { mode = 'single', videoConfig } = options
   
-  if (!prompt.value.trim()) {
-    message.warning('请输入图像描述')
-    return
-  }
-
-  // 图片数量验证 - 所有模型都支持无图片生成
-  // 移除强制要求上传图片的限制
-  if (referenceImages.value.length > 3) {
-    message.warning('最多支持3张图片')
-    return
-  }
-  
-  // 多图融合模式特殊验证
-  if (mode === 'fusion' && referenceImages.value.length < 2) {
-    message.warning('多图融合至少需要2张图片')
-    return
+  // 准备生成选项
+  const generateOptions = {
+    prompt: prompt.value,
+    model: selectedModel.value,
+    size: imageSize.value,
+    count: imageCount.value,
+    referenceImages: referenceImages.value,
+    loras: selectedLoras.value,
+    mode,
+    videoConfig
   }
   
-  // Flux模型2图融合验证
-  if (selectedModel.value === 'flux-dev' && referenceImages.value.length > 2) {
-    message.warning('Flux模型最多支持2张图片融合')
-    return
-  }
-  
-  // Wan模型2图验证
-  if (selectedModel.value === 'wan2.2-video' && referenceImages.value.length > 2) {
-    message.warning('Wan模型最多支持2张图片')
-    return
-  }
-
-  isGenerating.value = true
-  progress.value = 0
-  
-  try {
-    // 模拟进度更新
-    const progressInterval = setInterval(() => {
-      if (progress.value < 90) {
-        progress.value += Math.random() * 10
-      }
-    }, 1000)
-
-    // 准备FormData
-    const formData = new FormData()
-    formData.append('description', prompt.value)
-    formData.append('steps', 8)
-    formData.append('model', selectedModel.value)
-    
-    // 如果是视频生成，添加视频配置
-    if (videoConfig) {
-      formData.append('duration', videoConfig.duration)
-      formData.append('fps', videoConfig.fps)
-      console.log(`🎬 视频生成配置: 时长=${videoConfig.duration}秒, 帧率=${videoConfig.fps}FPS`)
-    }
-    
-    // 根据模式设置不同的参数
-    if (mode === 'fusion') {
-      // 多图融合模式
-      if (selectedModel.value === 'flux-dev') {
-        // Flux模型2图融合模式
-        formData.append('size', imageSize.value)
-        
-        // 添加2张参考图片
-        referenceImages.value.forEach((imageFile, index) => {
-          if (imageFile.originFileObj instanceof File) {
-            formData.append('reference_images', imageFile.originFileObj)
-          } else {
-            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
-            message.error(`参考图片${index + 1}文件无效，请重新选择`)
-            return
-          }
-        })
-        
-        console.log(`🎨 Flux 2图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
-      } else if (selectedModel.value === 'wan2.2-video') {
-        // Wan模型2图视频模式
-        formData.append('size', imageSize.value)
-        
-        // 添加2张参考图片
-        referenceImages.value.forEach((imageFile, index) => {
-          if (imageFile.originFileObj instanceof File) {
-            formData.append('reference_images', imageFile.originFileObj)
-          } else {
-            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
-            message.error(`参考图片${index + 1}文件无效，请重新选择`)
-            return
-          }
-        })
-        
-        console.log(`🎬 Wan 2图视频模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
-      } else {
-        // Qwen/Gemini多图融合模式
-        formData.append('fusion_mode', 'concat')
-        formData.append('cfg', 2.5)
-        formData.append('size', imageSize.value)  // 添加尺寸参数
-        
-        // 添加多张参考图片
-        referenceImages.value.forEach((imageFile, index) => {
-          if (imageFile.originFileObj instanceof File) {
-            formData.append('reference_images', imageFile.originFileObj)
-          } else {
-            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
-            message.error(`参考图片${index + 1}文件无效，请重新选择`)
-            return
-          }
-        })
-        
-        console.log(`🎨 多图融合模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
-      }
-    } else {
-      // 单图生成模式 - 但Wan模型需要特殊处理
-      if (selectedModel.value === 'wan2.2-video' && referenceImages.value.length > 1) {
-        // Wan模型自动检测多图，即使不是融合模式
-        formData.append('size', imageSize.value)
-        
-        // 添加多张参考图片
-        referenceImages.value.forEach((imageFile, index) => {
-          if (imageFile.originFileObj instanceof File) {
-            formData.append('reference_images', imageFile.originFileObj)
-          } else {
-            console.error(`参考图片${index + 1}文件对象无效:`, imageFile)
-            message.error(`参考图片${index + 1}文件无效，请重新选择`)
-            return
-          }
-        })
-        
-        console.log(`🎬 Wan模型自动多图模式: 上传${referenceImages.value.length}张图片, 尺寸=${imageSize.value}`)
-      } else {
-        // 真正的单图模式
-        formData.append('count', imageCount.value)
-        formData.append('size', imageSize.value)
-        
-        // 添加LoRA配置
-        if (selectedLoras.value.length > 0) {
-          formData.append('loras', JSON.stringify(selectedLoras.value))
-          console.log('🎨 添加LoRA配置:', selectedLoras.value)
-        }
-        
-        // 添加参考图片（如果有的话）
-        if (referenceImages.value.length > 0 && referenceImages.value[0].originFileObj) {
-          const fileObj = referenceImages.value[0].originFileObj
-          // 验证文件对象是否有效
-          if (fileObj instanceof File) {
-            formData.append('reference_image', fileObj)
-          } else {
-            console.error('参考图片文件对象无效:', fileObj)
-            message.error('参考图片文件无效，请重新选择')
-            return
-          }
-        }
-      }
-    }
-
-    // 调用后端API
-    let apiEndpoint
-    if (mode === 'fusion') {
-      if (selectedModel.value === 'flux-dev' || selectedModel.value === 'wan2.2-video') {
-        // Flux和Wan模型使用普通生成接口，但传递多张图片
-        apiEndpoint = '/api/generate-image'
-      } else {
-        // Qwen/Gemini模型使用专门的融合接口
-        apiEndpoint = '/api/generate-image-fusion'
-      }
-    } else {
-      // 单图模式，但Wan模型可能需要多图接口
-      if (selectedModel.value === 'wan2.2-video' && referenceImages.value.length > 1) {
-        // Wan模型自动多图模式，使用普通生成接口
-        apiEndpoint = '/api/generate-image'
-      } else {
-        apiEndpoint = '/api/generate-image'
-      }
-    }
-    
-    const response = await fetch(`${API_BASE}${apiEndpoint}`, {
-      method: 'POST',
-      body: formData
-    })
-
-    clearInterval(progressInterval)
-
-    if (response.ok) {
-      const result = await response.json()
-      const taskId = result.task_id
-      
-      // 轮询任务状态
-      const pollStatus = async () => {
-        try {
-          const statusResponse = await fetch(`${API_BASE}/api/task/${taskId}`)
-          if (statusResponse.ok) {
-            const statusData = await statusResponse.json()
-            progress.value = statusData.progress || 0
-            
-            if (statusData.status === 'completed' && statusData.result) {
-              // 任务完成，立即清除缓存确保获取最新数据
-              cacheManager.clearCache()
-              console.log('🧹 生图完成，已清除缓存')
-              
-              // 任务完成，获取图像
-              const imageUrls = statusData.result.image_urls
-              const filenames = statusData.result.filenames || []
-              const directUrls = statusData.result.direct_urls || []
-              
-              const newImages = imageUrls.map((imageUrl, index) => ({
-                id: Date.now() + index,
-                task_id: taskId,  // 添加task_id用于删除操作
-                url: imageUrl,
-           directUrl: directUrls[index] ? directUrls[index] : null,
-                filename: filenames[index] || `generated_${taskId}_${index + 1}.png`,
-                prompt: prompt.value,
-                size: imageSize.value,
-                createdAt: new Date(),
-                referenceImage: referenceImages.value.length > 0 ? referenceImages.value[0].url || referenceImages.value[0].preview : null,
-                isFavorited: statusData.is_favorited === 1 || statusData.is_favorited === true  // 使用后端返回的收藏状态
-              }))
-              
-              // 重新加载第一页历史记录以显示最新生成的图像
-              
-              // 等待一下确保数据库更新
-              await new Promise(resolve => setTimeout(resolve, 500))
-              
-              // 强制刷新历史记录，清除缓存确保获取最新数据
-              cacheManager.clearCache() // 先清除缓存
-              await loadHistory(1, false, {}, { forceRefresh: true })
-              
-              // 再次检查是否成功刷新
-              console.log('📊 刷新后历史记录数量:', history.value.length)
-              console.log('📋 刷新后历史记录内容:', history.value.map(item => ({
-                id: item.id,
-                task_id: item.task_id,
-                status: item.status,
-                image_count: item.images?.length || 0
-              })))
-              
-              // 检查是否包含新生成的任务
-              const hasNewTask = history.value.some(item => 
-                item.images && item.images.some(img => img.task_id === taskId)
-              )
-              
-              if (!hasNewTask && history.value.length > 0) {
-                console.log('⚠️ 刷新后没有找到新任务，等待后再次尝试...')
-                await new Promise(resolve => setTimeout(resolve, 1000))
-                await loadHistory(1, false)
-                
-                // 再次检查
-                const hasNewTaskAfterRetry = history.value.some(item => 
-                  item.images && item.images.some(img => img.task_id === taskId)
-                )
-                console.log('📊 重试后是否找到新任务:', hasNewTaskAfterRetry)
-              }
-              
-                             // 历史记录已由后端数据库管理
-              
-              isGenerating.value = false
-              progress.value = 100
-              message.success('图像生成成功！')
-              
-              // 滚动到页面底部显示新生成的内容，使用直接设置滚动位置避免触发滚动事件
-              setTimeout(() => {
-                // 临时禁用滚动监听器，避免触发翻页
-                const originalScrollHandler = window.onscroll
-                window.onscroll = null
-                
-                // 直接设置滚动位置到底部，不触发滚动事件
-                window.scrollTo(0, document.documentElement.scrollHeight)
-                
-                // 恢复滚动监听器
-                setTimeout(() => {
-                  window.onscroll = originalScrollHandler
-                }, 100)
-              }, 500)
-              
-              return
-            } else if (statusData.status === 'failed') {
-              isGenerating.value = false
-              progress.value = 0
-              message.error(statusData.error || '生成失败')
-              return
-            }
-            
-            // 继续轮询
-            setTimeout(pollStatus, 2000)
-          } else {
-            isGenerating.value = false
-            progress.value = 0
-            message.error('查询任务状态失败')
-          }
-        } catch (error) {
-          console.error('轮询错误:', error)
-          isGenerating.value = false
-          progress.value = 0
-          message.error('生成过程中出现错误，请重试')
-        }
-      }
-      
-      // 开始轮询
-      setTimeout(pollStatus, 1000)
+  // 准备回调函数
+  const callbacks = {
+    onStart: () => {
+      isGenerating.value = true
+      progress.value = 0
+    },
+    onProgress: (progressValue) => {
+      progress.value = progressValue
+    },
+    onTaskCreated: (taskId) => {
       message.success('任务已提交，正在生成中...')
-    } else {
-      throw new Error('提交任务失败')
+    },
+    onSuccess: async (statusData, taskId) => {
+      // 任务完成，立即清除缓存确保获取最新数据
+      cacheManager.clearCache()
+      console.log('🧹 生图完成，已清除缓存')
+      
+      // 等待一下确保数据库更新
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // 强制刷新历史记录，清除缓存确保获取最新数据
+      cacheManager.clearCache() // 先清除缓存
+      await loadHistoryWrapper(1, false, {}, { forceRefresh: true, silent: true })
+      
+      isGenerating.value = false
+      progress.value = 100
+      message.success('图像生成成功！')
+      
+      // 滚动到页面底部显示新生成的内容
+      setTimeout(() => {
+        scrollToBottom()
+      }, 500)
+    },
+    onError: (error) => {
+      isGenerating.value = false
+      progress.value = 0
+      message.error(error)
     }
-  } catch (error) {
-    console.error('生成错误:', error)
-    message.error('生成失败，请稍后重试')
-    isGenerating.value = false
-    progress.value = 0
   }
+  
+  // 调用提取的服务
+  await generateImage(generateOptions, API_BASE, callbacks)
 }
 
 
@@ -600,15 +343,10 @@ const selectHistoryItem = (item) => {
   prompt.value = item.prompt
 }
 
-// 清空历史记录
-const clearHistory = async () => {
-  try {
-    // 调用后端清空API
-    const response = await fetch(`${API_BASE}/api/history`, {
-      method: 'DELETE'
-    })
-    
-    if (response.ok) {
+// 清空历史记录 - 使用提取的服务
+const clearHistoryWrapper = async () => {
+  const callbacks = {
+    onSuccess: () => {
       history.value = []
       // 重置分页状态
       currentPage.value = 1
@@ -617,13 +355,13 @@ const clearHistory = async () => {
       // 清空本地存储
       localStorage.removeItem('imageGeneratorHistory')
       message.success('历史记录已清空')
-    } else {
-      throw new Error('清空失败')
+    },
+    onError: (error) => {
+      message.error('清空失败，请重试')
     }
-  } catch (error) {
-    console.error('清空历史记录失败:', error)
-    message.error('清空失败，请重试')
   }
+  
+  await clearHistory(API_BASE, callbacks)
 }
 
 // 使用图像的提示词
@@ -632,67 +370,33 @@ const useImagePrompt = (image) => {
   message.success('已复制提示词到输入框')
 }
 
-// 下载图像
-const downloadImage = async (image) => {
-  try {
-    // 使用直接URL或常规URL
-    const imageUrl = image.directUrl || image.url
-    const filename = image.filename || `ai-generated-${Date.now()}.png`
-    
-    // 创建一个临时链接
-    const link = document.createElement('a')
-    link.href = imageUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    message.success(`图片 ${filename} 下载已开始`)
-  } catch (error) {
-    console.error('下载失败:', error)
+// 下载图像 - 使用提取的工具函数
+const downloadImageWrapper = async (image) => {
+  const result = await downloadImage(image)
+  if (result.success) {
+    message.success(`图片 ${result.filename} 下载已开始`)
+  } else {
     message.error('下载失败，请重试')
   }
 }
 
 
-// 分享图像
-const shareImage = (image) => {
-  if (navigator.share) {
-    navigator.share({
-      title: 'AI生成的图像',
-      text: image.prompt,
-      url: image.url
-    })
-  } else {
-    navigator.clipboard.writeText(image.url)
+// 分享图像 - 使用提取的工具函数
+const shareImageWrapper = (image) => {
+  const result = shareImage(image)
+  if (result && result.method === 'clipboard') {
     message.success('图像链接已复制到剪贴板')
   }
 }
 
 // 移除了图片切换相关函数
 
-// 下载全部图片
-const downloadAllImages = async (group) => {
-  try {
-    for (let i = 0; i < group.length; i++) {
-      const image = group[i]
-      const response = await fetch(image.url)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `ai-generated-${image.task_id}-${i + 1}.png`
-      link.click()
-      window.URL.revokeObjectURL(url)
-      
-      // 添加延迟避免浏览器阻止多个下载
-      if (i < group.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
-    }
-    message.success(`开始下载 ${group.length} 张图片`)
-  } catch (error) {
-    console.error('批量下载失败:', error)
+// 下载全部图片 - 使用提取的工具函数
+const downloadAllImagesWrapper = async (group) => {
+  const result = await downloadAllImages(group)
+  if (result.success) {
+    message.success(`开始下载 ${result.count} 张图片`)
+  } else {
     message.error('批量下载失败，请重试')
   }
 }
@@ -961,46 +665,28 @@ const regenerateImage = async (image) => {
   await generateImage()
 }
 
-// 删除图像
-const deleteImage = async (image) => {
-  try {
-    // 调用后端删除API
-    const response = await fetch(`${API_BASE}/api/task/${image.task_id}`, {
-      method: 'DELETE'
-    })
-    
-    if (response.ok) {
+// 删除图像 - 使用提取的服务
+const deleteImageWrapper = async (image) => {
+  const callbacks = {
+    onSuccess: (taskId) => {
       // 从当前历史记录中移除被删除的任务，而不是重新加载整个第一页
-      const taskIdToDelete = image.task_id
-      history.value = history.value.filter(item => item.task_id !== taskIdToDelete)
+      history.value = history.value.filter(item => item.task_id !== taskId)
       
       // 更新总数
       totalCount.value = Math.max(0, totalCount.value - 1)
       
       // 从缓存中移除该任务，而不是完全清除缓存
-      cacheManager.removeTaskFromCache(taskIdToDelete)
+      cacheManager.removeTaskFromCache(taskId)
       console.log('🧹 删除任务后已从缓存中移除')
       
       message.success('图像已删除')
-    } else if (response.status === 404) {
-      // 任务已不存在，直接从前端移除
-      console.warn(`任务 ${image.task_id} 在数据库中不存在，从前端移除`)
-      const taskIdToDelete = image.task_id
-      history.value = history.value.filter(item => item.task_id !== taskIdToDelete)
-      totalCount.value = Math.max(0, totalCount.value - 1)
-      
-      // 从缓存中移除该任务，因为缓存中包含了不存在的任务
-      cacheManager.removeTaskFromCache(taskIdToDelete)
-      console.log('🧹 发现过期任务，已从缓存中移除')
-      
-      message.warning('该图像记录已过期，已从列表中移除')
-    } else {
-      throw new Error(`删除失败 (状态码: ${response.status})`)
+    },
+    onError: (error) => {
+      message.error('删除失败，请重试')
     }
-  } catch (error) {
-    console.error('删除图像失败:', error)
-    message.error('删除失败，请重试')
   }
+  
+  await deleteImage(image, API_BASE, callbacks)
 }
 
 
@@ -1033,20 +719,13 @@ const updateImageFavoriteStatus = async () => {
   }
 }
 
-// 切换收藏状态
-const toggleFavorite = async (image) => {
-  try {
-    // 调用后端API切换单张图片收藏状态
-    const response = await fetch(`${API_BASE}/api/image/${image.task_id}/${image.image_index || 0}/favorite`, {
-      method: 'POST'
-    })
-    
-    if (response.ok) {
-      const result = await response.json()
-      
+// 切换收藏状态 - 使用提取的服务
+const toggleFavoriteWrapper = async (image) => {
+  const callbacks = {
+    onSuccess: (result, imageData) => {
       // 在allImages中找到对应的图片并更新收藏状态
       const targetImage = allImages.value.find(img => 
-        img.url === image.url && img.task_id === image.task_id && img.image_index === image.image_index
+        img.url === imageData.url && img.task_id === imageData.task_id && img.image_index === imageData.image_index
       )
       
       if (targetImage) {
@@ -1061,29 +740,22 @@ const toggleFavorite = async (image) => {
           window.dispatchEvent(new CustomEvent('refresh-favorites'))
         }
       }
-    } else {
-      throw new Error('切换收藏状态失败')
+    },
+    onError: (error) => {
+      message.error('操作失败，请重试')
     }
-  } catch (error) {
-    console.error('切换收藏状态失败:', error)
-    message.error('操作失败，请重试')
   }
+  
+  await toggleFavorite(image, API_BASE, callbacks)
 }
 
-// 切换视频收藏状态
-const toggleVideoFavorite = async (video) => {
-  try {
-    // 调用后端API切换视频收藏状态
-    const response = await fetch(`${API_BASE}/api/video/${video.task_id}/favorite`, {
-      method: 'POST'
-    })
-    
-    if (response.ok) {
-      const result = await response.json()
-      
+// 切换视频收藏状态 - 使用提取的服务
+const toggleVideoFavoriteWrapper = async (video) => {
+  const callbacks = {
+    onSuccess: (result, videoData) => {
       // 在history中找到对应的视频并更新收藏状态
       for (const historyItem of history.value) {
-        if (historyItem.id === video.task_id) {
+        if (historyItem.id === videoData.task_id) {
           if (historyItem.images && historyItem.images.length > 0) {
             historyItem.images[0].isFavorited = result.is_favorited
           }
@@ -1099,24 +771,16 @@ const toggleVideoFavorite = async (video) => {
         // 通知灵感页面刷新收藏列表
         window.dispatchEvent(new CustomEvent('refresh-favorites'))
       }
-    } else {
-      throw new Error('切换收藏状态失败')
+    },
+    onError: (error) => {
+      message.error('操作失败，请重试')
     }
-  } catch (error) {
-    console.error('切换视频收藏状态失败:', error)
-    message.error('操作失败，请重试')
   }
+  
+  await toggleVideoFavorite(video, API_BASE, callbacks)
 }
 
-// 格式化时间
-const formatTime = (date) => {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date)
-}
+// formatTime 函数已提取到 utils/formatUtils.js
 
 // 处理参考图预览
 const handlePreview = (file) => {
@@ -1193,7 +857,41 @@ const handleUpscale = async (imageData, scaleFactor) => {
       saveUpscaleState()
       
       // 轮询检查任务状态
-      await pollUpscaleStatus(result.task_id)
+      await pollUpscaleStatus(result.task_id, API_BASE, {
+        onProgress: (progress) => {
+          upscalingProgress.value = progress
+          saveUpscaleState()
+        },
+        onSuccess: async (status) => {
+          upscalingProgress.value = 100
+          message.success('图片放大完成！')
+          
+          // 等待一下确保数据库更新
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          // 重新加载历史记录以显示最新的放大结果
+          cacheManager.clearCache()
+          await loadHistoryWrapper(1, false, {}, { forceRefresh: true, silent: true })
+          
+          // 重置放大状态
+          isUpscaling.value = false
+          currentUpscaleTaskId.value = null
+          saveUpscaleState()
+        },
+        onError: (error) => {
+          message.error(error)
+          isUpscaling.value = false
+          currentUpscaleTaskId.value = null
+          saveUpscaleState()
+        },
+        onTimeout: async () => {
+          message.warning('放大任务超时，请稍后查看结果')
+          await loadHistoryWrapper(1, false)
+          isUpscaling.value = false
+          currentUpscaleTaskId.value = null
+          saveUpscaleState()
+        }
+      })
     } else {
       throw new Error('放大任务提交失败')
     }
@@ -1218,7 +916,34 @@ const handleVideoTaskCreated = async (taskId) => {
     currentVideoTaskId.value = taskId
     
     // 开始轮询视频任务状态
-    await pollVideoStatus(taskId)
+    await pollVideoStatus(taskId, API_BASE, {
+      onSuccess: async (status) => {
+        console.log('✅ 视频生成完成！')
+        message.success('视频生成完成！')
+        
+        // 等待数据库更新
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 重新加载历史记录以显示最新的视频结果
+        cacheManager.clearCache()
+        await loadHistoryWrapper(1, false, {}, { forceRefresh: true })
+        
+        // 重置视频生成状态
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+      },
+      onError: (error) => {
+        message.error(error)
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+      },
+      onTimeout: async () => {
+        message.warning('视频生成任务超时，请稍后查看结果')
+        await loadHistoryWrapper(1, false)
+        isVideoGenerating.value = false
+        currentVideoTaskId.value = null
+      }
+    })
   } catch (error) {
     console.error('❌ 视频任务处理失败:', error)
     message.error('视频任务处理失败')
@@ -1227,505 +952,36 @@ const handleVideoTaskCreated = async (taskId) => {
   }
 }
 
-// 轮询放大任务状态 - 强化版
-const pollUpscaleStatus = async (taskId) => {
-  const maxAttempts = 180  // 增加到180次（6分钟）
-  let attempts = 0
-  let consecutiveErrors = 0
-  
-  console.log(`🚀 开始轮询任务状态: ${taskId}`)
-  
-  const checkStatus = async () => {
-    try {
-      console.log(`🔍 检查任务状态 (${attempts + 1}/${maxAttempts}): ${taskId}`)
-      
-      const response = await fetch(`${API_BASE}/api/upscale/${taskId}`, {
-        cache: 'no-cache',  // 强制不使用缓存
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
-      const status = await response.json()
-      consecutiveErrors = 0  // 重置错误计数
-      
-      console.log(`📊 任务状态: ${JSON.stringify(status)}`)
-      
-      // 使用后端返回的真实进度，而不是自己计算
-      upscalingProgress.value = status.progress || 50
-      
-      // 更新进度时保存状态
-      saveUpscaleState()
-      
-      if (status.status === 'completed') {
-        upscalingProgress.value = 100
-        console.log('✅ 任务完成！')
-        
-        // 显示成功消息
-        message.success('图片放大完成！')
-        
-        // 等待一下确保数据库更新
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // 重新加载历史记录以显示最新的放大结果
-        cacheManager.clearCache() // 先清除缓存
-        await loadHistory(1, false, {}, { forceRefresh: true })
-        
-        // 强制刷新一次，确保显示最新状态
-        setTimeout(async () => {
-          await loadHistory(1, false, {}, { forceRefresh: true })
-        }, 1000)
-        
-        // 第三次刷新确保万无一失
-        setTimeout(async () => {
-          await loadHistory(1, false, {}, { forceRefresh: true })
-        }, 3000)
-        
-        // 重置放大状态
-        isUpscaling.value = false
-        currentUpscaleTaskId.value = null
-        saveUpscaleState() // 清除localStorage中的状态
-        return
-      } else if (status.status === 'failed') {
-        console.log('❌ 任务失败')
-        message.error('图片放大失败')
-        isUpscaling.value = false
-        currentUpscaleTaskId.value = null
-        saveUpscaleState() // 清除localStorage中的状态
-        return
-      }
-      
-      // 任务仍在处理中
-      attempts++
-      if (attempts < maxAttempts) {
-        setTimeout(checkStatus, 1000) // 1秒轮询
-      } else {
-        console.log('⏰ 轮询超时')
-        message.warning('放大任务超时，请稍后查看结果')
-        // 超时时也尝试刷新一次历史记录
-        await loadHistory(1, false)
-        isUpscaling.value = false
-        currentUpscaleTaskId.value = null
-        saveUpscaleState() // 清除localStorage中的状态
-      }
-    } catch (error) {
-      consecutiveErrors++
-      console.error(`❌ 检查放大状态失败 (连续错误: ${consecutiveErrors}):`, error)
-      
-      // 如果连续错误太多，可能是严重问题
-      if (consecutiveErrors >= 5) {
-        console.log('❌ 连续错误过多，终止轮询')
-        message.error('网络连接异常，请检查网络后手动刷新页面')
-        isUpscaling.value = false
-        currentUpscaleTaskId.value = null
-        saveUpscaleState() // 清除localStorage中的状态
-        return
-      }
-      
-      // 网络错误或临时问题，继续重试
-      attempts++
-      if (attempts < maxAttempts) {
-        console.log(`🔄 网络错误重试 (${attempts}/${maxAttempts})，${consecutiveErrors} 连续错误`)
-        setTimeout(checkStatus, 2000) // 网络错误时等待2秒再重试
-      } else {
-        console.log('❌ 重试次数用尽')
-        message.error('放大任务检查超时，请手动刷新页面查看结果')
-        isUpscaling.value = false
-        currentUpscaleTaskId.value = null
-        saveUpscaleState() // 清除localStorage中的状态
-      }
-    }
-  }
-  
-  await checkStatus()
-}
+// pollUpscaleStatus 函数已提取到 services/pollingService.js
 
-// 轮询视频生成任务状态
-const pollVideoStatus = async (taskId) => {
-  const maxAttempts = 300  // 5分钟轮询
-  let attempts = 0
-  let consecutiveErrors = 0
-  
-  
-  const checkStatus = async () => {
-    try {
-      
-      const response = await fetch(`${API_BASE}/api/task/${taskId}`, {
-        cache: 'no-cache',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
-      const status = await response.json()
-      consecutiveErrors = 0
-      
-      
-      if (status.status === 'completed') {
-        console.log('✅ 视频生成完成！')
-        message.success('视频生成完成！')
-        
-        // 等待数据库更新
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // 重新加载历史记录以显示最新的视频结果
-        cacheManager.clearCache() // 先清除缓存
-        await loadHistory(1, false, {}, { forceRefresh: true })
-        
-        // 强制刷新一次，确保显示最新状态
-        setTimeout(async () => {
-          await loadHistory(1, false, {}, { forceRefresh: true })
-        }, 1000)
-        
-        // 第三次刷新确保万无一失
-        setTimeout(async () => {
-          await loadHistory(1, false, {}, { forceRefresh: true })
-        }, 3000)
-        
-        // 重置视频生成状态
-        isVideoGenerating.value = false
-        currentVideoTaskId.value = null
-        return
-      } else if (status.status === 'failed') {
-        console.log('❌ 视频生成失败')
-        message.error('视频生成失败')
-        isVideoGenerating.value = false
-        currentVideoTaskId.value = null
-        return
-      }
-      
-      // 任务仍在处理中
-      attempts++
-      if (attempts < maxAttempts) {
-        setTimeout(checkStatus, 2000) // 2秒轮询
-      } else {
-        console.log('⏰ 视频轮询超时')
-        message.warning('视频生成任务超时，请稍后查看结果')
-        // 超时时也尝试刷新一次历史记录
-        await loadHistory(1, false)
-        isVideoGenerating.value = false
-        currentVideoTaskId.value = null
-      }
-    } catch (error) {
-      consecutiveErrors++
-      console.error(`❌ 检查视频状态失败 (连续错误: ${consecutiveErrors}):`, error)
-      
-      // 如果连续错误太多，可能是严重问题
-      if (consecutiveErrors >= 5) {
-        console.log('❌ 连续错误过多，终止视频轮询')
-        message.error('网络连接异常，请检查网络后手动刷新页面')
-        isVideoGenerating.value = false
-        currentVideoTaskId.value = null
-        return
-      }
-      
-      // 网络错误或临时问题，继续重试
-      attempts++
-      if (attempts < maxAttempts) {
-        console.log(`🔄 网络错误重试 (${attempts}/${maxAttempts})，${consecutiveErrors} 连续错误`)
-        setTimeout(checkStatus, 2000) // 网络错误时等待2秒再重试
-      } else {
-        console.log('❌ 重试次数用尽')
-        message.error('视频任务检查超时，请手动刷新页面查看结果')
-        isVideoGenerating.value = false
-        currentVideoTaskId.value = null
-      }
-    }
-  }
-  
-  await checkStatus()
-}
+// pollVideoStatus 函数已提取到 services/pollingService.js
 
-// 处理任务图片数据的辅助函数
-const processTaskImages = (task) => {
-  try {
-    if (!task || !task.task_id) {
-      console.warn('无效的任务数据:', task)
-      return []
-    }
-    
-    // 对于失败的任务，返回一个表示失败状态的图片对象
-    if (task.status === 'failed') {
-      return [{
-        url: null, // 失败的任务没有图片URL
-        directUrl: null,
-        filename: `failed_${task.task_id}.png`,
-        task_id: task.task_id,
-        prompt: task.description || '',
-        createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? (Array.isArray(task.reference_image_path) ? JSON.stringify(task.reference_image_path.map(path => `${API_BASE}/api/image/upload/${path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`)) : `${API_BASE}/api/image/upload/${task.reference_image_path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`) : null,
-        isFavorited: task.is_favorited === 1 || task.is_favorited === true,
-        status: 'failed',
-        error: task.error || '生成失败',
-        parameters: task.parameters || {},  // 添加任务参数信息
-        result_path: task.result_path  // 保留result_path字段
-      }]
-    }
-    
-    // 对于其他非完成状态，也返回一个状态对象
-    if (task.status !== 'completed') {
-      return [{
-        url: null,
-        directUrl: null,
-        filename: `${task.status}_${task.task_id}.png`,
-        task_id: task.task_id,
-        prompt: task.description || '',
-        createdAt: new Date(task.created_at || Date.now()),
-        referenceImage: task.reference_image_path ? (Array.isArray(task.reference_image_path) ? JSON.stringify(task.reference_image_path.map(path => `${API_BASE}/api/image/upload/${path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`)) : `${API_BASE}/api/image/upload/${task.reference_image_path.replace(/^uploads[\/\\]/, '').replace(/\\/g, '/').replace(/\/\//g, '/')}`) : null,
-        isFavorited: task.is_favorited === 1 || task.is_favorited === true,
-        status: task.status,
-        error: task.error || `状态: ${task.status}`,
-        parameters: task.parameters || {},  // 添加任务参数信息
-        result_path: task.result_path  // 保留result_path字段
-      }]
-    }
-    
-    // 检查是否有image_urls数组
-    if (!task.image_urls || !Array.isArray(task.image_urls) || task.image_urls.length === 0) {
-      console.warn('任务没有有效的image_urls:', task)
-      return []
-    }
-    
-    // 获取参考图信息
-    let referenceImageUrl = null
-    if (task.reference_image_path && task.reference_image_path !== 'uploads/blank.png' && task.reference_image_path !== 'uploads\\blank.png') {
-      // 处理多图融合的情况，reference_image_path可能是数组
-      let referencePath = task.reference_image_path
-      if (Array.isArray(referencePath)) {
-        // 多图融合时，处理所有参考图路径
-        const cleanPaths = referencePath.map(path => {
-          let cleanPath = path
-          
-          // 处理uploads/或uploads\前缀
-          if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('uploads\\')) {
-            // 去掉uploads/或uploads\前缀
-            cleanPath = cleanPath.replace(/^uploads[\/\\]/, '')
-          }
-          
-          // 将Windows路径分隔符转换为URL路径分隔符
-          cleanPath = cleanPath.replace(/\\/g, '/')
-          
-          // 处理双斜杠问题
-          cleanPath = cleanPath.replace(/\/\//g, '/')
-          
-          return `${API_BASE}/api/image/upload/${cleanPath}`
-        })
-        
-        // 多图融合时，将完整的URL数组作为JSON字符串传递
-        referenceImageUrl = JSON.stringify(cleanPaths)
-      } else {
-        // 单图情况，保持原有逻辑
-        let cleanPath = referencePath
-        
-        // 处理uploads/或uploads\前缀
-        if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('uploads\\')) {
-          // 去掉uploads/或uploads\前缀
-          cleanPath = cleanPath.replace(/^uploads[\/\\]/, '')
-        }
-        
-        // 将Windows路径分隔符转换为URL路径分隔符
-        cleanPath = cleanPath.replace(/\\/g, '/')
-        
-        // 处理双斜杠问题
-        cleanPath = cleanPath.replace(/\/\//g, '/')
-        
-        referenceImageUrl = `${API_BASE}/api/image/upload/${cleanPath}`
-      }
-    }
-    
-    // 处理image_urls数组，使用后端提供的收藏状态
-    const images = task.image_urls.map((imageUrl, index) => {
-      try {
-        // 从后端提供的images数组中获取收藏状态
-        let isFavorited = false
-        if (task.images && Array.isArray(task.images)) {
-          const imageData = task.images.find(img => img.image_index === index)
-          if (imageData) {
-            isFavorited = imageData.isFavorited || false
-          }
-        }
-        
-        return {
-          url: imageUrl,
-          directUrl: null,
-          thumbnailUrl: task.thumbnail_urls && task.thumbnail_urls[index] ? `${API_BASE}${task.thumbnail_urls[index]}` : null,
-          filename: `generated_${task.task_id}_${index + 1}.png`,
-          task_id: task.task_id,
-          image_index: index, // 使用与后端一致的字段名
-          prompt: task.description || '',
-          createdAt: new Date(task.created_at || Date.now()),
-          referenceImage: referenceImageUrl,
-          isFavorited: isFavorited,  // 使用后端提供的收藏状态
-          parameters: task.parameters || {},  // 添加任务参数信息
-          result_path: task.result_path  // 保留result_path字段
-        }
-      } catch (imageError) {
-        console.error('处理单个图片数据失败:', imageError, { imageUrl, index, task })
-        return null
-      }
-    }).filter(img => img !== null) // 过滤掉处理失败的图片
-    
-    return images
-  } catch (error) {
-    console.error('processTaskImages 函数执行失败:', error, task)
-    return []
-  }
-}
+// processTaskImages 函数已提取到 utils/imageUtils.js
 
-// 加载历史记录（支持分页，从最新开始）
-const loadHistory = async (page = 1, prepend = false, filterParams = {}, options = {}) => {
-  if (isLoadingHistory.value) return
-  
+// 加载历史记录 - 使用提取的服务
+const loadHistoryWrapper = async (page = 1, prepend = false, filterParams = {}, options = {}) => {
   const startTime = performance.now()
   console.log(`[性能监控] 开始加载历史记录，页面: ${page}, 模式: ${prepend ? 'prepend' : 'replace'}`)
   
-  try {
-    isLoadingHistory.value = true
-    const offset = (page - 1) * pageSize.value
-    
-    // 记录加载前的历史记录数量，用于计算新内容位置
-    const beforeCount = history.value.length
-    
-    // 构建查询参数
-    const queryParams = new URLSearchParams({
-      limit: pageSize.value.toString(),
-      offset: offset.toString(),
-      order: 'desc', // 降序排列，最新的任务在第一页
-      _t: Date.now().toString() // 添加时间戳避免缓存
-    })
-    
-    // 添加筛选参数
-    if (filterParams.favoriteFilter && filterParams.favoriteFilter !== 'all') {
-      queryParams.append('favorite_filter', filterParams.favoriteFilter)
-    }
-    if (filterParams.timeFilter && filterParams.timeFilter !== 'all') {
-      queryParams.append('time_filter', filterParams.timeFilter)
-    }
-
-    // 智能加载函数
-    const loadFunction = async () => {
-      // 使用AbortController来支持请求取消
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => {
-        console.log('请求超时，取消请求')
-        controller.abort()
-      }, 15000) // 减少到15秒超时
-      
-      console.log('开始加载历史记录，页面:', page, '偏移量:', offset, '筛选参数:', filterParams)
-      
-      const response = await fetch(`${API_BASE}/api/history?${queryParams.toString()}`, {
-        signal: controller.signal,
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      clearTimeout(timeoutId)
-      console.log('API响应状态:', response.status)
-      
-      if (!response.ok) {
-        throw new Error(`API响应失败: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      
-      // 处理任务数据
-      const processedTasks = data.tasks ? data.tasks.map(task => {
-        try {
-          const processedImages = processTaskImages(task)
-          return {
-            id: task.task_id,
-            task_id: task.task_id,
-            prompt: task.description,
-            timestamp: task.created_at,
-            status: task.status,
-            images: processedImages,
-            result_path: task.result_path,
-            model: task.parameters?.model,
-            parameters: task.parameters
-          }
-        } catch (taskError) {
-          console.error('处理单个任务数据失败:', taskError, task)
-          return null
-        }
-      }).filter(item => item !== null) : []
-      
-      return {
-        data: processedTasks,
-        totalCount: data.total || 0,
-        hasMore: data.has_more || false
-      }
-    }
-
-    // 使用智能缓存加载
-    let result
-    if (page === 1 && !prepend && !options.forceRefresh && import.meta.env.DEV) {
-      // 只在开发环境使用缓存，生产环境直接加载
-      result = await cacheManager.smartLoad(loadFunction, {
-        forceRefresh: options.forceRefresh,
-        useCache: true
-      })
-      
-      // 生产环境不显示缓存状态，开发环境可选显示
-      if (import.meta.env.DEV && result.fromCache === true) {
-        if (result.stale) {
-          cacheStatus.value = {
-            type: 'stale',
-            icon: '⚠️',
-            text: '使用过期缓存'
-          }
-        } else {
-          cacheStatus.value = {
-            type: 'valid',
-            icon: '✅',
-            text: '使用缓存数据'
-          }
-        }
-        
-        // 3秒后隐藏缓存状态
-        setTimeout(() => {
-          cacheStatus.value = null
-        }, 3000)
-      } else {
-        // 生产环境或非缓存数据，不显示状态
-        cacheStatus.value = null
-      }
-    } else {
-      // 其他情况直接加载
-      result = await loadFunction()
-      
-      // 生产环境不显示状态
-      cacheStatus.value = null
-    }
-    
-    // 更新分页状态
-    totalCount.value = result.totalCount
-    hasMore.value = result.hasMore
-    currentPage.value = page
-    
-    if (result.data && result.data.length > 0) {
+  // 准备回调函数
+  const callbacks = {
+    isLoadingHistory: isLoadingHistory,
+    setLoadingHistory: (loading) => { isLoadingHistory.value = loading },
+    setTotalCount: (count) => { totalCount.value = count },
+    setHasMore: (hasMoreValue) => { hasMore.value = hasMoreValue },
+    setCurrentPage: (pageValue) => { currentPage.value = pageValue },
+    setHistory: (historyData) => { history.value = historyData },
+    onDataLoaded: async (data, prependMode, currentScrollTop, currentScrollHeight) => {
       // 使用nextTick优化DOM更新
       await nextTick()
       
       try {
-        if (prepend) {
+        if (prependMode) {
           // 前置模式：添加到现有历史记录前面（用于加载更早的数据）
-          // 由于后端返回的是降序排列，新加载的内容是更早的数据，应该放在现有内容的后面
-          history.value = [...history.value, ...result.data]
+          history.value = [...history.value, ...data]
         } else {
           // 替换模式：替换现有历史记录（首次加载）
-          history.value = result.data
+          history.value = data
         }
         
         const endTime = performance.now()
@@ -1733,104 +989,50 @@ const loadHistory = async (page = 1, prepend = false, filterParams = {}, options
         
         // 获取所有图片的收藏状态
         await updateImageFavoriteStatus()
+        
+        // 如果是翻页加载（prepend模式），保持滚动位置
+        if (prependMode) {
+          maintainScrollPosition(currentScrollTop, currentScrollHeight)
+        }
       } catch (error) {
         console.error('处理历史数据时出错:', error)
-        // 即使处理失败也要清除loading状态
         isLoadingHistory.value = false
         return
       }
-    } else {
-      // 如果没有数据需要处理，直接清除loading状态
-      if (!prepend) {
-        history.value = []
-      }
+    },
+    onError: (error) => {
+      message.error(error)
     }
-    
-    // 立即清除loading状态
-    isLoadingHistory.value = false
-    
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.log('请求被取消')
-    } else {
-      console.error('加载历史记录失败:', error)
-      // 如果API失败且是第一页，显示错误信息
-      if (page === 1) {
-        console.error('无法从后端加载历史记录，请检查网络连接')
-      }
-      message.error('加载历史记录失败')
-    }
-    // 在catch块中也要清除loading状态
-    isLoadingHistory.value = false
   }
+  
+  // 调用提取的服务
+  await loadHistory(page, prepend, filterParams, { ...options, pageSize: pageSize.value }, API_BASE, callbacks)
 }
 
-// 滚动到新内容位置的函数
-const scrollToNewContent = (newContentCount) => {
-  try {
-    // 等待DOM完全更新
-    setTimeout(() => {
-      // 查找新加载的内容元素
-      const taskCards = document.querySelectorAll('.task-card')
-      if (taskCards.length >= newContentCount) {
-        // 滚动到第一个新内容的顶部，留出一些空间
-        const targetElement = taskCards[newContentCount - 1]
-        if (targetElement) {
-          const targetPosition = targetElement.offsetTop - 100 // 留出100px的空间
-          window.scrollTo({
-            top: targetPosition,
-            behavior: 'smooth'
-          })
-          console.log(`已滚动到新内容位置，新内容数量: ${newContentCount}`)
-        }
-      }
-    }, 200) // 增加延迟确保DOM完全更新
-  } catch (error) {
-    console.error('滚动到新内容位置失败:', error)
-  }
-}
-
-// 防抖函数
-const debounce = (func, wait) => {
-  let timeout
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout)
-      func(...args)
-    }
-    clearTimeout(timeout)
-    timeout = setTimeout(later, wait)
-  }
-}
+// scrollToNewContent 和 debounce 函数已提取到 utils/formatUtils.js
 
 // 当前筛选参数
 const currentFilterParams = ref({})
 
 // 防抖版本的loadMoreHistory
 const debouncedLoadMore = debounce(async () => {
-  console.log('loadMoreHistory被调用，hasMore:', hasMore.value, 'isLoadingHistory:', isLoadingHistory.value)
+  console.log('debouncedLoadMore被调用，hasMore:', hasMore.value, 'isLoadingHistory:', isLoadingHistory.value)
   
   if (hasMore.value && !isLoadingHistory.value) {
-    await loadHistory(currentPage.value + 1, true, currentFilterParams.value)
-  } else if (!hasMore.value && isLoadingHistory.value) {
-    // 如果没有更多数据但加载状态仍为true，清除加载状态
-    isLoadingHistory.value = false
-    console.log('没有更多数据，强制清除loading状态')
+    console.log('开始加载下一页，当前页:', currentPage.value)
+    await loadHistoryWrapper(currentPage.value + 1, true, currentFilterParams.value)
+  } else if (!hasMore.value) {
+    console.log('没有更多数据，hasMore:', hasMore.value)
   } else if (isLoadingHistory.value) {
-    // 如果正在加载中，强制清除状态（防止卡住）
-    console.log('检测到loading状态异常，强制清除')
-    isLoadingHistory.value = false
+    console.log('正在加载中，跳过重复请求')
   }
-}, 1000) // 增加到1秒防抖
+}, 1000) // 1秒防抖
 
 // 加载更多历史记录（加载更早的数据）
 const loadMoreHistory = async () => {
-  // 添加额外的状态检查
-  if (isLoadingHistory.value) {
-    console.log('正在加载中，跳过重复请求')
-    return
-  }
+  console.log('loadMoreHistory被调用，hasMore:', hasMore.value, 'isLoadingHistory:', isLoadingHistory.value)
   
+  // 直接调用防抖函数，让防抖函数内部处理状态检查
   debouncedLoadMore()
 }
 
@@ -1844,7 +1046,7 @@ const handleFilterChange = async (filterParams) => {
   hasMore.value = true
   
   // 直接使用后端API进行筛选
-  await loadHistory(1, false, filterParams)
+  await loadHistoryWrapper(1, false, filterParams)
 }
 
 // 历史记录现在由后端数据库管理，无需本地存储
@@ -1888,9 +1090,12 @@ const initializeDefaultModel = async () => {
 
 // 组件挂载时加载历史记录
 onMounted(async () => {
+  // 立即设置加载状态，避免显示空状态
+  isLoadingHistory.value = true
+  
   // 首先获取默认模型
   await initializeDefaultModel()
-  await loadHistory()
+  await loadHistoryWrapper(1, false, {}, { forceRefresh: true })
   
   // 检查是否有回填数据
   const regenerateData = localStorage.getItem('regenerateData')

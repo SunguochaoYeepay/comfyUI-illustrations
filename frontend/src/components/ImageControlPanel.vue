@@ -347,7 +347,7 @@ const handleLoraDropdownVisibleChange = (visible) => {
  .control-section {
    position: fixed;
    bottom: 0px;
-   left: 50%;
+   left: 52%;
    transform: translateX(-50%);
    z-index: 9999;
    max-width: 1000px;
@@ -355,6 +355,7 @@ const handleLoraDropdownVisibleChange = (visible) => {
    border-radius: 16px;
    overflow: hidden;
    pointer-events: auto;
+   border: 1px solid rgba(255, 255, 255, 0.1);
  }
 
  .control-card {

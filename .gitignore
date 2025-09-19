@@ -69,3 +69,5 @@ node_modules/
 *.bak
 *.backup
 *.orig
+*backup*.zip
+admin_backup_*.zip

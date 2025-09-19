@@ -79,7 +79,16 @@ export const generateImage = async (options, API_BASE, callbacks) => {
     // 准备FormData
     const formData = new FormData()
     formData.append('description', prompt)
-    formData.append('steps', 8)
+    
+    // 根据模型类型设置不同的步数
+    let steps = 8  // 默认步数
+    if (model === 'flux1-dev' || model === 'flux-dev') {
+      steps = 20  // Flux模型使用20步
+    } else if (model === 'qwen-image') {
+      steps = 8   // Qwen模型使用8步
+    }
+    
+    formData.append('steps', steps)
     formData.append('model', model)
     
     // 如果是视频生成，添加视频配置

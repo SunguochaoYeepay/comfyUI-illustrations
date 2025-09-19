@@ -80,7 +80,6 @@ async def get_lora_categories():
         "LOGO设计",
         "字体设计",
         "ICON设计",
-        "Banner设计",
         "海报设计",
         "角色设计"
     ]

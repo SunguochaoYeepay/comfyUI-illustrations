@@ -27,6 +27,7 @@ services:
     volumes:
       - admin-database:/app/data
       - admin-logs:/app/logs
+      - admin-backups:/app/backups
       - E:/AI-Image/ComfyUI-aki-v1.4/models:/app/comfyui/models:ro
       - E:/AI-Image/YeePay/back/models:/app/yeepay_models:ro
       # 主服务数据挂载 - 支持备份恢复
@@ -65,3 +66,4 @@ networks:
 volumes:
   admin-database:
   admin-logs:
+  admin-backups:

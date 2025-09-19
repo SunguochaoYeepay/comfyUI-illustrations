@@ -72,6 +72,25 @@ async def get_models_config(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"获取模型配置失败: {str(e)}")
 
 
+@router.get("/lora-categories", summary="获取LoRA分类列表")
+async def get_lora_categories():
+    """获取LoRA分类列表"""
+    # LoRA分类常量
+    LORA_CATEGORIES = [
+        "LOGO设计",
+        "字体设计",
+        "ICON设计",
+        "Banner设计",
+        "海报设计",
+        "角色设计"
+    ]
+    
+    return {
+        "code": 200,
+        "message": "获取成功",
+        "data": LORA_CATEGORIES
+    }
+
 @router.get("/loras", summary="获取LoRA配置")
 async def get_loras_config(
     base_model: Optional[str] = Query(None, description="按基础模型过滤"),
@@ -105,17 +124,18 @@ async def get_loras_config(
                 "name": lora.name,
                 "display_name": lora.display_name,
                 "base_model": lora.base_model,
+                "category": lora.category,
                 "available": lora.is_available,
                 "description": lora.description,
                 "file_size": lora.file_size,
+                "preview_image_path": lora.preview_image_path,
                 "created_at": lora.created_at.isoformat() if lora.created_at else None,
                 "updated_at": lora.updated_at.isoformat() if lora.updated_at else None
             }
             
-            # 应用排序 - 优先使用code字段，如果没有则使用name字段
-            lora_identifier = lora.code or lora.name
-            if lora.base_model in lora_order and lora_identifier in lora_order[lora.base_model]:
-                lora_data["sort_order"] = lora_order[lora.base_model].index(lora_identifier) + 1
+            # 应用排序 - 使用code字段
+            if lora.base_model in lora_order and lora.code in lora_order[lora.base_model]:
+                lora_data["sort_order"] = lora_order[lora.base_model].index(lora.code) + 1
             else:
                 lora_data["sort_order"] = 999
             

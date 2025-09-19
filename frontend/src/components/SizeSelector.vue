@@ -3,9 +3,10 @@
     <!-- 尺寸选择器下拉菜单 -->
     <a-dropdown 
       :trigger="['click']" 
-      placement="bottomLeft"
+      placement="topLeft"
       @openChange="handleSizeDropdownVisibleChange"
-      :overlayStyle="{ pointerEvents: 'auto' }"
+      :overlayStyle="{ pointerEvents: 'auto', zIndex: 10001 }"
+      :getPopupContainer="getPopupContainer"
     >
       <div class="size-dropdown-trigger">
         <span class="size-label">尺寸:</span>
@@ -97,9 +98,10 @@
     <!-- 生成数量选择器 -->
     <a-dropdown 
       :trigger="['click']" 
-      placement="bottomLeft"
+      placement="topLeft"
       @openChange="handleCountDropdownVisibleChange"
-      :overlayStyle="{ pointerEvents: 'auto' }"
+      :overlayStyle="{ pointerEvents: 'auto', zIndex: 10001 }"
+      :getPopupContainer="getPopupContainer"
     >
       <div class="count-dropdown-trigger">
         <span class="count-label">数量:</span>
@@ -235,6 +237,12 @@ const getCountDescription = (count) => {
 // 处理数量下拉菜单显示状态变化
 const handleCountDropdownVisibleChange = (visible) => {
   // 可以在这里添加额外的逻辑
+}
+
+// 安全的获取弹出容器方法 - 使用body避免被父容器截断
+const getPopupContainer = () => {
+  // 直接使用body作为容器，避免被control-section的overflow限制
+  return document?.body || document?.documentElement || document
 }
 
 // 获取尺寸配置

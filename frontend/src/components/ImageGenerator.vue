@@ -2006,6 +2006,16 @@ onMounted(async () => {
   padding: 0 0 180px 0; /* 为底部固定控制面板预留空间 */
 }
 
+/* 确保控制面板始终在最上层 */
+.control-section {
+  position: fixed !important;
+  bottom: 0px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
 
 /* 参考图片上传样式 */
 .reference-upload .ant-upload-list-picture-card {

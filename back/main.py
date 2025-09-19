@@ -177,6 +177,53 @@ async def get_available_loras(model: str = Query(..., description="基础模型�
         raise HTTPException(status_code=500, detail=f"获取LoRA列表失败: {str(e)}")
 
 
+@app.get("/api/lora-categories")
+async def get_lora_categories():
+    """获取LoRA分类列表"""
+    try:
+        from core.config_client import get_config_client
+        
+        config_client = get_config_client()
+        if config_client:
+            categories = await config_client.get_lora_categories()
+            return {
+                "code": 200,
+                "message": "获取成功",
+                "data": categories
+            }
+        else:
+            # 返回默认分类
+            default_categories = [
+                "LOGO设计",
+                "字体设计",
+                "ICON设计", 
+                "Banner设计",
+                "海报设计",
+                "角色设计"
+            ]
+            return {
+                "code": 200,
+                "message": "获取成功",
+                "data": default_categories
+            }
+    except Exception as e:
+        print(f"❌ 获取LoRA分类失败: {e}")
+        # 返回默认分类
+        default_categories = [
+            "LOGO设计",
+            "字体设计",
+            "ICON设计",
+            "Banner设计", 
+            "海报设计",
+            "角色设计"
+        ]
+        return {
+            "code": 200,
+            "message": "获取成功",
+            "data": default_categories
+        }
+
+
 @app.post("/api/loras/upload")
 async def upload_lora(file: UploadFile = File(...)):
     """上传LoRA文件"""

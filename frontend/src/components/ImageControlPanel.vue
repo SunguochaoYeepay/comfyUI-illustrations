@@ -47,122 +47,28 @@
              />
              
              <!-- 视频生成配置 - 仅在WAN2.2视频模型时显示 -->
-             <div v-if="isVideoModel" class="video-config-section">
-               <div class="video-config-item">
-                 <label>时长(秒):</label>
-                 <a-input-number 
-                   v-model:value="videoDuration" 
-                   :min="1" 
-                   :max="10" 
-                   :step="1"
-                   size="small"
-                   class="video-config-input"
-                 />
-               </div>
-               <div class="video-config-item">
-                 <label>帧率:</label>
-                 <a-select 
-                   v-model:value="videoFps" 
-                   size="small"
-                   class="video-config-select"
-                 >
-                   <a-select-option value="8">8 FPS</a-select-option>
-                   <a-select-option value="16">16 FPS</a-select-option>
-                   <a-select-option value="24">24 FPS</a-select-option>
-                 </a-select>
-               </div>
-             </div>
+             <VideoConfig 
+               v-if="isVideoModel"
+               v-model:duration="videoDuration"
+               v-model:fps="videoFps"
+             />
              
-                           <!-- LoRA选择器 - 下拉菜单样式 -->
-              <div v-if="shouldShowLoraPanel" class="lora-dropdown-section">
-                                 <a-dropdown 
-                   :trigger="['click']" 
-                   placement="bottomLeft"
-                   @openChange="handleLoraDropdownVisibleChange"
-                   :overlayStyle="{ pointerEvents: 'auto' }"
-                 >
-                  <div class="lora-dropdown-trigger">
-                    <div class="lora-trigger-content">
-                      <div class="lora-trigger-icon">🎨</div>
-                                             <div class="lora-trigger-info">
-                         <div class="lora-trigger-name">风格模型</div>
-                       </div>
-                      
-                    </div>
-                    <div class="lora-trigger-arrow">
-                      <DownOutlined />
-                    </div>
-                  </div>
-                  
-                  <template #overlay>
-                    <div class="lora-dropdown-menu">
-                                             <div class="lora-dropdown-header">
-                         <span class="lora-dropdown-title">选择风格模型</span>
-                        <a-button 
-                          type="link" 
-                          size="small" 
-                          @click="refreshLoras"
-                          :loading="loading"
-                        >
-                          <template #icon>
-                            <ReloadOutlined />
-                          </template>
-                          刷新
-                        </a-button>
-                      </div>
-                      
-                      <div class="lora-dropdown-list">
-                                                 <div 
-                           v-for="lora in availableLoras" 
-                           :key="lora.name"
-                           class="lora-dropdown-item"
-                           :class="{ 'lora-dropdown-selected': isLoraSelected(lora.name) }"
-                           @click.stop="toggleLora(lora)"
-                         >
-                          <div class="lora-dropdown-item-icon">
-                            <span class="lora-icon">🎨</span>
-                          </div>
-                          <div class="lora-dropdown-item-info">
-                            <div class="lora-dropdown-item-name">{{ lora.display_name || lora.name.replace('.safetensors', '') }}</div>
-                            <div class="lora-dropdown-item-desc">{{ getLoraDescription(lora) }}</div>
-                          </div>
-                                                     <div class="lora-dropdown-item-status">
-                             <a-checkbox 
-                               :checked="isLoraSelected(lora.name)"
-                               @change="(e) => handleLoraToggle(lora, e.target.checked)"
-                               @click.stop
-                             />
-                           </div>
-                        </div>
-                        
-                        <div v-if="availableLoras.length === 0" class="lora-dropdown-empty">
-                          <a-empty description="暂无可用的LoRA模型" size="small" />
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                </a-dropdown>
-                
-                <!-- 已选择的LoRA标签 - 放在LoRA选择器后面 -->
-                <div v-if="selectedLoras.length > 0" class="selected-loras-tags">
-                  <div 
-                    v-for="(lora, index) in selectedLoras" 
-                    :key="`selected-${lora.name}-${index}`"
-                    class="selected-lora-tag"
-                  >
-                    <span class="lora-tag-name">{{ lora.name.replace('.safetensors', '') }}</span>
-                                         <a-button 
-                       type="text" 
-                       size="small" 
-                       danger
-                       @click="removeLora(index)"
-                       class="lora-tag-remove"
-                     >
-                       ×
-                     </a-button>
-                  </div>
-                </div>
-              </div>
+             <!-- LoRA选择器 -->
+             <div v-if="shouldShowLoraPanel" class="lora-dropdown-section">
+               <LoraDropdown
+                 :available-loras="availableLoras"
+                 :selected-loras="selectedLoras"
+                 :lora-categories="loraCategories"
+                 :selected-lora-category="selectedLoraCategory"
+                 :loading="loraLoading"
+                 :api-base="API_BASE"
+                 @refresh="refreshLoras"
+                 @category-filter="onLoraCategoryFilter"
+                 @toggle-lora="toggleLora"
+                 @lora-toggle="handleLoraToggle"
+                 @dropdown-visible-change="handleLoraDropdownVisibleChange"
+               />
+             </div>
            </div>
 
            <!-- 右侧：生成按钮 -->
@@ -191,12 +97,13 @@
  <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-  import { ReloadOutlined, DownOutlined } from '@ant-design/icons-vue'
-import ReferenceUpload from './ReferenceUpload.vue'
 import MultiImageUpload from './MultiImageUpload.vue'
 import ModelSelector from './ModelSelector.vue'
 import SizeSelector from './SizeSelector.vue'
+import LoraDropdown from './LoraDropdown.vue'
+import VideoConfig from './VideoConfig.vue'
 import modelManager from '../utils/modelManager.js'
+import { useLora } from '../composables/useLora.js'
 
  // API基础URL - 自动检测环境
  const API_BASE = (() => {
@@ -283,13 +190,6 @@ const shouldShowUploadButton = computed(() => {
   return localReferenceImages.value.length === 0
 })
 
-// LoRA相关状态
-const availableLoras = ref([])
-const loading = ref(false)
-const loraPanelExpanded = ref(false) // 控制LoRA面板的展开/收起
-const loraConfigSource = ref('')
-const loraLastUpdated = ref('')
-
 // 视频生成配置状态
 const videoDuration = ref(5) // 默认5秒
 const videoFps = ref('16') // 默认16 FPS
@@ -305,15 +205,46 @@ const videoFps = ref('16') // 默认16 FPS
    set: (value) => emit('update:referenceImages', value)
  })
 
+ const localModel = computed({
+   get: () => props.model,
+   set: (value) => emit('update:model', value)
+ })
+
  const selectedLoras = computed({
    get: () => props.loras,
    set: (value) => emit('update:loras', value)
  })
 
- const localModel = computed({
-   get: () => props.model,
-   set: (value) => emit('update:model', value)
- })
+// 使用LoRA composable
+const {
+  availableLoras,
+  loading: loraLoading,
+  loraConfigSource,
+  loraLastUpdated,
+  loraCategories,
+  selectedLoraCategory,
+  selectedLoras: loraSelectedLoras,
+  filteredLoras,
+  fetchLoras,
+  fetchLoraCategories,
+  onLoraCategoryFilter,
+  getCategoryCount,
+  isLoraSelected,
+  addLora,
+  removeLoraByName,
+  toggleLora,
+  handleLoraToggle,
+  refreshLoras
+} = useLora(API_BASE, localModel)
+
+ // 同步composable中的selectedLoras到props
+ watch(loraSelectedLoras, (newLoras) => {
+   selectedLoras.value = newLoras
+ }, { deep: true })
+
+ watch(selectedLoras, (newLoras) => {
+   loraSelectedLoras.value = newLoras
+ }, { deep: true })
 
  const localSize = computed({
    get: () => props.size,
@@ -398,183 +329,18 @@ const handleGenerate = () => {
   emit('generate', options)
 }
 
-// LoRA相关方法
-const fetchLoras = async () => {
-  try {
-    loading.value = true
-    // 添加模型参数来过滤LoRA
-    const response = await fetch(`${API_BASE}/api/loras?model=${localModel.value}`)
-    if (response.ok) {
-      const data = await response.json()
-      availableLoras.value = data.loras?.loras || []
-      loraConfigSource.value = data.config_source || 'unknown'
-      loraLastUpdated.value = data.timestamp || ''
-      console.log('📋 获取到LoRA列表:', availableLoras.value)
-      console.log('🎯 当前模型:', data.model, '模型类型:', data.model_type)
-      console.log('📊 LoRA配置来源:', loraConfigSource.value)
-    } else {
-      console.error('❌ 获取LoRA列表失败:', response.status)
-      message.error('获取LoRA列表失败')
+// 处理LoRA下拉菜单显示状态变化
+// 处理LoRA下拉菜单显示状态变化
+const handleLoraDropdownVisibleChange = (visible) => {
+  if (visible) {
+    if (availableLoras.value.length === 0) {
+      fetchLoras()
     }
-  } catch (error) {
-    console.error('❌ 获取LoRA列表出错:', error)
-    message.error('获取LoRA列表出错')
-  } finally {
-    loading.value = false
+    if (loraCategories.value.length === 0) {
+      fetchLoraCategories()
+    }
   }
 }
-
- const refreshLoras = () => {
-   fetchLoras()
- }
-
- const isLoraSelected = (loraName) => {
-   return selectedLoras.value.some(lora => lora.name === loraName)
- }
-
- const toggleLora = (lora) => {
-   if (isLoraSelected(lora.name)) {
-     removeLoraByName(lora.name)
-   } else {
-     addLora(lora)
-   }
- }
-
- const handleLoraToggle = (lora, checked) => {
-   if (checked) {
-     addLora(lora)
-   } else {
-     removeLoraByName(lora.name)
-   }
- }
-
- const addLora = (lora) => {
-   if (selectedLoras.value.length >= 4) {
-     message.warning('最多只能选择4个LoRA模型')
-     return
-   }
-   
-   // 检查是否已经选择了这个LoRA
-   if (isLoraSelected(lora.name)) {
-     console.log('⚠️ LoRA已经存在:', lora.name)
-     return
-   }
-   
-   // 检查LoRA兼容性
-   if (!isLoraCompatible(lora.name)) {
-     message.warning(`LoRA "${lora.name}" 与当前模型不兼容，已跳过`)
-     return
-   }
-   
-   const newLora = {
-     name: lora.name,
-     strength_model: 1.0,
-     strength_clip: 1.0,
-     trigger_word: '',
-     enabled: true
-   }
-   
-   selectedLoras.value = [...selectedLoras.value, newLora]
-   console.log('✅ 添加LoRA:', newLora)
-   console.log('📋 当前已选择的LoRA数量:', selectedLoras.value.length)
- }
-
- // 检查LoRA兼容性
- const isLoraCompatible = (loraName) => {
-   const loraNameLower = loraName.toLowerCase()
-   
-   if (localModel.value.includes('flux')) {
-     // Flux模型：排除Qwen相关的LoRA
-     return !['qwen', '千问', 'qwen2'].some(keyword => loraNameLower.includes(keyword))
-   } else if (localModel.value.includes('qwen')) {
-     // Qwen模型：排除明确为Flux的LoRA
-     return !['flux', 'kontext', 'sdxl'].some(keyword => loraNameLower.includes(keyword))
-   }
-   
-   return true
- }
-
- const removeLora = (index) => {
-   selectedLoras.value = selectedLoras.value.filter((_, i) => i !== index)
- }
-
- const removeLoraByName = (loraName) => {
-   selectedLoras.value = selectedLoras.value.filter(lora => lora.name !== loraName)
- }
-
-   // 获取LoRA描述
-  const getLoraDescription = (lora) => {
-    // 如果传入的是LoRA对象，优先使用其description字段
-    if (typeof lora === 'object' && lora.description) {
-      return lora.description
-    }
-    
-    // 如果传入的是字符串（向后兼容），使用原来的逻辑
-    const loraName = typeof lora === 'string' ? lora : lora.name
-    const name = loraName.toLowerCase()
-    
-    // 根据LoRA名称关键词判断特点
-    if (name.includes('字体') || name.includes('font')) {
-      return '字体艺术风格，适合文字设计'
-    } else if (name.includes('人物') || name.includes('portrait')) {
-      return '人物肖像风格，适合人像生成'
-    } else if (name.includes('风景') || name.includes('landscape')) {
-      return '风景画风格，适合自然场景'
-    } else if (name.includes('动漫') || name.includes('anime')) {
-      return '动漫风格，适合二次元创作'
-    } else if (name.includes('写实') || name.includes('realistic')) {
-      return '写实风格，适合真实感图像'
-    } else if (name.includes('艺术') || name.includes('art')) {
-      return '艺术风格，适合创意表达'
-    } else if (name.includes('复古') || name.includes('vintage')) {
-      return '复古风格，适合怀旧主题'
-    } else if (name.includes('现代') || name.includes('modern')) {
-      return '现代风格，适合时尚设计'
-    } else if (name.includes('科幻') || name.includes('sci-fi')) {
-      return '科幻风格，适合未来主题'
-    } else if (name.includes('童话') || name.includes('fairy')) {
-      return '童话风格，适合梦幻场景'
-    } else {
-      return 'AI风格模型，增强生成效果'
-    }
-  }
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-  }
-
- // 控制LoRA面板的展开/收起
- const toggleLoraPanel = () => {
-   loraPanelExpanded.value = !loraPanelExpanded.value
-   
-   // 当展开面板时，如果还没有加载过LoRA列表，则加载
-   if (loraPanelExpanded.value && availableLoras.value.length === 0) {
-     fetchLoras()
-   }
- }
-
- const handleLoraDropdownVisibleChange = (visible) => {
-   if (visible && availableLoras.value.length === 0) {
-     fetchLoras()
-   }
- }
-
- // 监听模型变化，自动刷新LoRA列表
- watch(localModel, (newModel, oldModel) => {
-   if (newModel !== oldModel) {
-     console.log('🔄 模型已切换:', oldModel, '->', newModel)
-           // 清空已选择的LoRA，因为可能不兼容
-      if (selectedLoras.value.length > 0) {
-        selectedLoras.value = []
-      }
-     // 刷新LoRA列表
-     fetchLoras()
-   }
- })
  </script>
 
  <style scoped>
@@ -583,11 +349,12 @@ const fetchLoras = async () => {
    bottom: 0px;
    left: 50%;
    transform: translateX(-50%);
-   z-index: 1000;
+   z-index: 9999;
    max-width: 1000px;
    width: 90%;
    border-radius: 16px;
    overflow: hidden;
+   pointer-events: auto;
  }
 
  .control-card {
@@ -815,17 +582,45 @@ const fetchLoras = async () => {
     align-items: center;
   }
 
-   .selected-lora-tag {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 11px;
-    color: #fff;
-  }
+  .selected-lora-tag {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   background: #2a2a2a;
+   border: 1px solid #444;
+   border-radius: 4px;
+   padding: 2px 6px;
+   font-size: 11px;
+   color: #fff;
+ }
+
+ .lora-tag-preview {
+   width: 20px;
+   height: 20px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   background: rgba(255, 255, 255, 0.1);
+   border-radius: 4px;
+   flex-shrink: 0;
+ }
+
+ .lora-tag-image {
+   width: 100%;
+   height: 100%;
+   border-radius: 4px;
+   overflow: hidden;
+ }
+
+ .lora-tag-image img {
+   width: 100%;
+   height: 100%;
+   object-fit: cover;
+ }
+
+ .lora-tag-icon {
+   font-size: 12px;
+ }
 
  .lora-tag-name {
    font-weight: 500;
@@ -895,176 +690,11 @@ const fetchLoras = async () => {
     }
   }
 
- /* LoRA下拉菜单样式 */
- 
-
- .lora-dropdown-trigger {
-   display: flex;
-   justify-content: space-between;
-   align-items: center;
-   padding: 6px 10px;
-   background: #2a2a2a;
-   border: 0px solid #444;
-   border-radius: 6px;
-   cursor: pointer;
-   transition: all 0.2s;
-   min-height: 36px;
- }
-
- .lora-dropdown-trigger:hover {
-   background: #3a3a3a;
-   border-color: #555;
- }
-
- .lora-trigger-content {
-   display: flex;
-   align-items: center;
-   flex: 1;
-   gap: 6px;
- }
-
- .lora-trigger-icon {
-   font-size: 14px;
-   flex-shrink: 0;
- }
-
- .lora-trigger-info {
-   flex: 1;
-   min-width: 0;
- }
-
- .lora-trigger-name {
-   font-size: 12px;
-   font-weight: 600;
-   color: #fff;
-   white-space: nowrap;
-   overflow: hidden;
-   text-overflow: ellipsis;
- }
-
- .lora-trigger-count {
-   flex-shrink: 0;
- }
-
- .lora-trigger-arrow {
-   color: #ccc;
-   margin-left: 8px;
-   transition: transform 0.2s;
- }
-
- .lora-dropdown-trigger:hover .lora-trigger-arrow {
-   color: #fff;
- }
-
- /* LoRA下拉菜单样式 */
- .lora-dropdown-menu {
-   background: #2a2a2a;
-   border: 1px solid #444;
-   border-radius: 8px;
-   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-   min-width: 320px;
-   max-width: 400px;
- }
-
- .lora-dropdown-header {
-   display: flex;
-   justify-content: space-between;
-   align-items: center;
-   padding: 12px 16px;
-   border-bottom: 1px solid #444;
- }
-
- .lora-dropdown-title {
-   font-size: 14px;
-   font-weight: 600;
-   color: #fff;
- }
-
- .lora-dropdown-list {
-   max-height: 300px;
-   overflow-y: auto;
- }
-
- .lora-dropdown-item {
-   display: flex;
-   align-items: flex-start;
-   padding: 12px 16px;
-   cursor: pointer;
-   transition: all 0.2s;
-   border-bottom: 1px solid #333;
- }
-
- .lora-dropdown-item:hover {
-   background: #3a3a3a;
- }
-
- .lora-dropdown-item:last-child {
-   border-bottom: none;
- }
-
- .lora-dropdown-item.lora-dropdown-selected {
-   background: #1890ff;
-   color: #fff;
- }
-
- .lora-dropdown-item-icon {
-   flex-shrink: 0;
-   margin-right: 12px;
- }
-
- .lora-icon {
-   font-size: 24px;
- }
-
- .lora-dropdown-item-info {
-   flex: 1;
-   min-width: 0;
- }
-
-   .lora-dropdown-item-name {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 4px;
-    color: #fff;
-  }
-
-  .lora-dropdown-item-desc {
-    font-size: 11px;
-    color: #ccc;
-    line-height: 1.3;
-    margin-top: 2px;
-  }
-
-  .lora-dropdown-item.lora-dropdown-selected .lora-dropdown-item-desc {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
- .lora-dropdown-item-status {
-   display: flex;
-   align-items: center;
-   margin-left: 12px;
-   flex-shrink: 0;
- }
-
- .lora-dropdown-empty {
-   padding: 20px;
-   text-align: center;
- }
-
- /* 响应式设计 */
- @media (max-width: 768px) {
-   .lora-dropdown-menu {
-     min-width: 280px;
-   }
-   
-   .lora-dropdown-item {
-     flex-direction: column;
-     gap: 8px;
-   }
-   
-   .lora-dropdown-item-status {
-     align-items: flex-start;
-     margin-left: 0;
-   }
- }
+/* LoRA下拉菜单区域样式 */
+.lora-dropdown-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
  </style>

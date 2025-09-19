@@ -77,19 +77,15 @@ class LoraManager:
                             print(f"  {i}: '{item}'")
                         # 按配置的排序重新排列
                         def sort_key(lora):
-                            # 尝试匹配code字段和name字段
+                            # 使用code字段进行匹配
                             lora_code = lora.get("code")
-                            lora_name = lora.get("name", "")
                             
-                            # 首先尝试匹配code字段
                             if lora_code and lora_code in model_lora_order:
                                 order = model_lora_order.index(lora_code)
                                 print(f"✅ 匹配code字段: {lora_code} -> 排序: {order}")
                                 return order
                             
-                           
-                            
-                            print(f"❌ 未找到匹配: code={lora_code}, name={lora_name}")
+                            print(f"❌ 未找到匹配: code={lora_code}")
                             return 999  # 未配置的排在最后
                         filtered_loras.sort(key=sort_key)
                     

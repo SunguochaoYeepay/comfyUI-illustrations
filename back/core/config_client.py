@@ -225,6 +225,27 @@ class ConfigClient:
             logger.error(f"获取LoRA配置失败: {e}")
             return self._get_config_with_fallback("loras")
     
+    async def get_lora_categories(self) -> List[str]:
+        """获取LoRA分类列表"""
+        try:
+            # 尝试从admin后端获取LoRA分类
+            backend_data = await self._make_request("/api/admin/config-sync/lora-categories")
+            if backend_data and "data" in backend_data:
+                return backend_data["data"]
+            else:
+                raise Exception("admin后端返回的分类数据格式不正确")
+        except Exception as e:
+            logger.error(f"获取LoRA分类失败: {e}")
+            # 返回默认分类
+            return [
+                "LOGO设计",
+                "字体设计", 
+                "ICON设计",
+                "Banner设计",
+                "海报设计",
+                "角色设计"
+            ]
+    
     async def get_workflows_config(self) -> Dict[str, Any]:
         """获取工作流配置"""
         try:

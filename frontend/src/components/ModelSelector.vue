@@ -3,8 +3,10 @@
     <!-- 模型选择下拉菜单 -->
           <a-dropdown 
         :trigger="['click']" 
-        placement="bottomLeft"
+        placement="topLeft"
         @openChange="handleDropdownVisibleChange"
+        :getPopupContainer="getPopupContainer"
+        :overlayStyle="{ zIndex: 10001 }"
       >
       <div class="model-dropdown-trigger">
         <div class="model-trigger-content">
@@ -152,6 +154,12 @@ const handleDropdownVisibleChange = (visible) => {
   if (visible && availableModels.value.length === 0 && !modelManager.initialized.value) {
     fetchModelsWrapper()
   }
+}
+
+// 安全的获取弹出容器方法 - 使用body避免被父容器截断
+const getPopupContainer = () => {
+  // 直接使用body作为容器，避免被control-section的overflow限制
+  return document?.body || document?.documentElement || document
 }
 
 // 组件挂载时不自动加载模型列表，避免与ImageGenerator重复调用

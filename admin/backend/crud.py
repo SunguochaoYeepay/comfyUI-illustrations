@@ -240,7 +240,8 @@ def get_loras(db: Session, skip: int = 0, limit: int = 100, base_model: str = No
         query = query.filter(models.Lora.name.contains(name))
     if category:
         query = query.filter(models.Lora.category == category)
-    return query.offset(skip).limit(limit).all()
+    # 按创建时间倒序排序
+    return query.order_by(models.Lora.created_at.desc()).offset(skip).limit(limit).all()
 
 def create_lora(db: Session, lora_data: lora.LoraCreate):
     # 使用model_dump()替代dict()以兼容新版本Pydantic

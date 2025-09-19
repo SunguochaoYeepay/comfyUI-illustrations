@@ -59,19 +59,15 @@ class BackupManager:
             # Docker环境中的admin服务路径
             self.admin_service_paths = {
                 "database": Path("/app/data/admin.db"),
-                "uploads": Path("/app/back/uploads"),  # 修复：使用正确的上传目录
-                "outputs": Path("/app/back/outputs"),  # 修复：使用正确的输出目录
                 "config": Path("/app/config"),
-                "lora_previews": Path("/app/back/uploads/lora_previews")  # 新增：LoRA预览图片目录
+                "lora_previews": Path("/app/uploads/lora_previews")  # LoRA预览图片目录
             }
         else:
             # 本地开发环境中的admin服务路径
             self.admin_service_paths = {
                 "database": self.project_root / "admin" / "backend" / "admin.db",
-                "uploads": self.project_root / "back" / "uploads",  # 修复：使用正确的上传目录
-                "outputs": self.project_root / "back" / "outputs",  # 修复：使用正确的输出目录
                 "config": self.project_root / "admin" / "backend" / "config.py",
-                "lora_previews": self.project_root / "back" / "uploads" / "lora_previews"  # 新增：LoRA预览图片目录
+                "lora_previews": self.project_root / "admin" / "backend" / "uploads" / "lora_previews"  # LoRA预览图片目录
             }
         
         # 配置系统路径

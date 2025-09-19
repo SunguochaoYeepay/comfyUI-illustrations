@@ -32,7 +32,7 @@ services:
       - E:/AI-Image/YeePay/back/models:/app/yeepay_models:ro
       # 主服务数据挂载 - 支持备份恢复
       - E:/AI-Image/YeePay/back:/app/back
-      - E:/AI-Image/YeePay/uploads:/app/uploads
+      - E:/AI-Image/YeePay/admin/backend/uploads:/app/uploads
       - E:/AI-Image/YeePay/outputs:/app/outputs
       - E:/AI-Image/YeePay/thumbnails:/app/thumbnails
     restart: unless-stopped

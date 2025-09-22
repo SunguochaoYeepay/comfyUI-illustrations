@@ -35,7 +35,7 @@ class TranslationClient:
         """
         self.ollama_url = ollama_url or OLLAMA_URL or "http://localhost:11434"
         self.model_name = "qwen2.5:3b-instruct"  # 使用已安装的qwen2.5:3b-instruct模型
-        self.timeout = 30  # 30秒超时
+        self.timeout = 120  # 120秒超时，给长文本翻译更多时间
         
         logger.info(f"🔧 翻译客户端初始化完成")
         logger.info(f"   Ollama URL: {self.ollama_url}")
@@ -89,6 +89,53 @@ class TranslationClient:
             logger.error(f"   异常类型: {type(e).__name__}")
             return None
     
+    async def translate_to_chinese(self, english_text: str) -> Optional[str]:
+        """将英文文本翻译成中文
+        
+        Args:
+            english_text: 英文文本
+            
+        Returns:
+            翻译后的中文文本，如果失败返回None
+        """
+        start_time = datetime.now()
+        logger.info(f"🔄 开始英文到中文翻译任务")
+        logger.info(f"   原文: {english_text}")
+        logger.info(f"   开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        try:
+            # 构建翻译提示词
+            prompt = self._build_english_to_chinese_prompt(english_text)
+            logger.debug(f"   提示词: {prompt}")
+            
+            # 调用Ollama API
+            response = await self._call_ollama(prompt)
+            
+            if response:
+                # 提取翻译结果
+                chinese_text = self._extract_translation(response)
+                
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                
+                logger.info(f"✅ 英文到中文翻译成功")
+                logger.info(f"   译文: {chinese_text}")
+                logger.info(f"   耗时: {duration:.2f}秒")
+                logger.info(f"   结束时间: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                return chinese_text
+            else:
+                logger.error(f"❌ 英文到中文翻译失败: Ollama返回空响应")
+                return None
+            
+        except Exception as e:
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            logger.error(f"❌ 英文到中文翻译异常: {str(e)}")
+            logger.error(f"   耗时: {duration:.2f}秒")
+            logger.error(f"   异常类型: {type(e).__name__}")
+            return None
+    
     def _build_translation_prompt(self, chinese_text: str) -> str:
         """构建翻译提示词
         
@@ -115,6 +162,33 @@ class TranslationClient:
         logger.debug(f"📝 构建翻译提示词完成，长度: {len(prompt)}字符")
         return prompt
     
+    def _build_english_to_chinese_prompt(self, english_text: str) -> str:
+        """构建英文到中文翻译提示词
+        
+        Args:
+            english_text: 英文文本
+            
+        Returns:
+            翻译提示词
+        """
+        prompt = f"""你是一个专业的英中翻译专家，请将以下英文文本翻译成中文。
+
+翻译要求：
+1. 保持原意完全准确，不添加或删除任何信息
+2. 使用自然流畅的中文表达，符合中文语法规范
+3. 如果是图像描述，请保持艺术性和描述性，使用专业的中文艺术术语
+4. 如果是技术术语，请使用标准的中文表达
+5. 只返回中文翻译结果，不要添加任何解释、注释或额外文本
+6. 保持原文的语气和风格
+7. 使用简体中文
+
+英文文本：{english_text}
+
+中文翻译："""
+        
+        logger.debug(f"📝 构建英文到中文翻译提示词完成，长度: {len(prompt)}字符")
+        return prompt
+    
     async def _call_ollama(self, prompt: str) -> Optional[str]:
         """调用Ollama API
         
@@ -136,7 +210,7 @@ class TranslationClient:
                 "options": {
                     "temperature": 0.1,  # 更低的温度，保证翻译准确性
                     "top_p": 0.8,
-                    "max_tokens": 1000,  # 增加token限制
+                    "max_tokens": 2000,  # 增加token限制，支持长文本翻译
                     "repeat_penalty": 1.1  # 避免重复
                 }
             }

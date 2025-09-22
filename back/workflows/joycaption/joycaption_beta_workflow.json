@@ -1,0 +1,62 @@
+{
+  "11": {
+    "inputs": {
+      "memory_mode": "Default",
+      "caption_type": "Descriptive",
+      "caption_length": "very long",
+      "extra_option1": "Do NOT mention the image's resolution.",
+      "extra_option2": "",
+      "extra_option3": "",
+      "extra_option4": "",
+      "extra_option5": "",
+      "person_name": "",
+      "max_new_tokens": 2048,
+      "temperature": 0.6,
+      "top_p": 0.9,
+      "top_k": 0,
+      "image": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "JJC_JoyCaption",
+    "_meta": {
+      "title": "JoyCaption"
+    }
+  },
+  "14": {
+    "inputs": {
+      "image": "example_image.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "15": {
+    "inputs": {
+      "text_0": "This is a screenshot of a computer interface displaying a text editor or code editor window, likely part of a software development environment. The interface has a dark gray background with white and blue text. The top left corner shows a tab labeled \"Untitled 2022-06-01\" with a drop-down menu and various icons, including a \"New File\" option. The top right corner features a toolbar with icons for \"Save,\" \"Undo,\" \"Redo,\" and others.\n\nThe main content area is filled with a long list of code snippets or text lines, each starting with a number followed by a brief description or command. The text is divided into sections by horizontal gray lines, and most lines are written in white text, with some lines highlighted in blue. The code snippets include terms like \"Running Game,\" \"Game Logic,\" \"Game State,\" and \"Game Loop,\" indicating a game development context. The code uses a mix of camel case and underscore notation, typical in programming languages.\n\nOn the right side of the interface, there is a vertical column with a \"In the code\" section, displaying a line of text \"game_state = 0\" in blue. The bottom left corner has a \"Code Editor\" label, and the bottom right corner has a \"To Do\" section with a blue text input field. The overall style is modern and functional, with a focus on readability and efficiency.",
+      "text": [
+        "11",
+        1
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "展示文本"
+    }
+  },
+  "20": {
+    "inputs": {
+      "text_0": "Write a very long detailed description for this image. Do NOT mention the image's resolution.",
+      "text": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "展示文本"
+    }
+  }
+}

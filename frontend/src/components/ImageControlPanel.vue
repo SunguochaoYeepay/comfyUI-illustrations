@@ -12,6 +12,7 @@
                v-model:file-list="localReferenceImages"
                :show-upload-button="shouldShowUploadButton"
                @preview="$emit('preview', $event)"
+               @upload-complete="$emit('upload-complete', $event)"
              />
            </div>
 
@@ -154,7 +155,8 @@ const emit = defineEmits([
   'update:size',
   'update:count',
   'generate',
-  'preview'
+  'preview',
+  'upload-complete'
 ])
 
 // 计算属性：根据图片数量和模型类型判断是否为融合模式

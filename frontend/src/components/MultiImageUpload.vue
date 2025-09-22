@@ -11,9 +11,10 @@
       @remove="handleRemove"
       :max-count="3"
       multiple
+      :custom-request="customRequest"
       :style="{ '--ant-upload-border': 'none !important' }"
     >
-      <div v-if="showUploadButton && localFileList.length < 3">
+      <div v-if="showUploadButton && localFileList.length < 3" @click.stop="handleUploadClick">
         <PlusOutlined />
         <div class="upload-text">上传图片</div>
       </div>
@@ -43,7 +44,8 @@ const props = defineProps({
 // Emits
 const emit = defineEmits([
   'update:fileList',
-  'preview'
+  'preview',
+  'upload-complete'
 ])
 
 // 双向绑定的计算属性
@@ -85,6 +87,9 @@ const beforeUpload = (file) => {
   const newFileList = [...localFileList.value, fileObj]
   localFileList.value = newFileList
   
+  // 触发上传完成事件，用于显示智能参考弹窗
+  emit('upload-complete', fileObj)
+  
   return false // 阻止自动上传，手动处理
 }
 
@@ -101,6 +106,35 @@ const handleRemove = (file) => {
     newFileList.splice(index, 1)
     localFileList.value = newFileList
   }
+}
+
+// 自定义上传请求（阻止自动上传）
+const customRequest = (options) => {
+  console.log('🔍 自定义上传请求被调用', options)
+  // 不执行任何上传操作，因为我们已经在 beforeUpload 中处理了
+  options.onSuccess({}, options.file)
+}
+
+// 处理上传按钮点击
+const handleUploadClick = (event) => {
+  console.log('🔍 上传按钮被点击了', event)
+  event.preventDefault()
+  event.stopPropagation()
+  
+  // 触发文件选择
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/jpeg,image/png'
+  input.multiple = true
+  input.onchange = (e) => {
+    const files = Array.from(e.target.files)
+    console.log('🔍 选择了文件:', files.length, '个')
+    files.forEach(file => {
+      console.log('🔍 处理文件:', file.name)
+      beforeUpload(file)
+    })
+  }
+  input.click()
 }
 </script>
 
@@ -144,6 +178,19 @@ const handleRemove = (file) => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.multi-upload :deep(.ant-upload-select .ant-upload) {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: auto !important;
 }
 
 .multi-upload :deep(.ant-upload-select:hover) {
@@ -181,6 +228,7 @@ const handleRemove = (file) => {
   flex-shrink: 0 !important;
   width: 80px !important;
   height: 80px !important;
+  position: relative !important;
 }
 
 .multi-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item-thumbnail img) {
@@ -189,12 +237,41 @@ const handleRemove = (file) => {
   object-fit: cover;
 }
 
+/* 禁用 Ant Design 默认的悬停遮罩层 */
+.multi-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item::before) {
+  display: none !important;
+}
+
 .multi-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item-actions) {
   background: rgba(0, 0, 0, 0.5);
+  z-index: 10 !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s !important;
+  border-radius: 8px !important;
+}
+
+.multi-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item:hover .ant-upload-list-item-actions) {
+  opacity: 1 !important;
 }
 
 .multi-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item-actions .anticon) {
-  color: #fff;
+  color: #fff !important;
+  font-size: 16px !important;
+  margin: 0 8px !important;
+  cursor: pointer !important;
+  transition: color 0.3s !important;
+}
+
+.multi-upload :deep(.ant-upload-list-picture-card .ant-upload-list-item-actions .anticon:hover) {
+  color: #667eea !important;
 }
 
 /* 上传信息样式 */

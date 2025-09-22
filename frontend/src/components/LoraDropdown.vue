@@ -332,7 +332,7 @@ const getPlacement = () => {
   min-width: 320px;
   max-width: 450px;
   position: relative;
-  z-index: 10000;
+  z-index: 2000;
 }
 
 .lora-dropdown-header {

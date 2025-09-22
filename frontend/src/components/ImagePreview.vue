@@ -48,6 +48,22 @@
                 @load="handleImageLoad"
                 @error="handleImageError"
               />
+              
+              <!-- 图片反推按钮 -->
+              <div class="image-reverse-overlay">
+                <a-button 
+                  type="primary" 
+                  shape="circle" 
+                  size="large"
+                  class="reverse-btn"
+                  @click.stop="toggleReversePanel"
+                  title="图片内容反推"
+                >
+                  <template #icon>
+                    <SearchOutlined />
+                  </template>
+                </a-button>
+              </div>
             </template>
           </div>
           
@@ -73,6 +89,11 @@
         <div class="info-panel">
           <div class="info-header">
             <h3>生成信息</h3>
+          </div>
+          
+          <!-- 图片反推面板 -->
+          <div v-if="showReversePanel && !isVideoTask" class="reverse-panel">
+            <ImageReverse :image-url="imageData.url" />
           </div>
           
                      <!-- 图片操作按钮 -->
@@ -267,8 +288,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons-vue'
+import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined, HeartOutlined, HeartFilled, SearchOutlined } from '@ant-design/icons-vue'
 import VideoGenerator from './VideoGenerator.vue'
+import ImageReverse from './ImageReverse.vue'
 
 // Props
 const props = defineProps({
@@ -312,6 +334,7 @@ const isVideoTask = computed(() => {
 const referenceImageError = ref(false)
 const videoGeneratorVisible = ref(false)
 const imageLoading = ref(true)
+const showReversePanel = ref(false)
 
 // 处理参考图URL，支持多图融合的情况
 const processedReferenceImage = computed(() => {
@@ -372,6 +395,11 @@ const showVideoGenerator = () => {
 // 关闭视频生成器
 const closeVideoGenerator = () => {
   videoGeneratorVisible.value = false
+}
+
+// 切换反推面板
+const toggleReversePanel = () => {
+  showReversePanel.value = !showReversePanel.value
 }
 
 // 处理参考图加载错误
@@ -790,6 +818,7 @@ onUnmounted(() => {
   justify-content: center;
   overflow: hidden;
   margin-bottom: 16px;
+  position: relative;
 }
 
 .preview-image-skeleton {
@@ -837,6 +866,37 @@ onUnmounted(() => {
   max-height: 100%;
   object-fit: contain;
   border-radius: 8px;
+}
+
+/* 图片反推按钮样式 */
+.image-reverse-overlay {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+.reverse-btn {
+  background: rgba(102, 126, 234, 0.9) !important;
+  border-color: rgba(102, 126, 234, 0.9) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s ease;
+}
+
+.reverse-btn:hover {
+  background: rgba(102, 126, 234, 1) !important;
+  border-color: rgba(102, 126, 234, 1) !important;
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+/* 反推面板样式 */
+.reverse-panel {
+  margin-bottom: 16px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .image-actions {

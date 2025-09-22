@@ -42,8 +42,18 @@
         :is-generating="isGenerating"
         @generate="generateImageWrapper"
         @preview="handlePreview"
+        @upload-complete="handleUploadComplete"
       />
     </div>
+    
+    <!-- 图片预览模态框 -->
+    <ImagePreviewModal
+      :visible="previewVisible"
+      :image-url="previewImage"
+      title="图片预览"
+      @update:visible="previewVisible = $event"
+      @use-prompt="handleUsePrompt"
+    />
   </div>
 </template>
 
@@ -52,6 +62,7 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import ImageGallery from './ImageGallery.vue'
 import ImageControlPanel from './ImageControlPanel.vue'
+import ImagePreviewModal from './ImagePreviewModal.vue'
 import cacheManager from '../utils/cacheManager.js'
 import modelManager from '../utils/modelManager.js'
 // 导入提取的工具函数和服务
@@ -799,6 +810,75 @@ const handlePreview = (file) => {
   
   previewImage.value = imageUrl
   previewVisible.value = true
+}
+
+// 处理图片上传完成事件
+const handleUploadComplete = (file) => {
+  console.log('📸 参考图上传完成，准备显示智能参考弹窗:', file)
+  
+  // 获取图片URL
+  let imageUrl = file.url || file.preview
+  
+  // 如果是blob URL，需要上传到服务器获取真实URL
+  if (imageUrl.startsWith('blob:')) {
+    // 上传图片到服务器
+    uploadReferenceImage(file.originFileObj).then(uploadedUrl => {
+      if (uploadedUrl) {
+        // 显示智能参考弹窗
+        showSmartReferenceModal(uploadedUrl)
+      }
+    }).catch(error => {
+      console.error('上传参考图失败:', error)
+      message.error('上传参考图失败，无法进行智能分析')
+    })
+  } else {
+    // 直接显示智能参考弹窗
+    showSmartReferenceModal(imageUrl)
+  }
+}
+
+// 上传参考图到服务器
+const uploadReferenceImage = async (file) => {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch(`${API_BASE}/api/image/upload`, {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!response.ok) {
+      throw new Error(`上传失败: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    return result.url
+  } catch (error) {
+    console.error('上传参考图失败:', error)
+    throw error
+  }
+}
+
+
+// 显示智能参考弹窗
+const showSmartReferenceModal = (imageUrl) => {
+  console.log('🔍 显示智能参考弹窗，图片URL:', imageUrl)
+  
+  // 设置预览图片和显示弹窗
+  previewImage.value = imageUrl
+  previewVisible.value = true
+}
+
+// 处理使用提示词
+const handleUsePrompt = (promptText) => {
+  console.log('📝 使用反推提示词:', promptText)
+  
+  // 将提示词回填到生图界面的提示词输入框
+  prompt.value = promptText
+  
+  // 显示成功消息
+  message.success('提示词已应用到生图界面')
 }
 
 // 处理放大请求

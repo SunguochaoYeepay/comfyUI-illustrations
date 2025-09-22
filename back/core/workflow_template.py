@@ -15,6 +15,7 @@ from core.model_manager import get_model_config, ModelType
 from core.workflows import FluxWorkflow, QwenWorkflow
 from core.workflows import WanWorkflow
 from core.workflows.seedream4_workflow import Seedream4Workflow
+from core.workflows.joycaption_workflow import JoyCaptionWorkflow
 
 
 class WorkflowTemplate:
@@ -89,6 +90,9 @@ class WorkflowTemplate:
         elif model_type == "seedream4":
             model_config_obj = self._convert_dict_to_model_config(model_config)
             workflow_creator = Seedream4Workflow(model_config_obj)
+        elif model_type == "joycaption":
+            model_config_obj = self._convert_dict_to_model_config(model_config)
+            workflow_creator = JoyCaptionWorkflow(model_config_obj)
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")
         
@@ -175,7 +179,8 @@ class WorkflowTemplate:
             "qwen": ModelType.QWEN,
             "flux": ModelType.FLUX,
             "wan": ModelType.WAN,
-            "gemini": ModelType.GEMINI
+            "gemini": ModelType.GEMINI,
+            "joycaption": ModelType.JOYCAPTION
         }
         
         model_type = type_mapping.get(model_dict.get("model_type", "unknown"), ModelType.FLUX)

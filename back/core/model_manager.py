@@ -23,6 +23,7 @@ class ModelType(Enum):
     WAN = "wan" # Added WAN model type
     GEMINI = "gemini" # Added GEMINI model type
     SEEDREAM4 = "seedream4" # Added SEEDREAM4 model type
+    JOYCAPTION = "joycaption" # Added JOYCAPTION model type
 
 
 class ModelConfig:
@@ -44,8 +45,8 @@ class ModelConfig:
     def _check_availability(self) -> bool:
         """检查模型文件是否可用"""
         try:
-            # API模型（如Gemini）不需要本地文件，直接返回可用
-            if self.model_type == ModelType.GEMINI:
+            # API模型（如Gemini、JoyCaption）不需要本地文件，直接返回可用
+            if self.model_type in [ModelType.GEMINI, ModelType.JOYCAPTION]:
                 print(f"✅ API模型 {self.name} 可用")
                 return True
             

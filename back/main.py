@@ -222,6 +222,45 @@ async def get_lora_categories():
         }
 
 
+@app.post("/api/image/upload")
+async def upload_image(file: UploadFile = File(...)):
+    """上传图片文件"""
+    try:
+        from pathlib import Path
+        import uuid
+        
+        # 验证文件类型
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="只支持图片文件")
+        
+        # 生成唯一文件名
+        file_extension = Path(file.filename).suffix if file.filename else '.png'
+        filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = UPLOAD_DIR / filename
+        
+        # 保存文件
+        content = await file.read()
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="文件为空")
+        
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        
+        # 返回文件URL
+        file_url = f"/api/image/upload/{filename}"
+        print(f"✅ 图片上传成功: {filename}")
+        
+        return {
+            "success": True,
+            "filename": filename,
+            "url": file_url,
+            "size": len(content)
+        }
+        
+    except Exception as e:
+        print(f"❌ 图片上传失败: {e}")
+        raise HTTPException(status_code=500, detail=f"图片上传失败: {str(e)}")
+
 @app.post("/api/loras/upload")
 async def upload_lora(file: UploadFile = File(...)):
     """上传LoRA文件"""
@@ -1447,6 +1486,54 @@ async def translate_health_check():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+
+@app.post("/api/image/reverse")
+async def reverse_image_content(request: Dict[str, Any]):
+    """图片内容反推API - 使用JoyCaption工作流"""
+    try:
+        image_url = request.get("image_url")
+        if not image_url:
+            raise HTTPException(status_code=400, detail="缺少图片URL参数")
+        
+        print(f"🔍 开始图片反推，图片URL: {image_url}")
+        
+        # 获取反推参数
+        caption_type = request.get("caption_type", "Descriptive")
+        caption_length = request.get("caption_length", "very long")
+        max_new_tokens = request.get("max_new_tokens", 2048)
+        temperature = request.get("temperature", 0.6)
+        top_p = request.get("top_p", 0.9)
+        
+        # 使用图片反推管理器
+        from core.reverse_manager import ReverseManager
+        from config.settings import OUTPUT_DIR
+        
+        reverse_manager = ReverseManager(
+            comfyui_client=get_comfyui_client(),
+            output_dir=OUTPUT_DIR / "reverse",
+            db_manager=get_db_manager()
+        )
+        
+        # 执行反推任务
+        result = await reverse_manager.reverse_image(
+            image_path=image_url,
+            caption_type=caption_type,
+            caption_length=caption_length,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p
+        )
+        
+        if result["success"]:
+            print(f"✅ 图片反推完成，结果: {result['prompt'][:50]}...")
+            return result
+        else:
+            print(f"❌ 图片反推失败: {result.get('error', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=result.get('error', '图片反推失败'))
+        
+    except Exception as e:
+        print(f"❌ 图片反推失败: {e}")
+        raise HTTPException(status_code=500, detail=f"图片反推失败: {str(e)}")
 
 @app.get("/api/health")
 async def health_check():

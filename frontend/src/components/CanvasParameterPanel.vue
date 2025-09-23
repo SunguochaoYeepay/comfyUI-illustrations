@@ -99,20 +99,23 @@ export default {
 /* 提示词行布局 */
 .prompt-row {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   height: 36px;
+  max-width: 800px; /* 限制最大宽度 */
+  margin: 0 auto; /* 居中显示 */
 }
 
 .prompt-input {
   flex: 1;
+  min-width: 400px; /* 设置最小宽度 */
   height: 36px;
-  padding: 0 12px;
+  padding: 0 16px; /* 增加内边距 */
   border: none;
-  border-radius: 4px;
+  border-radius: 6px; /* 稍微增加圆角 */
   background: #2a2a2a;
   color: #fff;
-  font-size: 13px;
+  font-size: 14px; /* 稍微增加字体大小 */
   font-family: inherit;
   transition: background-color 0.2s ease;
 }
@@ -124,24 +127,25 @@ export default {
 
 .prompt-input::placeholder {
   color: #888;
-  font-size: 13px;
+  font-size: 14px; /* 与输入框字体大小保持一致 */
 }
 
 .generate-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 36px;
-  padding: 0 12px;
+  padding: 0 16px; /* 增加内边距 */
   border: none;
-  border-radius: 4px;
+  border-radius: 6px; /* 与输入框保持一致 */
   background: #007bff;
   color: white;
-  font-size: 13px;
+  font-size: 14px; /* 与输入框保持一致 */
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  min-width: 120px; /* 设置按钮最小宽度 */
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -181,7 +185,7 @@ export default {
   }
   
   .prompt-row {
-    gap: 6px;
+    gap: 16px;
     height: 32px;
   }
   

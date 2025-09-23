@@ -436,6 +436,26 @@ class TaskManager:
                                             print(f"✅ 复制图片成功: {filename}")
                                         else:
                                             print(f"❌ 源文件不存在: {source_path}")
+                                            
+                                            # 尝试查找实际生成的文件（处理临时文件名问题）
+                                            print(f"🔍 尝试查找实际生成的文件...")
+                                            actual_filename = self._find_actual_output_file(filename, COMFYUI_MAIN_OUTPUT_DIR)
+                                            if actual_filename:
+                                                actual_source_path = COMFYUI_MAIN_OUTPUT_DIR / actual_filename
+                                                actual_dest_path = OUTPUT_DIR / actual_filename
+                                                
+                                                print(f"📄 找到实际文件: {actual_filename}")
+                                                print(f"   源路径: {actual_source_path}")
+                                                print(f"   目标路径: {actual_dest_path}")
+                                                
+                                                if actual_source_path.exists():
+                                                    shutil.copy2(actual_source_path, actual_dest_path)
+                                                    result_paths.append(f"outputs/{actual_filename}")
+                                                    print(f"✅ 复制实际文件成功: {actual_filename}")
+                                                else:
+                                                    print(f"❌ 实际文件也不存在: {actual_source_path}")
+                                            else:
+                                                print(f"❌ 未找到对应的实际文件")
                             
                             # 处理视频文件（兼容旧的videos字段）
                             if "videos" in output:
@@ -631,3 +651,146 @@ class TaskManager:
             任务状态信息字典，如果不存在返回None
         """
         return self.db.get_task(task_id)
+    
+    async def execute_qwen_edit_task(self, task_id: str, image_path: str, mask_path: str, prompt: str, negative_prompt: str, parameters: Dict[str, Any]):
+        """执行Qwen-Edit局部重绘任务
+        
+        Args:
+            task_id: 任务ID
+            image_path: 原始图像路径
+            mask_path: 遮罩图像路径
+            prompt: 重绘提示词
+            negative_prompt: 负面提示词
+            parameters: 生成参数
+        """
+        try:
+            print(f"🎨 开始执行Qwen-Edit局部重绘任务: {task_id}")
+            
+            # 首先创建任务记录
+            self.db.create_task(task_id, prompt, image_path, parameters)
+            
+            # 更新任务状态为处理中
+            self.db.update_task_status(task_id, "processing")
+            self.db.update_task_progress(task_id, 10)
+            
+            # 获取模型配置 - 使用现有的qwen-image模型
+            from core.model_manager import model_manager
+            model_name = "qwen-image"  # 使用现有的Qwen模型配置
+            model_config = await model_manager.get_model_config(model_name)
+            if not model_config:
+                raise Exception(f"未找到模型配置: {model_name}")
+            
+            print(f"🤖 使用模型: {model_config.display_name}")
+            
+            # 创建Qwen-Edit工作流
+            from core.workflows.qwen_edit_workflow import QwenEditWorkflow
+            qwen_edit_workflow = QwenEditWorkflow(model_config)
+            
+            # 准备工作流参数
+            workflow_params = parameters.copy()
+            workflow_params["mask_path"] = mask_path
+            
+            # 创建工作流
+            print(f"🔧 创建Qwen-Edit工作流...")
+            workflow = qwen_edit_workflow.create_workflow(
+                reference_image_path=image_path,
+                description=prompt,
+                parameters=workflow_params
+            )
+            print(f"✅ Qwen-Edit工作流创建完成")
+            
+            # 提交到ComfyUI
+            print(f"📤 提交Qwen-Edit工作流到ComfyUI...")
+            prompt_id = await self.comfyui.submit_workflow(workflow)
+            print(f"✅ 已提交Qwen-Edit工作流，prompt_id: {prompt_id}")
+            
+            # 更新进度
+            self.db.update_task_progress(task_id, 30)
+            
+            # 等待完成
+            print(f"⏳ 等待Qwen-Edit任务完成...")
+            result = await self.wait_for_completion(task_id, prompt_id)
+            
+            if result:
+                print(f"✅ Qwen-Edit局部重绘完成: {task_id}")
+                # 更新任务状态为完成，并保存结果路径
+                import json
+                result_path_json = json.dumps(result)
+                self.db.update_task_status(task_id, "completed", result_path=result_path_json)
+                self.db.update_task_progress(task_id, 100)
+            else:
+                print(f"❌ Qwen-Edit局部重绘失败: {task_id}")
+                self.db.update_task_status(task_id, "failed")
+                raise Exception("Qwen-Edit任务执行失败，没有返回结果")
+                
+        except Exception as e:
+            print(f"❌ Qwen-Edit任务执行异常: {e}")
+            self.db.update_task_status(task_id, "failed")
+            raise Exception(f"Qwen-Edit任务执行失败: {str(e)}")
+    
+    def _find_actual_output_file(self, temp_filename: str, output_dir: Path) -> Optional[str]:
+        """查找实际生成的文件（处理ComfyUI临时文件名问题）
+        
+        Args:
+            temp_filename: ComfyUI返回的临时文件名
+            output_dir: ComfyUI输出目录
+            
+        Returns:
+            实际文件名，如果未找到则返回None
+        """
+        try:
+            # 从临时文件名中提取编号
+            # 例如：ComfyUI_temp_qpvht_00008_.png -> 00008
+            import re
+            match = re.search(r'_(\d+)_\.png$', temp_filename)
+            if not match:
+                return None
+            
+            file_number = match.group(1)
+            print(f"🔍 从临时文件名提取编号: {file_number}")
+            
+            # 查找所有可能的前缀模式
+            possible_prefixes = [
+                "pl-qwen-edit",
+                "yeepay",
+                "ComfyUI",
+                "qwen-edit"
+            ]
+            
+            for prefix in possible_prefixes:
+                # 尝试不同的编号格式
+                possible_names = [
+                    f"{prefix}_{file_number}_.png",
+                    f"{prefix}_{file_number.zfill(5)}_.png",
+                    f"{prefix}_{file_number.zfill(4)}_.png",
+                    f"{prefix}_{file_number.zfill(3)}_.png",
+                    f"{prefix}_{file_number.zfill(2)}_.png",
+                    f"{prefix}_{file_number}.png",
+                    f"{prefix}_{file_number.zfill(5)}.png",
+                    f"{prefix}_{file_number.zfill(4)}.png",
+                    f"{prefix}_{file_number.zfill(3)}.png",
+                    f"{prefix}_{file_number.zfill(2)}.png"
+                ]
+                
+                for possible_name in possible_names:
+                    possible_path = output_dir / possible_name
+                    if possible_path.exists():
+                        print(f"✅ 找到匹配文件: {possible_name}")
+                        return possible_name
+            
+            # 如果没找到精确匹配，尝试查找最新的相关文件
+            print(f"🔍 未找到精确匹配，查找最新的相关文件...")
+            for prefix in possible_prefixes:
+                pattern = f"{prefix}_*.png"
+                matching_files = list(output_dir.glob(pattern))
+                if matching_files:
+                    # 按修改时间排序，返回最新的
+                    latest_file = max(matching_files, key=lambda f: f.stat().st_mtime)
+                    print(f"✅ 找到最新相关文件: {latest_file.name}")
+                    return latest_file.name
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ 查找实际文件时出错: {e}")
+            return None

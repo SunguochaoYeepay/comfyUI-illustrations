@@ -9,45 +9,60 @@
       @clear-canvas="handleClearCanvas"
       @file-upload="handleFileUpload"
       @save-image="handleSaveImage"
+      @save-state="handleSaveState"
+      @clear-state="handleClearState"
     />
     
-    <!-- 画布容器 -->
-    <div class="canvas-container">
-      <div class="canvas-wrapper">
-        <canvas 
-          ref="canvasElement" 
-          class="main-canvas"
-          @drop="handleDrop"
-          @dragover="handleDragOver"
-          @dragenter="handleDragEnter"
-          @dragleave="handleDragLeave"
-        ></canvas>
-        
-        <!-- 加载状态 -->
-        <div v-if="isLoading" class="loading-overlay">
-          <div class="loading-spinner"></div>
-          <p>加载图像中...</p>
-        </div>
-        
-        <!-- 处理状态 -->
-        <div v-if="isProcessing" class="processing-overlay">
-          <div class="processing-spinner"></div>
-          <p>{{ processingMessage }}</p>
-        </div>
-        
-        <!-- 调试信息 -->
-        <div v-if="!currentImage" class="debug-info">
-          <p>拖拽图像文件到此处，或点击工具栏的"上传"按钮</p>
-          <p>支持格式：PNG, JPG, JPEG, GIF, WebP</p>
-          <button @click="testImageLoad" class="test-btn">测试图像加载</button>
+    <!-- 主内容区域 -->
+    <div class="main-content" :class="{ 'full-width': isInpaintingMode || historyRecords.length === 0 }">
+      <!-- 画布容器 -->
+      <div class="canvas-container">
+        <div class="canvas-wrapper">
+          <canvas 
+            ref="canvasElement" 
+            class="main-canvas"
+            @drop="handleDrop"
+            @dragover="handleDragOver"
+            @dragenter="handleDragEnter"
+            @dragleave="handleDragLeave"
+          ></canvas>
+          
+          <!-- 加载状态 -->
+          <div v-if="isLoading" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <p>加载图像中...</p>
+          </div>
+          
+          <!-- 处理状态 -->
+          <div v-if="isProcessing" class="processing-overlay">
+            <div class="processing-spinner"></div>
+            <p>{{ processingMessage }}</p>
+          </div>
+          
+          <!-- 调试信息 -->
+          <div v-if="!currentImage" class="debug-info">
+            <p>拖拽图像文件到此处，或点击工具栏的"上传"按钮</p>
+            <p>支持格式：PNG, JPG, JPEG, GIF, WebP</p>
+            <button @click="testImageLoad" class="test-btn">测试图像加载</button>
+          </div>
         </div>
       </div>
+      
+      <!-- 参数面板 -->
+      <CanvasParameterPanel
+        v-model:prompt="parameters.prompt"
+        @execute="handleExecuteInpainting"
+      />
     </div>
     
-    <!-- 参数面板 -->
-    <CanvasParameterPanel
-      v-model:prompt="parameters.prompt"
-      @execute="handleExecuteInpainting"
+    <!-- 历史面板 - 局部重绘模式下隐藏，且需要有历史记录 -->
+    <CanvasHistoryPanel
+      v-if="!isInpaintingMode && historyRecords.length > 0"
+      v-model="historyRecords"
+      v-model:current-index="currentHistoryIndex"
+      @switch-history="handleSwitchHistory"
+      @undo="handleUndo"
+      @redo="handleRedo"
     />
   </div>
 </template>
@@ -55,15 +70,18 @@
 <script>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import * as fabric from 'fabric'
+import { executeQwenEdit } from '../services/imageService.js'
 import CanvasToolbar from './CanvasToolbar.vue'
 import CanvasParameterPanel from './CanvasParameterPanel.vue'
+import CanvasHistoryPanel from './CanvasHistoryPanel.vue'
 import MaskGenerator from '../utils/maskGenerator.js'
 
 export default {
   name: 'CanvasEditor',
   components: {
     CanvasToolbar,
-    CanvasParameterPanel
+    CanvasParameterPanel,
+    CanvasHistoryPanel
   },
   setup() {
     // 响应式数据
@@ -78,12 +96,27 @@ export default {
     const isProcessing = ref(false)
     const processingMessage = ref('')
     const currentImage = ref(null)
+    const currentImageFile = ref(null) // 存储原始图像文件
     const maskGenerator = new MaskGenerator()
     
     // 参数配置
     const parameters = reactive({
       prompt: ''
     })
+    
+    // 历史管理
+    const historyRecords = ref([])
+    const currentHistoryIndex = ref(-1)
+    const originalImageUrl = ref(null) // 保存原始图像URL
+    
+    // 持久化存储键名
+    const STORAGE_KEYS = {
+      CANVAS_STATE: 'canvas_editor_state',
+      HISTORY_RECORDS: 'canvas_history_records',
+      CURRENT_INDEX: 'canvas_current_index',
+      ORIGINAL_IMAGE: 'canvas_original_image',
+      PARAMETERS: 'canvas_parameters'
+    }
     
     // 工具配置
     const tools = {
@@ -98,6 +131,9 @@ export default {
     const initCanvas = () => {
       if (!canvasElement.value) return
       
+      // 在创建Canvas之前，先设置canvas元素的样式来避免wheel事件问题
+      canvasElement.value.style.touchAction = 'pan-x pan-y'
+      
       canvas.value = new fabric.Canvas(canvasElement.value, {
         width: 800,
         height: 600,
@@ -110,12 +146,38 @@ export default {
       // 设置画布事件
       setupCanvasEvents()
       
-      // 修复wheel事件警告 - 使用更简单的方法
+      // 修复wheel事件警告 - 更彻底的修复方法
       setTimeout(() => {
-        if (canvas.value && canvas.value.upperCanvasEl) {
-          canvas.value.upperCanvasEl.style.touchAction = 'pan-x pan-y'
+        if (canvas.value) {
+          // 直接禁用Fabric.js的wheel事件处理
+          canvas.value.enablePointerEvents = false
+          
+          // 移除所有wheel事件监听器
+          const upperCanvas = canvas.value.upperCanvasEl
+          const lowerCanvas = canvas.value.lowerCanvasEl
+          
+          if (upperCanvas) {
+            upperCanvas.removeEventListener('wheel', canvas.value._onMouseWheel, { passive: false })
+            upperCanvas.removeEventListener('wheel', canvas.value._onMouseWheel)
+          }
+          
+          if (lowerCanvas) {
+            lowerCanvas.removeEventListener('wheel', canvas.value._onMouseWheel, { passive: false })
+            lowerCanvas.removeEventListener('wheel', canvas.value._onMouseWheel)
+          }
+          
+          // 重新启用指针事件，但不包括wheel
+          canvas.value.enablePointerEvents = true
+          
+          // 设置touch-action来避免滚动阻塞
+          if (canvas.value.upperCanvasEl) {
+            canvas.value.upperCanvasEl.style.touchAction = 'pan-x pan-y'
+          }
+          if (canvas.value.lowerCanvasEl) {
+            canvas.value.lowerCanvasEl.style.touchAction = 'pan-x pan-y'
+          }
         }
-      }, 100)
+      }, 0)
     }
     
     // 设置画布事件
@@ -175,6 +237,9 @@ export default {
         // 重新渲染画布
         canvas.value.renderAll()
         console.log('画布绘制内容已清除')
+        
+        // 清除后保存状态
+        saveCanvasState()
       }
     }
     
@@ -207,6 +272,29 @@ export default {
       }
     }
     
+    // 验证图像文件
+    const validateImageFile = (file) => {
+      // 检查文件类型
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
+      if (!validTypes.includes(file.type)) {
+        throw new Error('不支持的文件格式，请使用 JPG、PNG、GIF、WebP 或 BMP 格式')
+      }
+      
+      // 检查文件大小 (限制为50MB)
+      const maxSize = 50 * 1024 * 1024 // 50MB
+      if (file.size > maxSize) {
+        throw new Error('文件过大，请使用小于50MB的图像文件')
+      }
+      
+      // 检查文件大小 (最小1KB)
+      const minSize = 1024 // 1KB
+      if (file.size < minSize) {
+        throw new Error('文件过小，可能不是有效的图像文件')
+      }
+      
+      return true
+    }
+    
     // 处理图像上传
     const loadImage = (file) => {
       if (!file || !canvas.value) {
@@ -214,8 +302,19 @@ export default {
         return
       }
       
-      console.log('Loading image:', file.name, file.type, file.size)
-      isLoading.value = true
+      try {
+        // 验证文件
+        validateImageFile(file)
+        
+        console.log('Loading image:', file.name, file.type, file.size)
+        currentImageFile.value = file // 保存原始文件
+        isLoading.value = true
+        processingMessage.value = '正在加载图像...'
+      } catch (error) {
+        console.error('File validation failed:', error)
+        alert(error.message)
+        return
+      }
       
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -227,16 +326,17 @@ export default {
         
         new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
+            console.log('Fabric image loading timeout, trying fallback...')
             reject(new Error('Fabric image loading timeout'))
-          }, 10000) // 10秒超时
+          }, 30000) // 增加到30秒超时
           
           fabric.Image.fromURL(imageUrl, (img) => {
             clearTimeout(timeout)
             console.log('Fabric callback executed, img:', img)
-            if (img) {
+            if (img && img.width > 0 && img.height > 0) {
               resolve(img)
             } else {
-              reject(new Error('Failed to create fabric image'))
+              reject(new Error('Failed to create fabric image - invalid dimensions'))
             }
           }, {
             crossOrigin: 'anonymous'
@@ -247,40 +347,31 @@ export default {
           // 清除现有内容
           canvas.value.clear()
           
+          // 保持画布尺寸不变，只缩放图像
+          const canvasWidth = 600
+          const canvasHeight = 600
+          
+          // 计算缩放比例以适应画布
+          const scaleX = canvasWidth / img.width
+          const scaleY = canvasHeight / img.height
+          const scale = Math.min(scaleX, scaleY)
+          
           // 设置图像
           img.set({
             left: 0,
             top: 0,
             selectable: false,
-            evented: false
+            evented: false,
+            scaleX: scale,
+            scaleY: scale
           })
-          
-          // 计算适合的显示尺寸
-          const maxWidth = 800
-          const maxHeight = 600
-          let displayWidth = img.width
-          let displayHeight = img.height
-          
-          // 如果图像太大，按比例缩放
-          if (img.width > maxWidth || img.height > maxHeight) {
-            const scale = Math.min(maxWidth / img.width, maxHeight / img.height)
-            displayWidth = img.width * scale
-            displayHeight = img.height * scale
-          }
-          
-          // 调整画布大小
-          canvas.value.setWidth(displayWidth)
-          canvas.value.setHeight(displayHeight)
-          
-          // 缩放图像以适应画布
-          img.scaleToWidth(displayWidth)
-          img.scaleToHeight(displayHeight)
           
           // 添加图像到画布
           canvas.value.add(img)
           
           currentImage.value = img
           isLoading.value = false
+          processingMessage.value = ''
           
           // 居中显示
           canvas.value.centerObject(img)
@@ -291,7 +382,13 @@ export default {
           console.error('Error loading image with Fabric.js:', error)
           // 尝试使用HTML5 Image作为备选方案
           console.log('Trying fallback method...')
-          loadImageFallback(imageUrl)
+          try {
+            loadImageFallback(imageUrl)
+          } catch (fallbackError) {
+            console.error('Fallback method also failed:', fallbackError)
+            isLoading.value = false
+            alert('图像加载失败，请尝试使用其他格式的图像文件')
+          }
         })
       }
       reader.onerror = (error) => {
@@ -305,11 +402,19 @@ export default {
     const loadImageFallback = (imageUrl) => {
       console.log('Using fallback image loading method')
       console.log('Image URL length:', imageUrl.length)
+      processingMessage.value = '使用备选方法加载图像...'
       
       const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
       img.onload = () => {
         try {
           console.log('Fallback image loaded:', img.width, 'x', img.height)
+          
+          if (img.width === 0 || img.height === 0) {
+            throw new Error('Invalid image dimensions')
+          }
+          
           console.log('Canvas before clear:', canvas.value)
           
           // 清除现有内容
@@ -325,32 +430,27 @@ export default {
           
           console.log('Fabric image created from fallback:', fabricImg)
           
-          // 计算适合的显示尺寸
-          const maxWidth = 800
-          const maxHeight = 600
-          let displayWidth = img.width
-          let displayHeight = img.height
+          // 保持画布尺寸不变，只缩放图像
+          const canvasWidth = 600
+          const canvasHeight = 600
           
-          // 如果图像太大，按比例缩放
-          if (img.width > maxWidth || img.height > maxHeight) {
-            const scale = Math.min(maxWidth / img.width, maxHeight / img.height)
-            displayWidth = img.width * scale
-            displayHeight = img.height * scale
-          }
+          // 计算缩放比例以适应画布
+          const scaleX = canvasWidth / img.width
+          const scaleY = canvasHeight / img.height
+          const scale = Math.min(scaleX, scaleY)
           
-          // 调整画布大小
-          canvas.value.setWidth(displayWidth)
-          canvas.value.setHeight(displayHeight)
-          
-          // 缩放图像以适应画布
-          fabricImg.scaleToWidth(displayWidth)
-          fabricImg.scaleToHeight(displayHeight)
+          // 设置图像缩放
+          fabricImg.set({
+            scaleX: scale,
+            scaleY: scale
+          })
           
           // 添加图像到画布
           canvas.value.add(fabricImg)
           
           currentImage.value = fabricImg
           isLoading.value = false
+          processingMessage.value = ''
           
           // 居中显示
           canvas.value.centerObject(fabricImg)
@@ -373,6 +473,29 @@ export default {
       
       console.log('Setting image src...')
       img.src = imageUrl
+      
+      // 设置超时，如果fallback也失败，使用最简单的方案
+      setTimeout(() => {
+        if (isLoading.value) {
+          console.log('Fallback timeout, trying simplest method...')
+          loadImageSimplest(imageUrl)
+        }
+      }, 20000) // 20秒后尝试最简单的方法
+    }
+    
+    // 最简单的图像加载方案
+    const loadImageSimplest = (imageUrl) => {
+      console.log('Using simplest image loading method')
+      
+      try {
+        // 直接使用loadImageFromUrl方法
+        loadImageFromUrl(imageUrl, true) // 标记为原始图像
+        isLoading.value = false
+      } catch (error) {
+        console.error('Simplest method failed:', error)
+        isLoading.value = false
+        alert('所有图像加载方法都失败了，请尝试使用其他图像文件')
+      }
     }
     
     // 处理拖拽上传
@@ -578,7 +701,8 @@ export default {
               evented: false,
               moveable: false,
               lockMovementX: true,
-              lockMovementY: true
+              lockMovementY: true,
+              isDrawnMask: true // 标识这是绘制的遮罩区域
             })
             
             canvas.value.add(circle)
@@ -599,13 +723,17 @@ export default {
             evented: false,
             moveable: false,
             lockMovementX: true,
-            lockMovementY: true
+            lockMovementY: true,
+            isDrawnMask: true // 标识这是绘制的遮罩区域
           })
           
           canvas.value.add(circle)
         }
         
         canvas.value.renderAll()
+        
+        // 绘制完成后自动保存
+        saveCanvasState()
       }
       
       brushPath.value = []
@@ -726,6 +854,34 @@ export default {
       }
     }
     
+    // 历史管理方法
+    const addToHistory = (record) => {
+      // 如果当前不在最新记录，删除后面的记录
+      if (currentHistoryIndex.value < historyRecords.value.length - 1) {
+        historyRecords.value = historyRecords.value.slice(0, currentHistoryIndex.value + 1)
+      }
+      
+      // 添加新记录
+      historyRecords.value.push(record)
+      currentHistoryIndex.value = historyRecords.value.length - 1
+      
+      console.log('📝 添加到历史记录:', record)
+    }
+    
+    const handleSwitchHistory = (record) => {
+      console.log('🔄 切换到历史记录:', record)
+      // 加载历史记录中的图像
+      loadImageFromUrl(record.resultImageUrl)
+    }
+    
+    const handleUndo = () => {
+      console.log('↶ 撤销操作')
+    }
+    
+    const handleRedo = () => {
+      console.log('↷ 重做操作')
+    }
+    
     // 执行局部重绘
     const handleExecuteInpainting = async () => {
       if (!currentImage.value) {
@@ -733,30 +889,50 @@ export default {
         return
       }
       
-      const selection = canvas.value.getActiveObject()
-      if (!selection) {
-        alert('请先选择要重绘的区域')
+      // 检查是否有绘制的区域
+      const objects = canvas.value.getObjects()
+      console.log('所有画布对象:', objects.length)
+      
+      const drawnObjects = objects.filter(obj => 
+        obj !== currentImage.value && 
+        !obj.tempPath && 
+        obj.isDrawnMask === true
+      )
+      
+      console.log('绘制的对象数量:', drawnObjects.length)
+      
+      if (drawnObjects.length === 0) {
+        alert('请先绘制要重绘的区域')
         return
       }
       
       isProcessing.value = true
-      processingMessage.value = '正在生成遮罩...'
+      processingMessage.value = '正在执行局部重绘...'
       
       try {
-        // 生成遮罩
-        const mask = await maskGenerator.generateMaskFromSelection(
-          selection,
-          currentImage.value.width,
-          currentImage.value.height
-        )
-        
-        processingMessage.value = '正在执行局部重绘...'
-        
-        // 调用API
-        const result = await executeInpaintingAPI(currentImage.value, mask, parameters)
+        // 调用API（generateMaskImage在executeInpaintingAPI内部调用）
+        const result = await executeInpaintingAPI(currentImage.value, null, parameters)
         
         // 更新图像
         if (result.success) {
+          console.log('🎨 局部重绘成功，准备更新图像:', result.imageUrl)
+          
+          // 保存当前状态到历史记录
+          const historyRecord = {
+            id: Date.now().toString(),
+            timestamp: Date.now(),
+            prompt: parameters.prompt,
+            originalImageUrl: originalImageUrl.value,
+            maskDataUrl: result.maskDataUrl,
+            resultImageUrl: result.imageUrl,
+            parameters: { ...parameters }
+          }
+          
+          // 添加到历史记录
+          addToHistory(historyRecord)
+          
+          // 加载新图像
+          console.log('🔄 开始加载重绘结果图像...')
           loadImageFromUrl(result.imageUrl)
         } else {
           alert('局部重绘失败: ' + result.message)
@@ -796,43 +972,284 @@ export default {
     }
     
     // 从URL加载图像
-    const loadImageFromUrl = (url) => {
+    const loadImageFromUrl = (url, isOriginal = false) => {
+      console.log('📥 开始加载图像:', url, 'isOriginal:', isOriginal)
+      
       fabric.Image.fromURL(url, (img) => {
-        canvas.value.clear()
-        
-        img.set({
-          left: 0,
-          top: 0,
-          selectable: false,
-          evented: false
-        })
-        
-        canvas.value.setWidth(img.width)
-        canvas.value.setHeight(img.height)
-        canvas.value.add(img)
-        canvas.value.sendToBack(img)
-        
-        currentImage.value = img
-        canvas.value.centerObject(img)
-        canvas.value.renderAll()
+        console.log('✅ 图像加载成功:', img.width, 'x', img.height)
+        if (isOriginal) {
+          // 原始图像加载：清除所有内容
+          canvas.value.clear()
+          
+          img.set({
+            left: 0,
+            top: 0,
+            selectable: false,
+            evented: false
+          })
+          
+          canvas.value.setWidth(img.width)
+          canvas.value.setHeight(img.height)
+          canvas.value.add(img)
+          canvas.value.sendToBack(img)
+          
+          currentImage.value = img
+          canvas.value.centerObject(img)
+          canvas.value.renderAll()
+          
+          // 保存原始图像URL
+          originalImageUrl.value = url
+        } else {
+          // 重绘结果加载：只替换背景图像，保留其他绘制内容
+          if (currentImage.value) {
+            // 获取当前图像的位置和缩放信息
+            const currentLeft = currentImage.value.left
+            const currentTop = currentImage.value.top
+            const currentScaleX = currentImage.value.scaleX
+            const currentScaleY = currentImage.value.scaleY
+            
+            // 设置新图像的位置和缩放
+            img.set({
+              left: currentLeft,
+              top: currentTop,
+              scaleX: currentScaleX,
+              scaleY: currentScaleY,
+              selectable: false,
+              evented: false
+            })
+            
+            // 移除旧图像，添加新图像
+            canvas.value.remove(currentImage.value)
+            canvas.value.add(img)
+            canvas.value.sendToBack(img)
+            
+            // 更新当前图像引用
+            currentImage.value = img
+            canvas.value.renderAll()
+            
+            console.log('✅ 重绘结果已回填到画板')
+          } else {
+            // 如果没有当前图像，按原始图像方式加载
+            canvas.value.clear()
+            
+            img.set({
+              left: 0,
+              top: 0,
+              selectable: false,
+              evented: false
+            })
+            
+            canvas.value.setWidth(img.width)
+            canvas.value.setHeight(img.height)
+            canvas.value.add(img)
+            canvas.value.sendToBack(img)
+            
+            currentImage.value = img
+            canvas.value.centerObject(img)
+            canvas.value.renderAll()
+          }
+        }
       })
     }
     
-    // API调用函数（占位符）
-    const executeInpaintingAPI = async (image, mask, params) => {
-      // TODO: 实现实际的千问编辑API调用
-      console.log('调用千问编辑API:', {
-        prompt: params.prompt
+    // 生成遮罩图像
+    const generateMaskImage = () => {
+      if (!canvas.value || !currentImage.value) {
+        throw new Error('画布或图像未加载')
+      }
+      
+      // 创建临时画布用于生成遮罩
+      const tempCanvas = document.createElement('canvas')
+      const tempCtx = tempCanvas.getContext('2d')
+      
+      // 获取原始图像尺寸
+      // 从Fabric.js图像对象获取原始尺寸
+      const originalWidth = currentImage.value._originalElement ? currentImage.value._originalElement.width : 1024
+      const originalHeight = currentImage.value._originalElement ? currentImage.value._originalElement.height : 1024
+      
+      // 设置画布尺寸为原始图像尺寸
+      tempCanvas.width = originalWidth
+      tempCanvas.height = originalHeight
+      
+      // 获取所有绘制的对象
+      const objects = canvas.value.getObjects()
+      const drawnObjects = objects.filter(obj => 
+        obj !== currentImage.value && 
+        !obj.tempPath && 
+        obj.isDrawnMask === true // 检查是否是绘制的遮罩区域
+      )
+      
+      if (drawnObjects.length === 0) {
+        throw new Error('请先绘制要重绘的区域')
+      }
+      
+      // 计算坐标缩放比例
+      // 从Fabric.js显示尺寸到原始图像尺寸的缩放比例
+      const scaleX = originalWidth / (currentImage.value.width * currentImage.value.scaleX)
+      const scaleY = originalHeight / (currentImage.value.height * currentImage.value.scaleY)
+      
+      // 获取图像在画布中的实际位置（考虑居中偏移）
+      const imageBounds = currentImage.value.getBoundingRect()
+      const imageLeft = imageBounds.left
+      const imageTop = imageBounds.top
+      
+      // 调试信息：图像位置和尺寸 - 简化输出
+      console.log('图像信息:', {
+        imageWidth: currentImage.value.width,
+        imageHeight: currentImage.value.height,
+        originalWidth: originalWidth,
+        originalHeight: originalHeight,
+        scaleX: scaleX,
+        scaleY: scaleY,
+        isCentered: currentImage.value.left === (canvas.value.width - currentImage.value.width) / 2
       })
       
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            success: true,
-            imageUrl: image.toDataURL()
-          })
-        }, 2000)
+      console.log('遮罩生成逻辑:')
+      console.log('1. 创建白色背景 (alpha=255, 保持不变的区域)')
+      console.log('2. 在绘制区域创建透明洞 (alpha=0, 要重绘的区域)')
+      console.log('3. 绘制对象数量:', drawnObjects.length)
+      
+      // 绘制遮罩 - 使用alpha通道表示遮罩区域
+      // 1. 先创建完全不透明的白色背景（表示保持不变的区域）
+      tempCtx.fillStyle = 'rgba(255, 255, 255, 1.0)' // 白色，完全不透明
+      tempCtx.fillRect(0, 0, originalWidth, originalHeight)
+      
+      // 2. 在绘制的区域创建透明"洞"（表示要重绘的区域）
+      // 使用destination-out模式来移除像素，创建透明区域
+      tempCtx.globalCompositeOperation = 'destination-out'
+      tempCtx.fillStyle = 'rgba(0, 0, 0, 1.0)' // 任何颜色都可以，destination-out会移除像素
+      drawnObjects.forEach(obj => {
+        if (obj.type === 'circle') {
+          // 将Fabric.js画布坐标转换为原始图像坐标
+          // 1. 减去图像在画布中的偏移
+          const relativeLeft = obj.left - imageLeft
+          const relativeTop = obj.top - imageTop
+          
+          // 2. 转换为原始图像坐标
+          const originalLeft = relativeLeft * scaleX
+          const originalTop = relativeTop * scaleY
+          const originalRadius = obj.radius * Math.min(scaleX, scaleY)
+          
+          // 调试信息 - 简化输出
+          if (drawnObjects.indexOf(obj) < 3) { // 只显示前3个对象的详细信息
+            console.log('遮罩坐标转换:', {
+              fabricLeft: obj.left,
+              fabricTop: obj.top,
+              originalLeft: originalLeft,
+              originalTop: originalTop,
+              scaleX: scaleX,
+              scaleY: scaleY
+            })
+          }
+          
+          tempCtx.beginPath()
+          tempCtx.arc(
+            originalLeft + originalRadius, 
+            originalTop + originalRadius, 
+            originalRadius, 
+            0, 
+            2 * Math.PI
+          )
+          tempCtx.fill()
+        }
       })
+      
+      // 恢复默认的合成模式
+      tempCtx.globalCompositeOperation = 'source-over'
+      
+      return tempCanvas.toDataURL('image/png')
+    }
+    
+    // 将DataURL转换为File对象
+    const dataUrlToFile = (dataUrl, filename) => {
+      const arr = dataUrl.split(',')
+      const mime = arr[0].match(/:(.*?);/)[1]
+      const bstr = atob(arr[1])
+      let n = bstr.length
+      const u8arr = new Uint8Array(n)
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n)
+      }
+      return new File([u8arr], filename, { type: mime })
+    }
+    
+    // API调用函数
+    const executeInpaintingAPI = async (image, mask, params) => {
+      try {
+        console.log('🎨 开始执行局部重绘API调用')
+        
+        // 生成遮罩图像
+        const maskDataUrl = generateMaskImage()
+        const maskFile = dataUrlToFile(maskDataUrl, 'mask.png')
+        
+        // 准备参数
+        const parameters = {
+          negative_prompt: '',
+          steps: 8,
+          cfg: 2.5,
+          denoise: 1.0,
+          target_size: 1024,
+          lora_strength: 1.0,
+          seed: -1
+        }
+        
+        // 调用Qwen-Edit API
+        const API_BASE = 'http://localhost:9000' // 后端API地址
+        
+        return new Promise((resolve, reject) => {
+          executeQwenEdit(
+            currentImageFile.value, // 原始图像文件
+            maskFile, // 遮罩文件
+            params.prompt, // 提示词
+            parameters, // 参数
+            API_BASE, // API地址
+            {
+              onTaskCreated: (taskId) => {
+                console.log(`✅ 任务已创建: ${taskId}`)
+              },
+              onProgress: (progress) => {
+                console.log(`📊 进度: ${progress}%`)
+              },
+              onSuccess: async (statusData, taskId) => {
+                console.log('✅ 局部重绘完成:', statusData)
+                
+                // 获取图像URL
+                let imageUrl = null
+                if (statusData.result) {
+                  // 优先使用direct_urls，然后是image_urls
+                  if (statusData.result.direct_urls && statusData.result.direct_urls.length > 0) {
+                    imageUrl = statusData.result.direct_urls[0]
+                  } else if (statusData.result.image_urls && statusData.result.image_urls.length > 0) {
+                    imageUrl = statusData.result.image_urls[0]
+                  } else if (statusData.result.image_url) {
+                    imageUrl = statusData.result.image_url
+                  }
+                }
+                
+                // 如果是相对路径，添加API基础URL
+                if (imageUrl && imageUrl.startsWith('/')) {
+                  imageUrl = API_BASE + imageUrl
+                }
+                
+                console.log('🖼️ 图像URL:', imageUrl)
+                
+                resolve({
+                  success: true,
+                  imageUrl: imageUrl,
+                  maskDataUrl: maskDataUrl // 返回遮罩数据URL
+                })
+              },
+              onError: (error) => {
+                console.error('❌ 局部重绘失败:', error)
+                reject(new Error(error))
+              }
+            }
+          )
+        })
+      } catch (error) {
+        console.error('❌ 执行局部重绘时出错:', error)
+        throw error
+      }
     }
     
     const executeOutpaintingAPI = async (image, params) => {
@@ -848,13 +1265,25 @@ export default {
     }
     
     // 生命周期
-    onMounted(() => {
-      nextTick(() => {
+    onMounted(async () => {
+      nextTick(async () => {
         initCanvas()
+        
+        // 启动自动保存
+        startAutoSave()
+        
+        // 加载保存的状态
+        await loadCanvasState()
       })
     })
     
     onUnmounted(() => {
+      // 停止自动保存
+      stopAutoSave()
+      
+      // 保存当前状态
+      saveCanvasState()
+      
       if (canvas.value) {
         canvas.value.dispose()
       }
@@ -864,6 +1293,38 @@ export default {
     const handleFileUpload = (file) => {
       console.log('File uploaded:', file)
       loadImage(file)
+    }
+    
+    // 处理保存图像事件
+    const handleSaveImage = () => {
+      if (!canvas.value || !currentImage.value) {
+        alert('没有可保存的图像')
+        return
+      }
+      
+      try {
+        // 导出画布为图像
+        const dataURL = canvas.value.toDataURL({
+          format: 'png',
+          quality: 1.0,
+          multiplier: 1
+        })
+        
+        // 创建下载链接
+        const link = document.createElement('a')
+        link.download = `canvas-image-${Date.now()}.png`
+        link.href = dataURL
+        
+        // 触发下载
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        console.log('图像已保存')
+      } catch (error) {
+        console.error('保存图像失败:', error)
+        alert('保存图像失败: ' + error.message)
+      }
     }
     
     // 测试图像加载
@@ -890,6 +1351,137 @@ export default {
       })
     }
     
+    // ==================== 持久化功能 ====================
+    
+    // 保存画布状态到localStorage
+    const saveCanvasState = () => {
+      try {
+        if (!canvas.value) return
+        
+        // 保存画布JSON状态
+        const canvasState = canvas.value.toJSON(['isDrawnMask'])
+        localStorage.setItem(STORAGE_KEYS.CANVAS_STATE, JSON.stringify(canvasState))
+        
+        // 保存历史记录
+        localStorage.setItem(STORAGE_KEYS.HISTORY_RECORDS, JSON.stringify(historyRecords.value))
+        
+        // 保存当前历史索引
+        localStorage.setItem(STORAGE_KEYS.CURRENT_INDEX, currentHistoryIndex.value.toString())
+        
+        // 保存原始图像URL
+        if (originalImageUrl.value) {
+          localStorage.setItem(STORAGE_KEYS.ORIGINAL_IMAGE, originalImageUrl.value)
+        }
+        
+        // 保存参数
+        localStorage.setItem(STORAGE_KEYS.PARAMETERS, JSON.stringify(parameters))
+        
+        console.log('✅ 画布状态已保存到localStorage')
+      } catch (error) {
+        console.error('❌ 保存画布状态失败:', error)
+      }
+    }
+    
+    // 从localStorage加载画布状态
+    const loadCanvasState = async () => {
+      try {
+        // 加载画布状态
+        const canvasStateStr = localStorage.getItem(STORAGE_KEYS.CANVAS_STATE)
+        if (canvasStateStr && canvas.value) {
+          const canvasState = JSON.parse(canvasStateStr)
+          await canvas.value.loadFromJSON(canvasState, () => {
+            canvas.value.renderAll()
+            console.log('✅ 画布状态已从localStorage恢复')
+          })
+        }
+        
+        // 加载历史记录
+        const historyStr = localStorage.getItem(STORAGE_KEYS.HISTORY_RECORDS)
+        if (historyStr) {
+          historyRecords.value = JSON.parse(historyStr)
+        }
+        
+        // 加载当前历史索引
+        const indexStr = localStorage.getItem(STORAGE_KEYS.CURRENT_INDEX)
+        if (indexStr) {
+          currentHistoryIndex.value = parseInt(indexStr)
+        }
+        
+        // 加载原始图像URL
+        const originalImageStr = localStorage.getItem(STORAGE_KEYS.ORIGINAL_IMAGE)
+        if (originalImageStr) {
+          originalImageUrl.value = originalImageStr
+        }
+        
+        // 加载参数
+        const paramsStr = localStorage.getItem(STORAGE_KEYS.PARAMETERS)
+        if (paramsStr) {
+          const savedParams = JSON.parse(paramsStr)
+          Object.assign(parameters, savedParams)
+        }
+        
+        console.log('✅ 所有状态已从localStorage恢复')
+      } catch (error) {
+        console.error('❌ 加载画布状态失败:', error)
+      }
+    }
+    
+    // 清除所有保存的状态
+    const clearSavedState = () => {
+      try {
+        Object.values(STORAGE_KEYS).forEach(key => {
+          localStorage.removeItem(key)
+        })
+        console.log('✅ 已清除所有保存的状态')
+      } catch (error) {
+        console.error('❌ 清除保存状态失败:', error)
+      }
+    }
+    
+    // 自动保存功能
+    let autoSaveTimer = null
+    const startAutoSave = () => {
+      // 每30秒自动保存一次
+      autoSaveTimer = setInterval(() => {
+        if (canvas.value && currentImage.value) {
+          saveCanvasState()
+        }
+      }, 30000)
+    }
+    
+    const stopAutoSave = () => {
+      if (autoSaveTimer) {
+        clearInterval(autoSaveTimer)
+        autoSaveTimer = null
+      }
+    }
+    
+    // 处理手动保存状态
+    const handleSaveState = () => {
+      saveCanvasState()
+      alert('状态已保存！')
+    }
+    
+    // 处理清除状态
+    const handleClearState = () => {
+      // 清除localStorage
+      clearSavedState()
+      
+      // 清除当前状态
+      historyRecords.value = []
+      currentHistoryIndex.value = -1
+      originalImageUrl.value = null
+      parameters.prompt = ''
+      
+      // 清除画布
+      if (canvas.value) {
+        canvas.value.clear()
+        canvas.value.renderAll()
+      }
+      
+      alert('所有状态已清除！')
+    }
+    
     return {
       // 响应式数据
       canvasElement,
@@ -902,6 +1494,7 @@ export default {
       processingMessage,
       parameters,
       currentImage,
+      currentImageFile,
       
       // 方法
       handleModeChange,
@@ -916,7 +1509,23 @@ export default {
       handleDragEnter,
       handleDragLeave,
       handleFileUpload,
-      testImageLoad
+      handleSaveImage,
+      testImageLoad,
+      // 历史管理
+      historyRecords,
+      currentHistoryIndex,
+      handleSwitchHistory,
+      handleUndo,
+      handleRedo,
+      
+      // 持久化功能
+      saveCanvasState,
+      loadCanvasState,
+      clearSavedState,
+      startAutoSave,
+      stopAutoSave,
+      handleSaveState,
+      handleClearState
     }
   }
 }
@@ -929,6 +1538,18 @@ export default {
   height: 100vh;
   background: #1a1a1a;
   color: white;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-right: 320px; /* 为固定的历史面板留出空间 */
+  transition: margin-right 0.3s ease;
+}
+
+.main-content.full-width {
+  margin-right: 0; /* 局部重绘模式下使用全宽 */
 }
 
 .canvas-container {

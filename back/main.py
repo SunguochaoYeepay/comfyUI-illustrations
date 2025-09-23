@@ -1655,6 +1655,101 @@ async def get_image_gen_config():
             "timestamp": datetime.now().isoformat()
         }
 
+
+@app.post("/api/qwen-edit", response_model=TaskResponse)
+async def execute_qwen_edit(
+    image: UploadFile = File(...),
+    mask: UploadFile = File(...),
+    prompt: str = Form(...),
+    negative_prompt: str = Form(""),
+    steps: int = Form(8),
+    cfg: float = Form(2.5),
+    denoise: float = Form(1.0),
+    target_size: int = Form(1024),
+    lora_strength: float = Form(1.0),
+    seed: int = Form(-1)
+):
+    """执行Qwen-Edit局部重绘"""
+    try:
+        print(f"🎨 开始执行Qwen-Edit局部重绘任务")
+        
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+        print(f"📋 任务ID: {task_id}")
+        
+        # 保存上传的图像
+        image_filename = f"{task_id}_image_{image.filename}"
+        image_path = UPLOAD_DIR / image_filename
+        
+        # 读取并保存图像文件
+        content = await image.read()
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="图像文件为空")
+        
+        async with aiofiles.open(image_path, 'wb') as f:
+            await f.write(content)
+        print(f"✅ 图像文件保存成功: {image_path}")
+        
+        # 保存上传的遮罩
+        mask_filename = f"{task_id}_mask_{mask.filename}"
+        mask_path = UPLOAD_DIR / mask_filename
+        
+        # 读取并保存遮罩文件
+        mask_content = await mask.read()
+        if len(mask_content) == 0:
+            raise HTTPException(status_code=400, detail="遮罩文件为空")
+        
+        async with aiofiles.open(mask_path, 'wb') as f:
+            await f.write(mask_content)
+        print(f"✅ 遮罩文件保存成功: {mask_path}")
+        
+        # 准备参数
+        parameters = {
+            "steps": steps,
+            "cfg": cfg,
+            "denoise": denoise,
+            "target_size": target_size,
+            "lora_strength": lora_strength,
+            "seed": seed,
+            "mask_path": str(mask_path)
+        }
+        
+        print(f"🔧 Qwen-Edit参数: {parameters}")
+        
+        # 创建任务管理器实例
+        from core.task_manager import TaskManager
+        from core.comfyui_client import ComfyUIClient
+        from core.workflow_template import WorkflowTemplate
+        from core.database_manager import DatabaseManager
+        
+        db_manager = DatabaseManager(DB_PATH)
+        comfyui_client = ComfyUIClient(COMFYUI_URL)
+        workflow_template = WorkflowTemplate()
+        task_manager = TaskManager(db_manager, comfyui_client, workflow_template)
+        
+        # 执行Qwen-Edit任务
+        await task_manager.execute_qwen_edit_task(
+            task_id=task_id,
+            image_path=str(image_path),
+            mask_path=str(mask_path),
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            parameters=parameters
+        )
+        
+        print(f"✅ Qwen-Edit任务创建成功: {task_id}")
+        
+        return TaskResponse(
+            task_id=task_id,
+            status="pending",
+            message="Qwen-Edit局部重绘任务已提交"
+        )
+        
+    except Exception as e:
+        print(f"❌ 创建Qwen-Edit任务失败: {e}")
+        raise HTTPException(status_code=500, detail=f"创建Qwen-Edit任务失败: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=9000)

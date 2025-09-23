@@ -66,6 +66,18 @@
           </svg>
           <span>保存</span>
         </button>
+        <button class="file-btn save-state" @click="handleSaveState" title="保存状态">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3M19,19H5V5H16.17L19,7.83V19Z"/>
+          </svg>
+          <span>保存状态</span>
+        </button>
+        <button class="file-btn clear-state" @click="handleClearState" title="清除状态">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+          </svg>
+          <span>清除状态</span>
+        </button>
       </div>
     </div>
 
@@ -150,7 +162,9 @@ export default {
     'brush-size-change',
     'clear-canvas',
     'file-upload',
-    'save-image'
+    'save-image',
+    'save-state',
+    'clear-state'
   ],
   setup(props, { emit }) {
     const fileInput = ref(null)
@@ -214,6 +228,18 @@ export default {
       emit('save-image')
     }
     
+    // 保存状态
+    const handleSaveState = () => {
+      emit('save-state')
+    }
+    
+    // 清除状态
+    const handleClearState = () => {
+      if (confirm('确定要清除所有保存的状态吗？这将删除所有历史记录和画布内容。')) {
+        emit('clear-state')
+      }
+    }
+    
     return {
       fileInput,
       isInpaintingMode,
@@ -228,7 +254,9 @@ export default {
       clearCanvas,
       handleUpload,
       handleFileSelect,
-      handleSave
+      handleSave,
+      handleSaveState,
+      handleClearState
     }
   }
 }
@@ -239,8 +267,6 @@ export default {
   display: flex;
   justify-content: center;
   padding: 10px 15px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #333;
   flex-shrink: 0;
 }
 

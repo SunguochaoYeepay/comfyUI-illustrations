@@ -269,6 +269,81 @@ export const generateImage = async (options, API_BASE, callbacks) => {
 }
 
 /**
+ * 执行Qwen-Edit局部重绘
+ * @param {File} imageFile - 原始图像文件
+ * @param {File} maskFile - 遮罩文件
+ * @param {string} prompt - 重绘提示词
+ * @param {Object} parameters - 生成参数
+ * @param {string} API_BASE - API基础URL
+ * @param {Object} callbacks - 回调函数对象
+ * @returns {Promise} 执行结果
+ */
+export const executeQwenEdit = async (imageFile, maskFile, prompt, parameters, API_BASE, callbacks) => {
+  try {
+    console.log('🎨 开始执行Qwen-Edit局部重绘')
+    
+    // 创建FormData
+    const formData = new FormData()
+    formData.append('image', imageFile)
+    formData.append('mask', maskFile)
+    formData.append('prompt', prompt)
+    formData.append('negative_prompt', parameters.negative_prompt || '')
+    formData.append('steps', parameters.steps || 8)
+    formData.append('cfg', parameters.cfg || 2.5)
+    formData.append('denoise', parameters.denoise || 1.0)
+    formData.append('target_size', parameters.target_size || 1024)
+    formData.append('lora_strength', parameters.lora_strength || 1.0)
+    formData.append('seed', parameters.seed || -1)
+    
+    console.log('📤 提交Qwen-Edit任务到后端')
+    
+    // 调用后端API
+    const response = await fetch(`${API_BASE}/api/qwen-edit`, {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const taskId = result.task_id
+      
+      console.log(`✅ Qwen-Edit任务已提交，任务ID: ${taskId}`)
+      
+      if (callbacks.onTaskCreated) {
+        callbacks.onTaskCreated(taskId)
+      }
+      
+      // 开始轮询任务状态
+      await pollTaskStatus(taskId, API_BASE, {
+        onProgress: (progress) => {
+          if (callbacks.onProgress) {
+            callbacks.onProgress(progress)
+          }
+        },
+        onSuccess: async (statusData) => {
+          if (callbacks.onSuccess) {
+            await callbacks.onSuccess(statusData, taskId)
+          }
+        },
+        onError: (error) => {
+          if (callbacks.onError) {
+            callbacks.onError(error)
+          }
+        }
+      })
+    } else {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || '提交Qwen-Edit任务失败')
+    }
+  } catch (error) {
+    console.error('❌ Qwen-Edit执行错误:', error)
+    if (callbacks.onError) {
+      callbacks.onError('Qwen-Edit执行失败，请稍后重试')
+    }
+  }
+}
+
+/**
  * 加载历史记录
  * @param {number} page - 页码
  * @param {boolean} prepend - 是否前置添加

@@ -63,7 +63,7 @@
       
       <!-- 局部重绘画板 -->
       <InpaintingCanvas
-        v-if="currentMode === 'inpainting'"
+        v-show="currentMode === 'inpainting'"
         ref="inpaintingCanvasRef"
         :original-image="currentImageData"
         :original-image-file="currentImageFile"
@@ -87,6 +87,13 @@
         v-model:prompt="parameters.prompt"
         @execute="handleExecuteInpainting"
       />
+      
+      <!-- 隐藏的执行按钮，用于触发局部重绘 -->
+      <button 
+        v-show="false"
+        ref="executeButtonRef"
+        @click="triggerInpaintingExecution"
+      ></button>
     </div>
     
     <!-- 历史面板 - 通过顶部工具栏的历史按钮控制显示 -->
@@ -247,8 +254,24 @@ export default {
     }
     
     // 处理执行局部重绘
-    const handleExecuteInpainting = () => {
+    const handleExecuteInpainting = async () => {
       console.log('执行局部重绘')
+      console.log('当前模式:', currentMode.value)
+      
+      if (currentMode.value !== 'inpainting') {
+        console.error('当前不在局部重绘模式')
+        return
+      }
+      
+      // 使用事件通信触发执行
+      console.log('通过事件触发局部重绘执行')
+      window.dispatchEvent(new CustomEvent('execute-inpainting'))
+    }
+    
+    // 触发局部重绘执行（备用方法）
+    const triggerInpaintingExecution = () => {
+      console.log('通过按钮触发局部重绘执行')
+      window.dispatchEvent(new CustomEvent('execute-inpainting'))
     }
     
     // 历史管理方法

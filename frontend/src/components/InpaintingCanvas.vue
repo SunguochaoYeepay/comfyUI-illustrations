@@ -360,7 +360,7 @@ export default {
           
           const originalLeft = relativeLeft * scaleX
           const originalTop = relativeTop * scaleY
-          const originalRadius = obj.radius * Math.min(scaleX, scaleY)
+          const originalRadius = obj.radius * scaleY // 使用高度缩放比例，与图像缩放逻辑保持一致
           
           tempCtx.beginPath()
           tempCtx.arc(originalLeft, originalTop, originalRadius, 0, 2 * Math.PI)
@@ -616,13 +616,29 @@ export default {
       nextTick(() => {
         initCanvas()
       })
+      
+      // 监听执行事件
+      window.addEventListener('execute-inpainting', handleExecuteRequest)
     })
     
     onUnmounted(() => {
       if (canvas.value) {
         canvas.value.dispose()
       }
+      
+      // 清理事件监听器
+      window.removeEventListener('execute-inpainting', handleExecuteRequest)
     })
+    
+    // 处理执行请求
+    const handleExecuteRequest = async () => {
+      console.log('InpaintingCanvas: 收到执行请求')
+      try {
+        await executeInpainting()
+      } catch (error) {
+        console.error('InpaintingCanvas: 执行失败:', error)
+      }
+    }
     
     // 监听props变化
     watch(() => props.originalImage, (newImage) => {

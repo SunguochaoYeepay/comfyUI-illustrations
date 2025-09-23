@@ -22,13 +22,24 @@
         </div>
         <span class="nav-label">生图</span>
       </div>
+      
+      <div 
+        class="nav-item" 
+        :class="{ active: activeTab === 'canvas' }"
+        @click="setActiveTab('canvas')"
+      >
+        <div class="nav-icon">
+          <EditOutlined />
+        </div>
+        <span class="nav-label">画布</span>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { StarOutlined, PictureOutlined } from '@ant-design/icons-vue'
+import { StarOutlined, PictureOutlined, EditOutlined } from '@ant-design/icons-vue'
 
 const emit = defineEmits(['tab-change'])
 

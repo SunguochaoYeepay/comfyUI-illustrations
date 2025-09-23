@@ -5,6 +5,7 @@ import NavigationSidebar from './components/NavigationSidebar.vue'
 import ImageGenerator from './components/ImageGenerator.vue'
 import InspirationPage from './components/InspirationPage.vue'
 import DetailModal from './components/DetailModal.vue'
+import CanvasDemo from './components/CanvasDemo.vue'
 
 const activeTab = ref('generate')
 const detailModalOpen = ref(false)
@@ -87,6 +88,9 @@ const handleRegenerate = (regenerateData) => {
         <InspirationPage 
           v-if="activeTab === 'inspiration'"
           @show-detail="handleShowDetail"
+        />
+        <CanvasDemo 
+          v-else-if="activeTab === 'canvas'"
         />
         <ImageGenerator v-else />
       </div>

@@ -1,7 +1,7 @@
 <template>
   <div class="canvas-toolbar">
-    <!-- 主工具栏 -->
-    <div v-if="!isInpaintingMode" class="main-toolbar">
+    <!-- 主工具栏 - 功能按钮（只在非局部重绘模式且允许显示功能按钮时显示） -->
+    <div v-if="!isInpaintingMode && showFunctionButtons" class="main-toolbar">
       <div class="toolbar-buttons">
         <button 
           class="action-btn inpainting" 
@@ -54,30 +54,6 @@
           <span>抠图</span>
         </button>
         
-        <button class="file-btn upload" @click="handleUpload">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-          </svg>
-          <span>上传</span>
-        </button>
-        <button class="file-btn save" @click="handleSave">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/>
-          </svg>
-          <span>保存</span>
-        </button>
-        <button class="file-btn save-state" @click="handleSaveState" title="保存状态">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3M19,19H5V5H16.17L19,7.83V19Z"/>
-          </svg>
-          <span>保存状态</span>
-        </button>
-        <button class="file-btn clear-state" @click="handleClearState" title="清除状态">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
-          </svg>
-          <span>清除状态</span>
-        </button>
       </div>
     </div>
 
@@ -133,20 +109,11 @@
         </button>
       </div>
     </div>
-    
-    <!-- 隐藏的文件输入 -->
-    <input 
-      ref="fileInput"
-      type="file"
-      accept="image/*"
-      style="display: none"
-      @change="handleFileSelect"
-    />
   </div>
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 export default {
   name: 'CanvasToolbar',
@@ -154,43 +121,42 @@ export default {
     isProcessing: {
       type: Boolean,
       default: false
+    },
+    showFunctionButtons: {
+      type: Boolean,
+      default: true
+    },
+    currentMode: {
+      type: String,
+      default: ''
     }
   },
   emits: [
     'mode-change',
     'drawing-tool-change',
     'brush-size-change',
-    'clear-canvas',
-    'file-upload',
-    'save-image',
-    'save-state',
-    'clear-state'
+    'clear-canvas'
   ],
   setup(props, { emit }) {
-    const fileInput = ref(null)
-    const isInpaintingMode = ref(false)
-    const currentMode = ref('')
     const currentDrawingTool = ref('brush')
     const brushSize = ref(20)
     
+    // 计算属性：是否为局部重绘模式
+    const isInpaintingMode = computed(() => props.currentMode === 'inpainting')
+    
     // 进入局部重绘模式
     const enterInpaintingMode = () => {
-      isInpaintingMode.value = true
-      currentMode.value = 'inpainting'
       currentDrawingTool.value = 'brush'
       emit('mode-change', 'inpainting')
     }
     
     // 退出局部重绘模式
     const exitInpaintingMode = () => {
-      isInpaintingMode.value = false
-      currentMode.value = ''
       emit('mode-change', '')
     }
     
     // 选择其他模式
     const selectMode = (mode) => {
-      currentMode.value = mode
       emit('mode-change', mode)
     }
     
@@ -210,40 +176,9 @@ export default {
       emit('clear-canvas')
     }
     
-    // 文件上传
-    const handleUpload = () => {
-      fileInput.value?.click()
-    }
-    
-    const handleFileSelect = (event) => {
-      const file = event.target.files[0]
-      if (file) {
-        emit('file-upload', file)
-      }
-      // 清空input值，允许重复选择同一文件
-      event.target.value = ''
-    }
-    
-    const handleSave = () => {
-      emit('save-image')
-    }
-    
-    // 保存状态
-    const handleSaveState = () => {
-      emit('save-state')
-    }
-    
-    // 清除状态
-    const handleClearState = () => {
-      if (confirm('确定要清除所有保存的状态吗？这将删除所有历史记录和画布内容。')) {
-        emit('clear-state')
-      }
-    }
     
     return {
-      fileInput,
       isInpaintingMode,
-      currentMode,
       currentDrawingTool,
       brushSize,
       enterInpaintingMode,
@@ -251,12 +186,7 @@ export default {
       selectMode,
       selectDrawingTool,
       updateBrushSize,
-      clearCanvas,
-      handleUpload,
-      handleFileSelect,
-      handleSave,
-      handleSaveState,
-      handleClearState
+      clearCanvas
     }
   }
 }
@@ -268,6 +198,7 @@ export default {
   justify-content: center;
   padding: 10px 15px;
   flex-shrink: 0;
+  background-color: #0f0f0f;
 }
 
 .main-toolbar,
@@ -294,7 +225,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 12px;
+  padding: 2px 4px;
   border: 1px solid #444;
   border-radius: 6px;
   background: #333;

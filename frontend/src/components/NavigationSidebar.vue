@@ -54,7 +54,7 @@ const setActiveTab = (tab) => {
 <style scoped>
 .navigation-sidebar {
   width: 60px;
-  height: 80vh;
+  height: 100vh;
   background: #1a1a1a;
   display: flex;
   flex-direction: column;

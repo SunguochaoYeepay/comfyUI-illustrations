@@ -143,9 +143,9 @@ export default {
 <style scoped>
 .history-panel {
   position: fixed;
-  top: 0;
+  top: 52px;
   right: 0;
-  width: 320px;
+  width: 220px;
   height: 100vh;
   background: var(--bg-color, #f8f9fa);
   border-left: 1px solid var(--border-color, #e9ecef);

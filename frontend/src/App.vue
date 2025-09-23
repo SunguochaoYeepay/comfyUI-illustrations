@@ -136,7 +136,7 @@ html, body {
 .main-content {
   flex: 1;
   background: #0f0f0f;
-  margin-left: 60px;
+  margin-left: 0px;
 }
 
 /* 强制重置可能的全局样式 */

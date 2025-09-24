@@ -425,19 +425,40 @@ export default {
               },
               onSuccess: async (statusData, taskId) => {
                 console.log('✅ 局部重绘完成:', statusData)
+                console.log('📋 statusData.result:', statusData.result)
                 
                 let imageUrl = null
                 if (statusData.result) {
-                  if (statusData.result.direct_urls && statusData.result.direct_urls.length > 0) {
-                    imageUrl = statusData.result.direct_urls[0]
-                  } else if (statusData.result.image_urls && statusData.result.image_urls.length > 0) {
-                    imageUrl = statusData.result.image_urls[0]
-                  }
+                console.log('📋 direct_urls:', statusData.result.direct_urls)
+                console.log('📋 image_urls:', statusData.result.image_urls)
+                console.log('📋 filenames:', statusData.result.filenames)
+                
+                // 优先使用第一个文件（主要结果），跳过可能的遮罩文件
+                if (statusData.result.direct_urls && statusData.result.direct_urls.length > 0) {
+                  // 查找主要结果文件（通常是第一个，文件名包含主要结果）
+                  const mainResultIndex = statusData.result.filenames.findIndex(filename => 
+                    filename.includes('00011') || filename.includes('main') || filename.includes('result')
+                  )
+                  const selectedIndex = mainResultIndex >= 0 ? mainResultIndex : 0
+                  imageUrl = statusData.result.direct_urls[selectedIndex]
+                  console.log('✅ 使用 direct_urls[', selectedIndex, ']:', imageUrl)
+                  console.log('📋 对应的文件名:', statusData.result.filenames[selectedIndex])
+                } else if (statusData.result.image_urls && statusData.result.image_urls.length > 0) {
+                  imageUrl = statusData.result.image_urls[0]
+                  console.log('✅ 使用 image_urls[0]:', imageUrl)
+                } else {
+                  console.log('❌ 没有找到图像URL')
+                }
+                } else {
+                  console.log('❌ statusData.result 为空')
                 }
                 
                 if (imageUrl && imageUrl.startsWith('/')) {
                   imageUrl = API_BASE + imageUrl
+                  console.log('🔗 完整图像URL:', imageUrl)
                 }
+                
+                console.log('📤 最终图像URL:', imageUrl)
                 
                 resolve({
                   success: true,
@@ -463,56 +484,102 @@ export default {
             maskDataUrl: result.maskDataUrl,
             prompt: props.prompt
           })
+          
+          // 只有成功加载图像后才重置处理状态
+          isProcessing.value = false
+          processingMessage.value = ''
+          emit('processing-end')
         } else {
           throw new Error('局部重绘失败')
         }
         
       } catch (error) {
         console.error('局部重绘错误:', error)
-        throw error
-      } finally {
+        // 发生错误时也要重置处理状态
         isProcessing.value = false
         processingMessage.value = ''
         emit('processing-end')
+        throw error
       }
     }
     
     // 加载结果图像
     const loadResultImage = async (imageUrl) => {
+      console.log('🔄 开始加载结果图像:', imageUrl)
       return new Promise((resolve, reject) => {
-        fabric.Image.fromURL(imageUrl, (img) => {
-          if (currentImage.value) {
-            // 获取当前图像的位置和缩放信息
-            const currentLeft = currentImage.value.left
-            const currentTop = currentImage.value.top
-            const currentScaleX = currentImage.value.scaleX
-            const currentScaleY = currentImage.value.scaleY
-            
-            // 设置新图像的位置和缩放
-            img.set({
-              left: currentLeft,
-              top: currentTop,
-              scaleX: currentScaleX,
-              scaleY: currentScaleY,
+        // 设置超时
+        const timeout = setTimeout(() => {
+          console.error('❌ 图像加载超时 (10秒)')
+          reject(new Error('图像加载超时'))
+        }, 10000)
+        
+        // 直接使用原生Image对象加载图像
+        const img = new Image()
+        img.crossOrigin = 'anonymous' // 设置跨域
+        
+        img.onload = () => {
+          console.log('✅ 图像加载成功，开始创建Fabric.js对象')
+          clearTimeout(timeout)
+          
+          try {
+            // 手动创建Fabric.js图像对象
+            const fabricImg = new fabric.Image(img, {
+              left: 0,
+              top: 0,
               selectable: false,
               evented: false
             })
             
-            // 移除旧图像，添加新图像
-            canvas.value.remove(currentImage.value)
-            canvas.value.add(img)
-            canvas.value.sendToBack(img)
+            console.log('✅ Fabric.js图像对象创建成功:', fabricImg)
             
-            // 更新当前图像引用
-            currentImage.value = img
-            canvas.value.renderAll()
-            
-            console.log('✅ 重绘结果已回填到画板')
-            resolve()
-          } else {
-            reject(new Error('没有当前图像'))
+            if (currentImage.value) {
+              // 获取当前图像的位置和缩放信息
+              const currentLeft = currentImage.value.left
+              const currentTop = currentImage.value.top
+              const currentScaleX = currentImage.value.scaleX
+              const currentScaleY = currentImage.value.scaleY
+              
+              console.log('📋 当前图像信息:', { currentLeft, currentTop, currentScaleX, currentScaleY })
+              
+              // 设置新图像的位置和缩放
+              fabricImg.set({
+                left: currentLeft,
+                top: currentTop,
+                scaleX: currentScaleX,
+                scaleY: currentScaleY,
+                selectable: false,
+                evented: false
+              })
+              
+              // 移除旧图像，添加新图像
+              canvas.value.remove(currentImage.value)
+              canvas.value.add(fabricImg)
+              fabricImg.sendToBack()
+              
+              // 更新当前图像引用
+              currentImage.value = fabricImg
+              canvas.value.renderAll()
+              
+              console.log('✅ 重绘结果已回填到画板')
+              resolve()
+            } else {
+              console.error('❌ 没有当前图像')
+              reject(new Error('没有当前图像'))
+            }
+          } catch (error) {
+            console.error('❌ 创建Fabric.js图像对象失败:', error)
+            reject(error)
           }
-        })
+        }
+        
+        img.onerror = (error) => {
+          console.error('❌ 图像加载失败:', error)
+          clearTimeout(timeout)
+          reject(new Error('图像加载失败'))
+        }
+        
+        console.log('🔄 开始加载图像:', imageUrl)
+        img.src = imageUrl
       })
     }
     

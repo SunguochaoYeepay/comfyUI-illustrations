@@ -387,9 +387,27 @@ class TaskManager:
                         print(f"📁 本地输出目录: {OUTPUT_DIR}")
                         
                         # 首先尝试从节点输出获取图片和视频
+                        # 只处理SaveImage节点的输出，忽略PreviewImage等预览节点
                         for node_id, output in outputs.items():
                             if "images" in output:
-                                print(f"🖼️ 找到图像输出节点 {node_id}，包含 {len(output['images'])} 个文件")
+                                # 通过文件名前缀判断是否为SaveImage节点的输出
+                                # SaveImage节点会生成我们设置的前缀文件名（如qwen-edit-xxx或pl-qwen-edit）
+                                # PreviewImage节点会生成临时文件名（如ComfyUI_temp_xxx）
+                                is_save_image_output = False
+                                for image_info in output["images"]:
+                                    filename = image_info['filename']
+                                    if (filename.startswith("qwen-edit-") or 
+                                        filename.startswith("pl-qwen-edit") or
+                                        filename.startswith("yeepay_") or
+                                        filename.startswith("ComfyUI_") and not filename.startswith("ComfyUI_temp_")):
+                                        is_save_image_output = True
+                                        break
+                                
+                                if not is_save_image_output:
+                                    print(f"⏭️ 跳过预览节点 {node_id} (文件名: {output['images'][0]['filename'] if output['images'] else 'N/A'})")
+                                    continue
+                                    
+                                print(f"🖼️ 找到SaveImage输出节点 {node_id}，包含 {len(output['images'])} 个文件")
                                 for image_info in output["images"]:
                                     filename = image_info['filename']
                                     
@@ -439,7 +457,7 @@ class TaskManager:
                                             
                                             # 尝试查找实际生成的文件（处理临时文件名问题）
                                             print(f"🔍 尝试查找实际生成的文件...")
-                                            actual_filename = self._find_actual_output_file(filename, COMFYUI_MAIN_OUTPUT_DIR)
+                                            actual_filename = self._find_actual_output_file(filename, COMFYUI_MAIN_OUTPUT_DIR, task_id)
                                             if actual_filename:
                                                 actual_source_path = COMFYUI_MAIN_OUTPUT_DIR / actual_filename
                                                 actual_dest_path = OUTPUT_DIR / actual_filename
@@ -689,6 +707,7 @@ class TaskManager:
             # 准备工作流参数
             workflow_params = parameters.copy()
             workflow_params["mask_path"] = mask_path
+            workflow_params["task_id"] = task_id  # 添加任务ID到参数中
             
             # 创建工作流
             print(f"🔧 创建Qwen-Edit工作流...")
@@ -728,17 +747,32 @@ class TaskManager:
             self.db.update_task_status(task_id, "failed")
             raise Exception(f"Qwen-Edit任务执行失败: {str(e)}")
     
-    def _find_actual_output_file(self, temp_filename: str, output_dir: Path) -> Optional[str]:
+    def _find_actual_output_file(self, temp_filename: str, output_dir: Path, task_id: str = None) -> Optional[str]:
         """查找实际生成的文件（处理ComfyUI临时文件名问题）
         
         Args:
             temp_filename: ComfyUI返回的临时文件名
             output_dir: ComfyUI输出目录
+            task_id: 任务ID，用于精确匹配包含任务ID的文件
             
         Returns:
             实际文件名，如果未找到则返回None
         """
         try:
+            # 如果有任务ID，优先查找包含任务ID的文件
+            if task_id:
+                task_prefix = f"qwen-edit-{task_id[:8]}"
+                print(f"🔍 优先查找包含任务ID的文件: {task_prefix}")
+                
+                # 查找包含任务ID的文件
+                pattern = f"{task_prefix}_*.png"
+                matching_files = list(output_dir.glob(pattern))
+                if matching_files:
+                    # 按修改时间排序，返回最新的
+                    latest_file = max(matching_files, key=lambda f: f.stat().st_mtime)
+                    print(f"✅ 找到包含任务ID的文件: {latest_file.name}")
+                    return latest_file.name
+            
             # 从临时文件名中提取编号
             # 例如：ComfyUI_temp_qpvht_00008_.png -> 00008
             import re
@@ -749,8 +783,9 @@ class TaskManager:
             file_number = match.group(1)
             print(f"🔍 从临时文件名提取编号: {file_number}")
             
-            # 查找所有可能的前缀模式
+            # 查找所有可能的前缀模式（按优先级排序）
             possible_prefixes = [
+                "qwen-edit-",  # 新的任务ID前缀
                 "pl-qwen-edit",
                 "yeepay",
                 "ComfyUI",
@@ -760,16 +795,16 @@ class TaskManager:
             for prefix in possible_prefixes:
                 # 尝试不同的编号格式
                 possible_names = [
-                    f"{prefix}_{file_number}_.png",
-                    f"{prefix}_{file_number.zfill(5)}_.png",
-                    f"{prefix}_{file_number.zfill(4)}_.png",
-                    f"{prefix}_{file_number.zfill(3)}_.png",
-                    f"{prefix}_{file_number.zfill(2)}_.png",
-                    f"{prefix}_{file_number}.png",
-                    f"{prefix}_{file_number.zfill(5)}.png",
-                    f"{prefix}_{file_number.zfill(4)}.png",
-                    f"{prefix}_{file_number.zfill(3)}.png",
-                    f"{prefix}_{file_number.zfill(2)}.png"
+                    f"{prefix}{file_number}_.png",
+                    f"{prefix}{file_number.zfill(5)}_.png",
+                    f"{prefix}{file_number.zfill(4)}_.png",
+                    f"{prefix}{file_number.zfill(3)}_.png",
+                    f"{prefix}{file_number.zfill(2)}_.png",
+                    f"{prefix}{file_number}.png",
+                    f"{prefix}{file_number.zfill(5)}.png",
+                    f"{prefix}{file_number.zfill(4)}.png",
+                    f"{prefix}{file_number.zfill(3)}.png",
+                    f"{prefix}{file_number.zfill(2)}.png"
                 ]
                 
                 for possible_name in possible_names:
@@ -781,7 +816,7 @@ class TaskManager:
             # 如果没找到精确匹配，尝试查找最新的相关文件
             print(f"🔍 未找到精确匹配，查找最新的相关文件...")
             for prefix in possible_prefixes:
-                pattern = f"{prefix}_*.png"
+                pattern = f"{prefix}*.png"
                 matching_files = list(output_dir.glob(pattern))
                 if matching_files:
                     # 按修改时间排序，返回最新的

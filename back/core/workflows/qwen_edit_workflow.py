@@ -33,9 +33,12 @@ class QwenEditWorkflow(BaseWorkflow):
         if not mask_path:
             raise ValueError("局部重绘需要提供mask_path参数")
         
-        return self.create_inpainting_workflow(reference_image_path, mask_path, description, parameters)
+        # 从parameters中获取任务ID
+        task_id = parameters.get("task_id")
+        
+        return self.create_inpainting_workflow(reference_image_path, mask_path, description, parameters, task_id)
     
-    def create_inpainting_workflow(self, image_path: str, mask_path: str, description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def create_inpainting_workflow(self, image_path: str, mask_path: str, description: str, parameters: Dict[str, Any], task_id: str = None) -> Dict[str, Any]:
         """创建Qwen-Edit局部重绘工作流
         
         Args:
@@ -43,6 +46,7 @@ class QwenEditWorkflow(BaseWorkflow):
             mask_path: 遮罩图像路径
             description: 重绘描述
             parameters: 生成参数
+            task_id: 任务ID，用于文件命名
             
         Returns:
             Qwen-Edit局部重绘工作流字典
@@ -60,6 +64,9 @@ class QwenEditWorkflow(BaseWorkflow):
         
         # 更新文本描述
         workflow = self._update_text_description(workflow, description)
+        
+        # 更新保存路径（使用任务ID）
+        workflow = self._update_save_path(workflow, task_id)
         
         print(f"✅ Qwen-Edit局部重绘工作流创建完成")
         return workflow
@@ -503,14 +510,31 @@ class QwenEditWorkflow(BaseWorkflow):
         
         return workflow
     
-    def _update_save_path(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_save_path(self, workflow: Dict[str, Any], task_id: str = None) -> Dict[str, Any]:
         """更新保存路径"""
+        print(f"🔧 开始更新保存路径，任务ID: {task_id}")
+        
         # 查找保存节点并更新路径
+        save_image_found = False
         for node_id, node_data in workflow.items():
             if node_data.get("class_type") == "SaveImage":
-                node_data["inputs"]["filename_prefix"] = "pl-qwen-edit"
-                print(f"✅ 更新保存路径: pl-qwen-edit")
+                save_image_found = True
+                print(f"📁 找到SaveImage节点: {node_id}")
+                print(f"📋 当前filename_prefix: {node_data.get('inputs', {}).get('filename_prefix', '未设置')}")
+                
+                if task_id:
+                    # 使用任务ID作为文件名前缀，确保唯一性
+                    filename_prefix = f"qwen-edit-{task_id[:8]}"  # 使用任务ID的前8位
+                    node_data["inputs"]["filename_prefix"] = filename_prefix
+                    print(f"✅ 更新保存路径为: {filename_prefix}")
+                else:
+                    # 如果没有任务ID，使用默认前缀
+                    node_data["inputs"]["filename_prefix"] = "pl-qwen-edit"
+                    print(f"✅ 更新保存路径为: pl-qwen-edit")
                 break
+        
+        if not save_image_found:
+            print(f"⚠️ 未找到SaveImage节点")
         
         return workflow
     

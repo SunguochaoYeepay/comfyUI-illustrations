@@ -452,6 +452,8 @@ export default {
       // 验证生成的遮罩图像
       const dataUrl = tempCanvas.toDataURL('image/png')
       console.log(`✅ 遮罩生成完成，尺寸: ${tempCanvas.width}x${tempCanvas.height}`)
+      console.log(`📊 遮罩DataURL长度: ${dataUrl.length} 字符`)
+      console.log(`🎯 遮罩DataURL前缀: ${dataUrl.substring(0, 50)}...`)
       
       return dataUrl
     }
@@ -479,8 +481,12 @@ export default {
       
       try {
         // 生成遮罩
+        console.log('🎨 开始生成遮罩图像...')
         const maskDataUrl = generateMaskImage()
+        console.log('✅ 遮罩图像生成成功，DataURL长度:', maskDataUrl.length)
+        
         const maskFile = dataUrlToFile(maskDataUrl, 'mask.png')
+        console.log('✅ 遮罩文件转换成功，文件大小:', maskFile.size, 'bytes')
         
         // 准备参数
         const parameters = {

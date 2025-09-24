@@ -1,7 +1,7 @@
 {
   "3": {
     "inputs": {
-      "seed": 182832096480712,
+      "seed": 1105094576049441,
       "steps": 8,
       "cfg": 2,
       "sampler_name": "euler",
@@ -31,7 +31,7 @@
   },
   "6": {
     "inputs": {
-      "text": "去掉遮罩区域内容，换成毛毛虫",
+      "text": "去掉",
       "clip": [
         "38",
         0
@@ -116,7 +116,7 @@
   },
   "66": {
     "inputs": {
-      "shift": 3.500000000000001,
+      "shift": 3.5,
       "model": [
         "70",
         0
@@ -212,7 +212,7 @@
   },
   "76": {
     "inputs": {
-      "image": "clipspace/clipspace-painted-masked-85719551.png [input]"
+      "image": "generated-image-1758523402979.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -237,12 +237,36 @@
   },
   "92": {
     "inputs": {
-      "image": "clipspace/clipspace-painted-masked-85728789.png [input]",
+      "image": "clipspace/54bf38c0-0d32-4164-839e-23c89a4a9195_mask_mask.png",
       "channel": "alpha"
     },
     "class_type": "LoadImageMask",
     "_meta": {
       "title": "加载图像遮罩"
+    }
+  },
+  "93": {
+    "inputs": {
+      "masks": [
+        "92",
+        0
+      ]
+    },
+    "class_type": "Convert Masks to Images",
+    "_meta": {
+      "title": "遮罩到图像"
+    }
+  },
+  "94": {
+    "inputs": {
+      "images": [
+        "93",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
     }
   }
 }

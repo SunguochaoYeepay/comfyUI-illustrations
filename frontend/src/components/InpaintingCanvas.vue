@@ -339,23 +339,23 @@ export default {
       tempCanvas.height = originalHeight
       const tempCtx = tempCanvas.getContext('2d')
       
-      // 填充白色背景
-      tempCtx.fillStyle = 'rgba(255, 255, 255, 1.0)'
-      tempCtx.fillRect(0, 0, originalWidth, originalHeight)
+      // 1. 先绘制原图作为背景
+      tempCtx.drawImage(currentImage.value._originalElement, 0, 0, originalWidth, originalHeight)
       
-      // 计算缩放比例
+      // 2. 计算缩放比例
       const scaleX = originalWidth / (currentImage.value.width * currentImage.value.scaleX)
       const scaleY = originalHeight / (currentImage.value.height * currentImage.value.scaleY)
-      
-      // 使用与图像缩放一致的缩放比例（Math.min(scaleX, scaleY)）
-      // 因为图像缩放使用了Math.min(scaleX, scaleY)，所以遮罩也需要使用相同的比例
       const imageScale = Math.min(scaleX, scaleY)
       
-      // 绘制遮罩区域（透明）
-      tempCtx.globalCompositeOperation = 'destination-out'
-      tempCtx.fillStyle = 'rgba(255, 255, 255, 1.0)'
+      console.log('📏 遮罩生成调试信息:')
+      console.log(`   原始图像尺寸: ${originalWidth}x${originalHeight}`)
+      console.log(`   绘制对象数量: ${drawnObjects.length}`)
+      console.log(`   画布图像尺寸: ${currentImage.value.width}x${currentImage.value.height}`)
+      console.log(`   画布图像缩放: ${currentImage.value.scaleX}x${currentImage.value.scaleY}`)
+      console.log(`   缩放比例: ${imageScale}`)
       
-      drawnObjects.forEach(obj => {
+      // 3. 在要重绘的区域绘制纯黑色（Alpha=0，完全透明）
+      drawnObjects.forEach((obj, index) => {
         if (obj.type === 'circle') {
           const imageBounds = currentImage.value.getBoundingRect()
           const imageLeft = imageBounds.left
@@ -364,14 +364,29 @@ export default {
           const relativeLeft = obj.left - imageLeft
           const relativeTop = obj.top - imageTop
           
-          // 使用统一的缩放比例，确保坐标转换正确
           const originalLeft = relativeLeft * imageScale
           const originalTop = relativeTop * imageScale
           const originalRadius = obj.radius * imageScale
           
-          tempCtx.beginPath()
-          tempCtx.arc(originalLeft, originalTop, originalRadius, 0, 2 * Math.PI)
-          tempCtx.fill()
+          console.log(`🎯 遮罩对象 ${index + 1}:`)
+          console.log(`   画布位置: (${obj.left}, ${obj.top}), 半径: ${obj.radius}`)
+          console.log(`   图像边界: (${imageLeft}, ${imageTop})`)
+          console.log(`   相对位置: (${relativeLeft}, ${relativeTop})`)
+          console.log(`   原始位置: (${originalLeft}, ${originalTop}), 半径: ${originalRadius}`)
+          
+          // 检查坐标是否在画布范围内
+          if (originalLeft >= 0 && originalLeft <= originalWidth && 
+              originalTop >= 0 && originalTop <= originalHeight) {
+            // 使用globalCompositeOperation来创建透明区域
+            tempCtx.globalCompositeOperation = 'destination-out'
+            tempCtx.beginPath()
+            tempCtx.arc(originalLeft, originalTop, originalRadius, 0, 2 * Math.PI)
+            tempCtx.fill()
+            tempCtx.globalCompositeOperation = 'source-over' // 重置合成模式
+            console.log(`✅ 成功绘制透明遮罩对象 ${index + 1}`)
+          } else {
+            console.log(`❌ 遮罩对象 ${index + 1} 坐标超出画布范围，跳过绘制`)
+          }
         }
       })
       

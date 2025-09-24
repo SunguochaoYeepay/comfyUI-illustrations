@@ -53,28 +53,37 @@ class QwenEditWorkflow(BaseWorkflow):
         """
         print(f"🎨 创建Qwen-Edit局部重绘工作流: {self.model_config.display_name}")
         
-        # 验证参数
-        validated_params = self._validate_parameters(parameters)
-        
         # 加载工作流模板
         workflow = self._load_qwen_edit_template()
         
-        # 更新图像和遮罩路径
+        # 更新图像和遮罩路径（必需）
         workflow = self._update_image_and_mask_paths(workflow, image_path, mask_path)
         
-        # 更新文本描述
+        # 更新文本描述（提示词）
         workflow = self._update_text_description(workflow, description)
         
         # 更新采样参数
-        workflow = self._update_sampling_parameters(workflow, validated_params)
+        workflow = self._update_sampling_parameters(workflow, parameters)
         
-        # 更新保存路径（使用任务ID）
+        # 更新保存路径
         workflow = self._update_save_path(workflow, task_id)
         
-        # 验证工作流JSON的完整性
-        self._validate_workflow_json(workflow)
+        # 验证工作流配置
+        print(f"🔍 验证工作流配置:")
+        if "76" in workflow:
+            print(f"   节点76 (LoadImage): {workflow['76']['inputs']['image']}")
+        if "92" in workflow:
+            print(f"   节点92 (LoadImageMask): {workflow['92']['inputs']['image']}")
+        if "6" in workflow:
+            print(f"   节点6 (正面提示词): {workflow['6']['inputs']['text'][:50]}...")
+        if "7" in workflow:
+            print(f"   节点7 (负面提示词): {workflow['7']['inputs']['text']}")
+        if "3" in workflow:
+            print(f"   节点3 (KSampler): 步数={workflow['3']['inputs']['steps']}, CFG={workflow['3']['inputs']['cfg']}")
+        if "60" in workflow:
+            print(f"   节点60 (SaveImage): {workflow['60']['inputs']['filename_prefix']}")
         
-        print(f"✅ Qwen-Edit局部重绘工作流创建完成")
+        print(f"✅ Qwen-Edit局部重绘工作流创建完成（全动态配置）")
         return workflow
     
     def _load_qwen_edit_template(self) -> Dict[str, Any]:
@@ -134,16 +143,58 @@ class QwenEditWorkflow(BaseWorkflow):
             raise
     
     
+    def _update_image_path_only(self, workflow: Dict[str, Any], image_path: str) -> Dict[str, Any]:
+        """只更新图像路径，不更新遮罩路径"""
+        print(f"📸 只更新Qwen-Edit工作流的图像路径")
+        
+        # 检查新工作流的节点结构 (CG迷工作流)
+        if "76" in workflow:
+            try:
+                # 只复制图像到ComfyUI的input目录
+                comfyui_image_path = self._copy_to_comfyui_input(image_path, is_mask=False)
+                
+                # 设置LoadImage节点的图像输入 (节点76)
+                workflow["76"]["inputs"]["image"] = comfyui_image_path
+                
+                print(f"✅ 设置图像路径: {os.path.basename(image_path)}")
+                print(f"   图像路径 (节点76): {comfyui_image_path}")
+                
+            except Exception as e:
+                print(f"❌ 设置图像路径失败: {e}")
+        
+        # 兼容旧工作流的节点结构
+        elif "141" in workflow:
+            try:
+                # 只复制图像到ComfyUI的input目录
+                comfyui_image_path = self._copy_to_comfyui_input(image_path)
+                
+                # 设置LoadImage节点的图像输入 (节点141)
+                workflow["141"]["inputs"]["image"] = comfyui_image_path
+                
+                print(f"✅ 设置图像路径: {os.path.basename(image_path)}")
+                print(f"   图像路径 (节点141): {comfyui_image_path}")
+                
+            except Exception as e:
+                print(f"❌ 设置图像路径失败: {e}")
+        
+        return workflow
+    
     def _update_image_and_mask_paths(self, workflow: Dict[str, Any], image_path: str, mask_path: str) -> Dict[str, Any]:
         """更新图像和遮罩路径"""
         print(f"📸 更新Qwen-Edit工作流的图像和遮罩路径")
+        
+        # 检查文件是否存在
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"图像文件不存在: {image_path}")
+        if not os.path.exists(mask_path):
+            raise FileNotFoundError(f"遮罩文件不存在: {mask_path}")
         
         # 检查新工作流的节点结构 (CG迷工作流)
         if "76" in workflow and "92" in workflow:
             try:
                 # 分别复制图像和遮罩到ComfyUI的input目录
-                comfyui_image_path = self._copy_to_comfyui_input(image_path)
-                comfyui_mask_path = self._copy_to_comfyui_input(mask_path)
+                comfyui_image_path = self._copy_to_comfyui_input(image_path, is_mask=False)
+                comfyui_mask_path = self._copy_to_comfyui_input(mask_path, is_mask=True)
                 
                 # 设置LoadImage节点的图像输入 (节点76)
                 workflow["76"]["inputs"]["image"] = comfyui_image_path
@@ -151,14 +202,14 @@ class QwenEditWorkflow(BaseWorkflow):
                 # 设置LoadImageMask节点的遮罩输入 (节点92)
                 workflow["92"]["inputs"]["image"] = comfyui_mask_path
                 
-                print(f"✅ 分别设置图像和遮罩: {os.path.basename(image_path)} + {os.path.basename(mask_path)}")
-                print(f"   图像路径 (节点76): {comfyui_image_path}")
-                print(f"   遮罩路径 (节点92): {comfyui_mask_path}")
+                print(f"✅ 设置图像和遮罩路径完成")
+                print(f"   图像: {os.path.basename(image_path)} -> {comfyui_image_path}")
+                print(f"   遮罩: {os.path.basename(mask_path)} -> {comfyui_mask_path}")
                 
             except Exception as e:
                 print(f"❌ 设置图像和遮罩路径失败: {e}")
                 # 降级：只使用原始图像
-                comfyui_image_path = self._copy_to_comfyui_input(image_path)
+                comfyui_image_path = self._copy_to_comfyui_input(image_path, is_mask=False)
                 workflow["76"]["inputs"]["image"] = comfyui_image_path
                 print(f"⚠️ 降级使用原始图像: {comfyui_image_path}")
         
@@ -189,7 +240,13 @@ class QwenEditWorkflow(BaseWorkflow):
         return workflow
     
     def _create_composite_image(self, image_path: str, mask_path: str) -> str:
-        """创建包含图像和遮罩的复合文件，模拟ComfyUI手工绘制的格式"""
+        """创建包含图像和遮罩的复合文件，模拟ComfyUI手工绘制的格式
+        
+        新的遮罩格式：
+        - 原图作为背景
+        - 要重绘的区域为透明（Alpha=0）
+        - 保持原样的区域为不透明（Alpha=255）
+        """
         try:
             from PIL import Image
             import os
@@ -203,40 +260,60 @@ class QwenEditWorkflow(BaseWorkflow):
                         mask = mask.resize(img.size, Image.Resampling.LANCZOS)
                         print(f"⚠️ 遮罩尺寸已调整: {mask.size}")
                     
-                    # 确保遮罩是单通道的
-                    if mask.mode != 'L':
-                        mask = mask.convert('L')
-                    
-                    # 创建复合图像：将遮罩作为Alpha通道
-                    # 白色区域（要重绘）= 透明，黑色区域（保持原样）= 不透明
-                    if img.mode != 'RGBA':
-                        img = img.convert('RGBA')
-                    
-                    # 创建新的RGBA图像
-                    composite = Image.new('RGBA', img.size, (0, 0, 0, 0))
-                    
-                    # 将原始图像复制到复合图像
-                    composite.paste(img, (0, 0))
-                    
-                    # 将遮罩作为Alpha通道
-                    # 白色区域（要重绘）= 透明（Alpha=0）
-                    # 黑色区域（保持原样）= 不透明（Alpha=255）
-                    mask_data = mask.getdata()
-                    composite_data = []
-                    
-                    for i, pixel in enumerate(mask_data):
-                        # 获取原始图像的RGBA值
-                        r, g, b, a = img.getdata()[i]
+                    # 如果遮罩是RGBA格式，直接使用
+                    if mask.mode == 'RGBA':
+                        print(f"✅ 遮罩已经是RGBA格式，直接使用")
+                        composite = mask.copy()
                         
-                        # 根据遮罩设置Alpha值
-                        if pixel > 128:  # 白色区域（要重绘）
-                            alpha = 0  # 完全透明
-                        else:  # 黑色区域（保持原样）
-                            alpha = 255  # 完全不透明
+                        # 将原图内容复制到遮罩的RGB通道
+                        if img.mode != 'RGB':
+                            img_rgb = img.convert('RGB')
+                        else:
+                            img_rgb = img
                         
-                        composite_data.append((r, g, b, alpha))
-                    
-                    composite.putdata(composite_data)
+                        # 创建新的RGBA图像，使用原图的RGB和遮罩的Alpha
+                        composite = Image.new('RGBA', img.size)
+                        composite.paste(img_rgb, (0, 0))
+                        
+                        # 使用遮罩的Alpha通道
+                        if mask.mode == 'RGBA':
+                            composite.putalpha(mask.split()[-1])  # 使用遮罩的Alpha通道
+                        else:
+                            # 如果遮罩不是RGBA，转换为Alpha通道
+                            if mask.mode != 'L':
+                                mask = mask.convert('L')
+                            composite.putalpha(mask)
+                        
+                    else:
+                        # 传统处理方式：将遮罩转换为Alpha通道
+                        if mask.mode != 'L':
+                            mask = mask.convert('L')
+                        
+                        # 创建RGBA图像
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                        
+                        composite = img.copy()
+                        
+                        # 将遮罩作为Alpha通道
+                        # 白色区域（要重绘）= 透明（Alpha=0）
+                        # 黑色区域（保持原样）= 不透明（Alpha=255）
+                        mask_data = mask.getdata()
+                        composite_data = []
+                        
+                        for i, pixel in enumerate(mask_data):
+                            # 获取原始图像的RGBA值
+                            r, g, b, a = img.getdata()[i]
+                            
+                            # 根据遮罩设置Alpha值
+                            if pixel > 128:  # 白色区域（要重绘）
+                                alpha = 0  # 完全透明
+                            else:  # 黑色区域（保持原样）
+                                alpha = 255  # 完全不透明
+                            
+                            composite_data.append((r, g, b, alpha))
+                        
+                        composite.putdata(composite_data)
                     
                     # 保存复合图像
                     composite_filename = f"qwen_edit_{Path(image_path).stem}.png"
@@ -245,6 +322,7 @@ class QwenEditWorkflow(BaseWorkflow):
                     
                     print(f"✅ 复合图像创建成功: {composite_path}")
                     print(f"   图像尺寸: {img.size}, 遮罩尺寸: {mask.size}")
+                    print(f"   复合图像模式: {composite.mode}")
                     return str(composite_path)
                     
         except Exception as e:
@@ -337,11 +415,12 @@ class QwenEditWorkflow(BaseWorkflow):
         return workflow
     
     
-    def _copy_to_comfyui_input(self, image_path: str) -> str:
+    def _copy_to_comfyui_input(self, image_path: str, is_mask: bool = False) -> str:
         """将图像文件复制到ComfyUI的input目录
         
         Args:
             image_path: 原始图像路径
+            is_mask: 是否为遮罩文件
             
         Returns:
             ComfyUI兼容的文件名格式
@@ -354,25 +433,31 @@ class QwenEditWorkflow(BaseWorkflow):
         original_filename = os.path.basename(image_path)
         name, ext = os.path.splitext(original_filename)
         
-        # 生成唯一的文件名，避免缓存问题
-        unique_filename = f"{name}_{uuid.uuid4().hex[:8]}{ext}"
+        # 使用固定的文件名，避免缓存问题
+        unique_filename = f"{name}_latest{ext}"
         
-        # 目标路径
-        dest_path = COMFYUI_INPUT_DIR / unique_filename
+        if is_mask:
+            # 遮罩文件复制到clipspace目录
+            clipspace_dir = COMFYUI_INPUT_DIR / "clipspace"
+            clipspace_dir.mkdir(exist_ok=True)
+            dest_path = clipspace_dir / unique_filename
+            comfyui_path = f"clipspace/{unique_filename}"
+        else:
+            # 图像文件复制到input根目录
+            dest_path = COMFYUI_INPUT_DIR / unique_filename
+            comfyui_path = unique_filename
         
         try:
             # 复制文件到ComfyUI的input目录
             shutil.copy2(image_path, dest_path)
-            print(f"✅ 文件复制成功: {image_path} -> {dest_path}")
-            print(f"   原始文件名: {original_filename}")
-            print(f"   唯一文件名: {unique_filename}")
+            print(f"✅ 文件复制: {os.path.basename(image_path)} -> {comfyui_path}")
             
-            # 返回ComfyUI期望的格式：filename [input]
-            return f"{unique_filename} [input]"
+            # 返回ComfyUI期望的格式
+            return comfyui_path
         except Exception as e:
             print(f"❌ 文件复制失败: {e}")
             # 如果复制失败，返回文件名（假设文件已经在正确位置）
-            return f"{unique_filename} [input]"
+            return comfyui_path
     
     def _convert_path_for_comfyui(self, image_path: str) -> str:
         """转换Windows路径为ComfyUI兼容的路径格式

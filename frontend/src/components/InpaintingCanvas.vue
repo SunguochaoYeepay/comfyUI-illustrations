@@ -69,9 +69,11 @@ export default {
     
     // 计算图片适应画布的缩放比例
     const calculateImageScale = (imgWidth, imgHeight, canvasWidth, canvasHeight) => {
-      // 高度适配画布，宽度自适应
-      // 使用高度比例，让图片高度填满画布
-      return canvasHeight / imgHeight
+      // 计算适应画布的缩放比例，确保图片完整显示
+      const scaleX = canvasWidth / imgWidth
+      const scaleY = canvasHeight / imgHeight
+      // 使用较小的缩放比例，确保图片完全适应画布
+      return Math.min(scaleX, scaleY)
     }
     
     // 初始化画布
@@ -345,6 +347,10 @@ export default {
       const scaleX = originalWidth / (currentImage.value.width * currentImage.value.scaleX)
       const scaleY = originalHeight / (currentImage.value.height * currentImage.value.scaleY)
       
+      // 使用与图像缩放一致的缩放比例（Math.min(scaleX, scaleY)）
+      // 因为图像缩放使用了Math.min(scaleX, scaleY)，所以遮罩也需要使用相同的比例
+      const imageScale = Math.min(scaleX, scaleY)
+      
       // 绘制遮罩区域（透明）
       tempCtx.globalCompositeOperation = 'destination-out'
       tempCtx.fillStyle = 'rgba(255, 255, 255, 1.0)'
@@ -358,9 +364,10 @@ export default {
           const relativeLeft = obj.left - imageLeft
           const relativeTop = obj.top - imageTop
           
-          const originalLeft = relativeLeft * scaleX
-          const originalTop = relativeTop * scaleY
-          const originalRadius = obj.radius * scaleY // 使用高度缩放比例，与图像缩放逻辑保持一致
+          // 使用统一的缩放比例，确保坐标转换正确
+          const originalLeft = relativeLeft * imageScale
+          const originalTop = relativeTop * imageScale
+          const originalRadius = obj.radius * imageScale
           
           tempCtx.beginPath()
           tempCtx.arc(originalLeft, originalTop, originalRadius, 0, 2 * Math.PI)
@@ -377,7 +384,9 @@ export default {
         throw new Error('没有图像')
       }
       
-      const drawnObjects = canvas.value.getObjects().filter(obj => 
+      // 检查是否有绘制的遮罩区域
+      const objects = canvas.value.getObjects()
+      const drawnObjects = objects.filter(obj => 
         obj !== currentImage.value && 
         obj.isDrawnMask === true
       )
@@ -406,12 +415,40 @@ export default {
           seed: -1
         }
         
+        // 决定使用哪个图像作为重绘源
+        // 如果当前画布上的图像是重绘结果（不是原始图像），则使用当前画布图像
+        // 否则使用原始图像文件
+        let sourceImageFile
+        console.log('🔍 检查当前图像状态:')
+        console.log('   currentImage.value:', currentImage.value ? '存在' : '不存在')
+        console.log('   isInpaintingResult:', currentImage.value ? currentImage.value.isInpaintingResult : 'N/A')
+        
+        if (currentImage.value && currentImage.value.isInpaintingResult) {
+          // 当前画布上是重绘结果，需要找到第一次重绘的结果文件
+          console.log('🔄 需要找到第一次重绘的结果文件作为重绘源')
+          
+          // 从当前图像获取第一次重绘的结果文件路径
+          const firstResultPath = currentImage.value.firstResultPath
+          if (firstResultPath) {
+            console.log('✅ 找到第一次重绘结果文件:', firstResultPath)
+            // 从URL获取第一次重绘的结果文件
+            sourceImageFile = await getFileFromUrl(firstResultPath)
+          } else {
+            console.log('⚠️ 没有找到第一次重绘结果文件路径，使用原始文件')
+            sourceImageFile = props.originalImageFile
+          }
+        } else {
+          // 当前画布上是原始图像，使用原始文件
+          console.log('🔄 使用原始图像文件作为重绘源')
+          sourceImageFile = props.originalImageFile
+        }
+        
         // 调用API
         const API_BASE = 'http://localhost:9000'
         
         const result = await new Promise((resolve, reject) => {
           executeQwenEdit(
-            props.originalImageFile,
+            sourceImageFile,
             maskFile,
             props.prompt,
             parameters,
@@ -477,6 +514,18 @@ export default {
         if (result.success) {
           // 加载新图像
           await loadResultImage(result.imageUrl)
+          
+          // 重绘成功后清除画布上的遮罩对象
+          const objects = canvas.value.getObjects()
+          const drawnObjects = objects.filter(obj => 
+            obj !== currentImage.value && 
+            obj.isDrawnMask === true
+          )
+          drawnObjects.forEach(obj => {
+            canvas.value.remove(obj)
+          })
+          canvas.value.renderAll()
+          console.log('🧹 重绘成功，已清除遮罩对象，数量:', drawnObjects.length)
           
           // 通知父组件
           emit('inpainting-complete', {
@@ -548,13 +597,15 @@ export default {
                 scaleX: currentScaleX,
                 scaleY: currentScaleY,
                 selectable: false,
-                evented: false
+                evented: false,
+                isInpaintingResult: true,  // 标记为重绘结果
+                firstResultPath: imageUrl  // 保存第一次重绘的结果文件路径
               })
               
               // 移除旧图像，添加新图像
               canvas.value.remove(currentImage.value)
               canvas.value.add(fabricImg)
-              fabricImg.sendToBack()
+              // 图像顺序不重要，直接跳过sendToBack调用
               
               // 更新当前图像引用
               currentImage.value = fabricImg
@@ -595,6 +646,66 @@ export default {
       }
       return new File([u8arr], filename, { type: mime })
     }
+    
+    // 从URL获取文件
+    const getFileFromUrl = async (url) => {
+      try {
+        const response = await fetch(url)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const blob = await response.blob()
+        const file = new File([blob], 'result_image.png', { type: blob.type })
+        console.log('✅ 从URL获取文件成功:', file.name, file.size, '字节')
+        return file
+      } catch (error) {
+        console.error('❌ 从URL获取文件失败:', error)
+        throw error
+      }
+    }
+    
+    // 获取当前画布上的图像作为重绘源
+    const getCurrentCanvasImage = async () => {
+      if (!currentImage.value) {
+        throw new Error('画布上没有图像')
+      }
+      
+      return new Promise((resolve, reject) => {
+        try {
+          // 将当前图像转换为DataURL，使用高质量参数
+          const dataURL = currentImage.value.toDataURL({
+            format: 'png',
+            quality: 1.0,
+            multiplier: 2.0  // 提高分辨率
+          })
+          
+          // 检查DataURL是否有效
+          if (!dataURL || dataURL === 'data:,') {
+            throw new Error('无法生成有效的图像数据')
+          }
+          
+          // 转换为File对象
+          const imageFile = dataUrlToFile(dataURL, 'current_canvas_image.png')
+          
+          // 检查文件大小
+          if (imageFile.size === 0) {
+            throw new Error('生成的图像文件为空')
+          }
+          
+          console.log('✅ 获取当前画布图像成功')
+          console.log('   文件大小:', imageFile.size, '字节')
+          console.log('   文件类型:', imageFile.type)
+          console.log('   文件名:', imageFile.name)
+          
+          resolve(imageFile)
+        } catch (error) {
+          console.error('❌ 获取当前画布图像失败:', error)
+          reject(error)
+        }
+      })
+    }
+    
+    
     
     // 清除绘制内容
     const clearDrawing = () => {

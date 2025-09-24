@@ -65,8 +65,14 @@ class QwenEditWorkflow(BaseWorkflow):
         # 更新文本描述
         workflow = self._update_text_description(workflow, description)
         
+        # 更新采样参数
+        workflow = self._update_sampling_parameters(workflow, validated_params)
+        
         # 更新保存路径（使用任务ID）
         workflow = self._update_save_path(workflow, task_id)
+        
+        # 验证工作流JSON的完整性
+        self._validate_workflow_json(workflow)
         
         print(f"✅ Qwen-Edit局部重绘工作流创建完成")
         return workflow
@@ -112,259 +118,52 @@ class QwenEditWorkflow(BaseWorkflow):
         try:
             print(f"📁 加载本地Qwen-Edit工作流模板")
             
-            # 完全使用用户提供的准确JSON工作流
-            workflow = {
-                "3": {
-                    "inputs": {
-                        "seed": 117645373250617,
-                        "steps": 8,
-                        "cfg": 2.5,
-                        "sampler_name": "euler",
-                        "scheduler": "simple",
-                        "denoise": 1,
-                        "model": ["75", 0],
-                        "positive": ["76", 0],
-                        "negative": ["77", 0],
-                        "latent_image": ["88", 0]
-                    },
-                    "class_type": "KSampler",
-                    "_meta": {
-                        "title": "K采样器"
-                    }
-                },
-                "8": {
-                    "inputs": {
-                        "samples": ["3", 0],
-                        "vae": ["39", 0]
-                    },
-                    "class_type": "VAEDecode",
-                    "_meta": {
-                        "title": "VAE解码"
-                    }
-                },
-                "37": {
-                    "inputs": {
-                        "unet_name": "qwen_image_edit_fp8_e4m3fn.safetensors",
-                        "weight_dtype": "default"
-                    },
-                    "class_type": "UNETLoader",
-                    "_meta": {
-                        "title": "UNET加载器"
-                    }
-                },
-                "38": {
-                    "inputs": {
-                        "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-                        "type": "qwen_image",
-                        "device": "default"
-                    },
-                    "class_type": "CLIPLoader",
-                    "_meta": {
-                        "title": "CLIP加载器"
-                    }
-                },
-                "39": {
-                    "inputs": {
-                        "vae_name": "qwen_image_vae.safetensors"
-                    },
-                    "class_type": "VAELoader",
-                    "_meta": {
-                        "title": "VAE加载器"
-                    }
-                },
-                "60": {
-                    "inputs": {
-                        "filename_prefix": "pl-qwen-edit",
-                        "images": ["8", 0]
-                    },
-                    "class_type": "SaveImage",
-                    "_meta": {
-                        "title": "保存图像"
-                    }
-                },
-                "66": {
-                    "inputs": {
-                        "shift": 3,
-                        "model": ["129", 0]
-                    },
-                    "class_type": "ModelSamplingAuraFlow",
-                    "_meta": {
-                        "title": "模型采样算法AuraFlow"
-                    }
-                },
-                "75": {
-                    "inputs": {
-                        "strength": 1,
-                        "model": ["66", 0]
-                    },
-                    "class_type": "CFGNorm",
-                    "_meta": {
-                        "title": "CFGNorm"
-                    }
-                },
-                "76": {
-                    "inputs": {
-                        "prompt": ["106", 0],
-                        "clip": ["38", 0],
-                        "vae": ["39", 0],
-                        "image": ["109", 0]
-                    },
-                    "class_type": "TextEncodeQwenImageEdit",
-                    "_meta": {
-                        "title": "TextEncodeQwenImageEdit"
-                    }
-                },
-                "77": {
-                    "inputs": {
-                        "prompt": "",
-                        "clip": ["38", 0],
-                        "vae": ["39", 0],
-                        "image": ["109", 0]
-                    },
-                    "class_type": "TextEncodeQwenImageEdit",
-                    "_meta": {
-                        "title": "TextEncodeQwenImageEdit"
-                    }
-                },
-                "88": {
-                    "inputs": {
-                        "pixels": ["126", 0],
-                        "vae": ["39", 0]
-                    },
-                    "class_type": "VAEEncode",
-                    "_meta": {
-                        "title": "VAE编码"
-                    }
-                },
-                "106": {
-                    "inputs": {
-                        "text": "换成毛毛虫"
-                    },
-                    "class_type": "Text Multiline",
-                    "_meta": {
-                        "title": "多行文本"
-                    }
-                },
-                "109": {
-                    "inputs": {
-                        "size": 1024,
-                        "mode": True,
-                        "images": ["122", 0]
-                    },
-                    "class_type": "ImageScaleDownToSize",
-                    "_meta": {
-                        "title": "Scale Down To Size"
-                    }
-                },
-                "139": {
-                    "inputs": {
-                        "image": "clipspace/clipspace-painted-masked-14995060.png [input]",
-                        "channel": "alpha"
-                    },
-                    "class_type": "LoadImageMask",
-                    "_meta": {
-                        "title": "加载图像遮罩"
-                    }
-                },
-                "141": {
-                    "inputs": {
-                        "image": "clipspace/clipspace-painted-masked-15089264.png [input]"
-                    },
-                    "class_type": "LoadImage",
-                    "_meta": {
-                        "title": "加载图像"
-                    }
-                },
-                "122": {
-                    "inputs": {
-                        "mask_opacity": 1,
-                        "mask_color": "0,255,0",
-                        "pass_through": True,
-                        "image": ["141", 0],
-                        "mask": ["139", 0]
-                    },
-                    "class_type": "ImageAndMaskPreview",
-                    "_meta": {
-                        "title": "图像与遮罩预览"
-                    }
-                },
-                "126": {
-                    "inputs": {
-                        "upscale_method": "nearest-exact",
-                        "width": 1024,
-                        "height": 1024,
-                        "crop": "center",
-                        "image": ["109", 0]
-                    },
-                    "class_type": "ImageScale",
-                    "_meta": {
-                        "title": "图像缩放"
-                    }
-                },
-                "129": {
-                    "inputs": {
-                        "lora_01": "Qwen-Image-Lightning-8steps-V1.0.safetensors",
-                        "strength_01": 1,
-                        "lora_02": "None",
-                        "strength_02": 1,
-                        "lora_03": "None",
-                        "strength_03": 1,
-                        "lora_04": "None",
-                        "strength_04": 1,
-                        "model": ["37", 0],
-                        "clip": ["38", 0]
-                    },
-                    "class_type": "Lora Loader Stack (rgthree)",
-                    "_meta": {
-                        "title": "LoRA堆加载器"
-                    }
-                },
-                "130": {
-                    "inputs": {
-                        "images": ["122", 0]
-                    },
-                    "class_type": "PreviewImage",
-                    "_meta": {
-                        "title": "预览图像"
-                    }
-                }
-            }
-            
-            print(f"✅ 本地Qwen-Edit工作流模板加载完成")
-            return workflow
+            # 加载CG迷工作流模板
+            workflow_file = Path(__file__).parent.parent.parent / "workflows" / "cgmi_qwen_inpainting_workflow.json"
+            if workflow_file.exists():
+                print(f"✅ 找到CG迷工作流模板: {workflow_file}")
+                with open(workflow_file, 'r', encoding='utf-8') as f:
+                    workflow = json.load(f)
+                print(f"✅ 成功加载CG迷工作流模板")
+                return workflow
+            else:
+                raise Exception(f"❌ CG迷工作流模板不存在: {workflow_file}")
             
         except Exception as e:
             print(f"❌ 加载本地Qwen-Edit工作流模板失败: {e}")
             raise
     
-    def _update_model_config(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
-        """更新模型配置"""
-        # 更新UNET模型 (节点37) - 只使用文件名，不包含路径
-        if "37" in workflow:
-            unet_filename = os.path.basename(self.model_config.unet_file)
-            workflow["37"]["inputs"]["unet_name"] = unet_filename
-            print(f"✅ 更新UNETLoader: {unet_filename}")
-        
-        # 更新CLIP模型 (节点38) - 只使用文件名，不包含路径
-        if "38" in workflow:
-            clip_filename = os.path.basename(self.model_config.clip_file)
-            workflow["38"]["inputs"]["clip_name"] = clip_filename
-            print(f"✅ 更新CLIPLoader: {clip_filename}")
-        
-        # 更新VAE模型 (节点39) - 只使用文件名，不包含路径
-        if "39" in workflow:
-            vae_filename = os.path.basename(self.model_config.vae_file)
-            workflow["39"]["inputs"]["vae_name"] = vae_filename
-            print(f"✅ 更新VAELoader: {vae_filename}")
-        
-        return workflow
     
     def _update_image_and_mask_paths(self, workflow: Dict[str, Any], image_path: str, mask_path: str) -> Dict[str, Any]:
         """更新图像和遮罩路径"""
         print(f"📸 更新Qwen-Edit工作流的图像和遮罩路径")
         
-        # ComfyUI的正确方式：分别传递图像和遮罩文件
-        if "141" in workflow and "139" in workflow:
+        # 检查新工作流的节点结构 (CG迷工作流)
+        if "76" in workflow and "92" in workflow:
+            try:
+                # 分别复制图像和遮罩到ComfyUI的input目录
+                comfyui_image_path = self._copy_to_comfyui_input(image_path)
+                comfyui_mask_path = self._copy_to_comfyui_input(mask_path)
+                
+                # 设置LoadImage节点的图像输入 (节点76)
+                workflow["76"]["inputs"]["image"] = comfyui_image_path
+                
+                # 设置LoadImageMask节点的遮罩输入 (节点92)
+                workflow["92"]["inputs"]["image"] = comfyui_mask_path
+                
+                print(f"✅ 分别设置图像和遮罩: {os.path.basename(image_path)} + {os.path.basename(mask_path)}")
+                print(f"   图像路径 (节点76): {comfyui_image_path}")
+                print(f"   遮罩路径 (节点92): {comfyui_mask_path}")
+                
+            except Exception as e:
+                print(f"❌ 设置图像和遮罩路径失败: {e}")
+                # 降级：只使用原始图像
+                comfyui_image_path = self._copy_to_comfyui_input(image_path)
+                workflow["76"]["inputs"]["image"] = comfyui_image_path
+                print(f"⚠️ 降级使用原始图像: {comfyui_image_path}")
+        
+        # 兼容旧工作流的节点结构
+        elif "141" in workflow and "139" in workflow:
             try:
                 # 分别复制图像和遮罩到ComfyUI的input目录
                 comfyui_image_path = self._copy_to_comfyui_input(image_path)
@@ -454,15 +253,25 @@ class QwenEditWorkflow(BaseWorkflow):
     
     def _update_text_description(self, workflow: Dict[str, Any], description: str) -> Dict[str, Any]:
         """更新文本描述"""
-        # 更新正面提示词 (节点106)
-        if "106" in workflow:
-            workflow["106"]["inputs"]["text"] = description
-            print(f"✅ 更新重绘描述文本: {description[:50]}...")
+        # 检查新工作流的节点结构 (CG迷工作流)
+        if "6" in workflow and "7" in workflow:
+            # 更新正面提示词 (节点6)
+            workflow["6"]["inputs"]["text"] = description
+            print(f"✅ 更新重绘描述文本 (节点6): {description[:50]}...")
+            
+            # 更新负面提示词 (节点7)
+            workflow["7"]["inputs"]["text"] = ""  # 负面提示词，通常为空
+            print(f"✅ 更新负面提示词 (节点7)")
         
-        # 更新负面提示词 (节点77)
-        if "77" in workflow:
+        # 兼容旧工作流的节点结构
+        elif "106" in workflow and "77" in workflow:
+            # 更新正面提示词 (节点106)
+            workflow["106"]["inputs"]["text"] = description
+            print(f"✅ 更新重绘描述文本 (节点106): {description[:50]}...")
+            
+            # 更新负面提示词 (节点77)
             workflow["77"]["inputs"]["prompt"] = ""  # 负面提示词，通常为空
-            print(f"✅ 更新负面提示词")
+            print(f"✅ 更新负面提示词 (节点77)")
         
         return workflow
     
@@ -485,30 +294,19 @@ class QwenEditWorkflow(BaseWorkflow):
                 workflow["3"]["inputs"]["seed"] = seed_value
             print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 8)}, CFG={parameters.get('cfg', 2.5)}, 去噪={parameters.get('denoise', 1.0)}, 种子={workflow['3']['inputs']['seed']}")
         
-        # 更新LoRA强度 (节点129)
-        if "129" in workflow and parameters.get("lora_strength"):
+        # 更新LoRA强度 (节点70 - 新工作流)
+        if "70" in workflow and parameters.get("lora_strength"):
+            workflow["70"]["inputs"]["strength_model"] = parameters["lora_strength"]
+            print(f"✅ 更新LoRA强度 (节点70): {parameters['lora_strength']}")
+        
+        # 兼容旧工作流的LoRA强度 (节点129)
+        elif "129" in workflow and parameters.get("lora_strength"):
             workflow["129"]["inputs"]["strength_01"] = parameters["lora_strength"]
-            print(f"✅ 更新LoRA强度: {parameters['lora_strength']}")
+            print(f"✅ 更新LoRA强度 (节点129): {parameters['lora_strength']}")
         
         return workflow
     
-    def _update_image_dimensions(self, workflow: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """更新图像尺寸"""
-        # 从参数中获取尺寸
-        target_size = parameters.get("target_size", 1024)
-        
-        # 更新节点109 (ImageScaleDownToSize)
-        if "109" in workflow:
-            workflow["109"]["inputs"]["size"] = target_size
-            print(f"✅ 更新图像缩放尺寸: {target_size}")
-        
-        # 更新节点126 (ImageScale)
-        if "126" in workflow:
-            workflow["126"]["inputs"]["width"] = target_size
-            workflow["126"]["inputs"]["height"] = target_size
-            print(f"✅ 更新最终图像尺寸: {target_size}x{target_size}")
-        
-        return workflow
+    
     
     def _update_save_path(self, workflow: Dict[str, Any], task_id: str = None) -> Dict[str, Any]:
         """更新保存路径"""
@@ -538,29 +336,6 @@ class QwenEditWorkflow(BaseWorkflow):
         
         return workflow
     
-    def _update_lora_config(self, workflow: Dict[str, Any], loras: list) -> Dict[str, Any]:
-        """更新LoRA配置"""
-        # 查找LoRA节点
-        for node_id, node_data in workflow.items():
-            if node_data.get("class_type") == "LoraLoader":
-                processed_loras = self._process_loras(loras)
-                
-                if not processed_loras:
-                    print("ℹ️ 未检测到LoRA配置，使用默认设置")
-                    return workflow
-                
-                print(f"🎨 检测到 {len(processed_loras)} 个LoRA配置")
-                
-                # 设置LoRA配置
-                if len(processed_loras) > 0:
-                    node_data["inputs"]["lora_name"] = processed_loras[0]["name"]
-                    node_data["inputs"]["strength_model"] = processed_loras[0]["strength_model"]
-                    node_data["inputs"]["strength_clip"] = processed_loras[0]["strength_clip"]
-                    print(f"✅ 设置LoRA: {processed_loras[0]['name']} (强度: {processed_loras[0]['strength_model']})")
-                
-                break
-        
-        return workflow
     
     def _copy_to_comfyui_input(self, image_path: str) -> str:
         """将图像文件复制到ComfyUI的input目录
@@ -572,25 +347,32 @@ class QwenEditWorkflow(BaseWorkflow):
             ComfyUI兼容的文件名格式
         """
         import shutil
+        import uuid
         from config.settings import COMFYUI_INPUT_DIR
         
-        # 获取文件名（不包含路径）
-        filename = os.path.basename(image_path)
+        # 获取原始文件名和扩展名
+        original_filename = os.path.basename(image_path)
+        name, ext = os.path.splitext(original_filename)
+        
+        # 生成唯一的文件名，避免缓存问题
+        unique_filename = f"{name}_{uuid.uuid4().hex[:8]}{ext}"
         
         # 目标路径
-        dest_path = COMFYUI_INPUT_DIR / filename
+        dest_path = COMFYUI_INPUT_DIR / unique_filename
         
         try:
             # 复制文件到ComfyUI的input目录
             shutil.copy2(image_path, dest_path)
             print(f"✅ 文件复制成功: {image_path} -> {dest_path}")
+            print(f"   原始文件名: {original_filename}")
+            print(f"   唯一文件名: {unique_filename}")
             
             # 返回ComfyUI期望的格式：filename [input]
-            return f"{filename} [input]"
+            return f"{unique_filename} [input]"
         except Exception as e:
             print(f"❌ 文件复制失败: {e}")
             # 如果复制失败，返回文件名（假设文件已经在正确位置）
-            return f"{filename} [input]"
+            return f"{unique_filename} [input]"
     
     def _convert_path_for_comfyui(self, image_path: str) -> str:
         """转换Windows路径为ComfyUI兼容的路径格式
@@ -613,3 +395,45 @@ class QwenEditWorkflow(BaseWorkflow):
         print(f"🔄 路径转换: {image_path} -> {comfyui_path}")
         print(f"📁 ComfyUI输入目录: {COMFYUI_INPUT_DIR}")
         return comfyui_path
+    
+    def _validate_workflow_json(self, workflow: Dict[str, Any]) -> None:
+        """验证工作流JSON的完整性"""
+        try:
+            print(f"🔍 验证工作流JSON完整性...")
+            
+            # 检查关键节点是否存在
+            required_nodes = ["3", "6", "7", "8", "37", "38", "39", "60", "66", "70", "71", "72", "74", "76", "80", "92"]
+            missing_nodes = []
+            
+            for node_id in required_nodes:
+                if node_id not in workflow:
+                    missing_nodes.append(node_id)
+            
+            if missing_nodes:
+                print(f"❌ 工作流缺少关键节点: {missing_nodes}")
+                raise Exception(f"工作流缺少关键节点: {missing_nodes}")
+            
+            # 检查关键节点的输入
+            if "76" in workflow:
+                image_input = workflow["76"].get("inputs", {}).get("image")
+                if not image_input:
+                    print(f"❌ 节点76缺少图像输入")
+                    raise Exception("节点76缺少图像输入")
+                print(f"✅ 节点76图像输入: {image_input}")
+            
+            if "92" in workflow:
+                mask_input = workflow["92"].get("inputs", {}).get("image")
+                if not mask_input:
+                    print(f"❌ 节点92缺少遮罩输入")
+                    raise Exception("节点92缺少遮罩输入")
+                print(f"✅ 节点92遮罩输入: {mask_input}")
+            
+            if "6" in workflow:
+                text_input = workflow["6"].get("inputs", {}).get("text")
+                print(f"✅ 节点6文本输入: {text_input}")
+            
+            print(f"✅ 工作流JSON验证通过")
+            
+        except Exception as e:
+            print(f"❌ 工作流JSON验证失败: {e}")
+            raise

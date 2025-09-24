@@ -385,6 +385,7 @@ class TaskManager:
                         
                         print(f"📁 ComfyUI输出目录: {COMFYUI_MAIN_OUTPUT_DIR}")
                         print(f"📁 本地输出目录: {OUTPUT_DIR}")
+                        print(f"🔍 ComfyUI返回的outputs结构: {outputs}")
                         
                         # 首先尝试从节点输出获取图片和视频
                         # 只处理SaveImage节点的输出，忽略PreviewImage等预览节点

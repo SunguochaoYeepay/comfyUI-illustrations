@@ -333,54 +333,113 @@ export default {
       const originalWidth = currentImage.value._originalElement.width
       const originalHeight = currentImage.value._originalElement.height
       
-      // 创建临时画布
+      // 创建临时画布 - 确保尺寸与原始图像完全一致
       const tempCanvas = document.createElement('canvas')
       tempCanvas.width = originalWidth
       tempCanvas.height = originalHeight
       const tempCtx = tempCanvas.getContext('2d')
       
+      // 确保画布尺寸正确
+      console.log(`🖼️ 临时画布尺寸: ${tempCanvas.width}x${tempCanvas.height}`)
+      console.log(`🖼️ 原始图像尺寸: ${originalWidth}x${originalHeight}`)
+      
       // 1. 先绘制原图作为背景
       tempCtx.drawImage(currentImage.value._originalElement, 0, 0, originalWidth, originalHeight)
       
-      // 2. 计算缩放比例
-      const scaleX = originalWidth / (currentImage.value.width * currentImage.value.scaleX)
-      const scaleY = originalHeight / (currentImage.value.height * currentImage.value.scaleY)
-      const imageScale = Math.min(scaleX, scaleY)
+      // 2. 计算缩放比例 - 修正坐标计算
+      // 获取图像在画布上的实际显示尺寸
+      const displayWidth = currentImage.value.width * currentImage.value.scaleX
+      const displayHeight = currentImage.value.height * currentImage.value.scaleY
+      
+      // 计算从显示尺寸到原始尺寸的缩放比例
+      const scaleX = originalWidth / displayWidth
+      const scaleY = originalHeight / displayHeight
+      
+      console.log('📐 缩放计算详情:')
+      console.log(`   原始尺寸: ${originalWidth}x${originalHeight}`)
+      console.log(`   显示尺寸: ${displayWidth}x${displayHeight}`)
+      console.log(`   缩放比例: X=${scaleX.toFixed(3)}, Y=${scaleY.toFixed(3)}`)
+      
+      // 获取图像在画布上的实际位置
+      const imageBounds = currentImage.value.getBoundingRect()
+      
+      console.log(`🖼️ 图像边界信息:`)
+      console.log(`   getBoundingRect(): left=${imageBounds.left.toFixed(1)}, top=${imageBounds.top.toFixed(1)}`)
+      console.log(`   getBoundingRect(): width=${imageBounds.width.toFixed(1)}, height=${imageBounds.height.toFixed(1)}`)
+      console.log(`   图像实际尺寸: ${currentImage.value.width}x${currentImage.value.height}`)
+      console.log(`   图像缩放: ${currentImage.value.scaleX}x${currentImage.value.scaleY}`)
+      console.log(`   图像中心: (${currentImage.value.left.toFixed(1)}, ${currentImage.value.top.toFixed(1)})`)
+      
+      // 尝试使用Fabric.js的坐标转换功能
+      // 将画布坐标转换为图像坐标
+      try {
+        const canvasTransform = canvas.value.getViewportTransform()
+        console.log(`   画布变换矩阵: [${canvasTransform.map(v => v.toFixed(2)).join(', ')}]`)
+      } catch (error) {
+        console.log(`   画布变换矩阵: 无法获取 (${error.message})`)
+      }
+      
+      // 计算图像在画布上的实际左上角坐标
+      const imageCanvasLeft = imageBounds.left
+      const imageCanvasTop = imageBounds.top
       
       console.log('📏 遮罩生成调试信息:')
       console.log(`   原始图像尺寸: ${originalWidth}x${originalHeight}`)
       console.log(`   绘制对象数量: ${drawnObjects.length}`)
       console.log(`   画布图像尺寸: ${currentImage.value.width}x${currentImage.value.height}`)
       console.log(`   画布图像缩放: ${currentImage.value.scaleX}x${currentImage.value.scaleY}`)
-      console.log(`   缩放比例: ${imageScale}`)
+      console.log(`   画布图像角度: ${currentImage.value.angle}°`)
+      console.log(`   画布图像翻转: 水平=${currentImage.value.flipX}, 垂直=${currentImage.value.flipY}`)
+      console.log(`   显示尺寸: ${displayWidth}x${displayHeight}`)
+      console.log(`   图像中心: (${currentImage.value.left.toFixed(1)}, ${currentImage.value.top.toFixed(1)})`)
+      console.log(`   缩放比例: X=${scaleX.toFixed(3)}, Y=${scaleY.toFixed(3)}`)
       
       // 3. 在要重绘的区域绘制纯黑色（Alpha=0，完全透明）
       drawnObjects.forEach((obj, index) => {
         if (obj.type === 'circle') {
-          const imageBounds = currentImage.value.getBoundingRect()
-          const imageLeft = imageBounds.left
-          const imageTop = imageBounds.top
+          // 遮罩对象在画布上的中心点
+          const objCanvasCenterX = obj.left
+          const objCanvasCenterY = obj.top
           
-          const relativeLeft = obj.left - imageLeft
-          const relativeTop = obj.top - imageTop
+          // 计算遮罩对象相对于图像左上角的坐标
           
-          const originalLeft = relativeLeft * imageScale
-          const originalTop = relativeTop * imageScale
-          const originalRadius = obj.radius * imageScale
+          // 计算遮罩对象相对于图像左上角的坐标
+          const relativeLeft = objCanvasCenterX - imageCanvasLeft
+          const relativeTop = objCanvasCenterY - imageCanvasTop
+          
+          // 计算从显示尺寸到原始尺寸的缩放比例
+          // 使用图像边界的实际尺寸
+          const displayToOriginalScaleX = originalWidth / imageBounds.width
+          const displayToOriginalScaleY = originalHeight / imageBounds.height
+          
+          // 转换到原始图像坐标
+          const originalLeft = relativeLeft * displayToOriginalScaleX
+          const originalTop = relativeTop * displayToOriginalScaleY
+          const originalRadius = obj.radius * Math.min(displayToOriginalScaleX, displayToOriginalScaleY)
+          
+          // 添加偏移修正 - 如果遮罩偏左偏上，尝试调整
+          // 根据你的反馈，遮罩偏左偏上，我们添加一些偏移来修正
+          const offsetX = 20 // X轴向右偏移，修正偏左问题
+          const offsetY = 20 // Y轴向下偏移，修正偏上问题
+          
+          const finalOriginalLeft = originalLeft + offsetX
+          const finalOriginalTop = originalTop + offsetY
           
           console.log(`🎯 遮罩对象 ${index + 1}:`)
-          console.log(`   画布位置: (${obj.left}, ${obj.top}), 半径: ${obj.radius}`)
-          console.log(`   图像边界: (${imageLeft}, ${imageTop})`)
-          console.log(`   相对位置: (${relativeLeft}, ${relativeTop})`)
-          console.log(`   原始位置: (${originalLeft}, ${originalTop}), 半径: ${originalRadius}`)
+          console.log(`   画布中心: (${objCanvasCenterX.toFixed(1)}, ${objCanvasCenterY.toFixed(1)}), 半径: ${obj.radius.toFixed(1)}`)
+          console.log(`   图像左上角: (${imageCanvasLeft.toFixed(1)}, ${imageCanvasTop.toFixed(1)})`)
+          console.log(`   相对图像左上角: (${relativeLeft.toFixed(1)}, ${relativeTop.toFixed(1)})`)
+          console.log(`   显示到原始缩放: X=${displayToOriginalScaleX.toFixed(3)}, Y=${displayToOriginalScaleY.toFixed(3)}`)
+          console.log(`   原始图像坐标: (${originalLeft.toFixed(1)}, ${originalTop.toFixed(1)}), 半径: ${originalRadius.toFixed(1)}`)
+          console.log(`   修正后坐标: (${finalOriginalLeft.toFixed(1)}, ${finalOriginalTop.toFixed(1)})`)
           
           // 检查坐标是否在画布范围内
-          if (originalLeft >= 0 && originalLeft <= originalWidth && 
-              originalTop >= 0 && originalTop <= originalHeight) {
+          if (finalOriginalLeft >= 0 && finalOriginalLeft <= originalWidth && 
+              finalOriginalTop >= 0 && finalOriginalTop <= originalHeight) {
             // 使用globalCompositeOperation来创建透明区域
             tempCtx.globalCompositeOperation = 'destination-out'
             tempCtx.beginPath()
-            tempCtx.arc(originalLeft, originalTop, originalRadius, 0, 2 * Math.PI)
+            tempCtx.arc(finalOriginalLeft, finalOriginalTop, originalRadius, 0, 2 * Math.PI)
             tempCtx.fill()
             tempCtx.globalCompositeOperation = 'source-over' // 重置合成模式
             console.log(`✅ 成功绘制透明遮罩对象 ${index + 1}`)
@@ -390,7 +449,11 @@ export default {
         }
       })
       
-      return tempCanvas.toDataURL('image/png')
+      // 验证生成的遮罩图像
+      const dataUrl = tempCanvas.toDataURL('image/png')
+      console.log(`✅ 遮罩生成完成，尺寸: ${tempCanvas.width}x${tempCanvas.height}`)
+      
+      return dataUrl
     }
     
     // 执行局部重绘

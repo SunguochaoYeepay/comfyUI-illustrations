@@ -517,74 +517,74 @@ export default {
       })
     }
     
-    // 设置比例（无缩放）
+    // 设置比例（基于原图扩展）
     const setAspectRatio = (ratio) => {
       currentAspectRatio.value = ratio
        
-      if (!canvas.value || !canvasWrapper.value) {
-        console.log('⚠️ setAspectRatio: canvas或canvasWrapper未准备好')
+      if (!canvas.value || !canvasWrapper.value || !originalImageSize.value.width || !originalImageSize.value.height) {
+        console.log('⚠️ setAspectRatio: 画布或图片尺寸未准备好')
         return
       }
        
       console.log('🔧 setAspectRatio 开始执行:', ratio)
        
       let newWidth, newHeight
+      let newX, newY
        
       if (ratio === 'original') {
-         // 恢复原始比例
+         // 原始比例：扩图区域 = 原图尺寸，居中显示
          newWidth = originalImageSize.value.width
          newHeight = originalImageSize.value.height
+         newX = 0
+         newY = 0
        } else {
-         // 设置固定比例
+         // 设置固定比例：以原图中心为基准向外扩展
          const [widthRatio, heightRatio] = ratio.split(':').map(Number)
          const targetAspect = widthRatio / heightRatio
-         
-         // 以原图尺寸为基础计算新的扩图区域
          const originalAspect = originalImageSize.value.width / originalImageSize.value.height
          
          if (targetAspect > originalAspect) {
-           // 更宽的比例，以宽度为准
+           // 目标比例更宽：以原图宽度为准，扩展高度
+           newWidth = originalImageSize.value.width
+           newHeight = originalImageSize.value.width / targetAspect
+         } else {
+           // 目标比例更高：以原图高度为准，扩展宽度
+           newHeight = originalImageSize.value.height
+           newWidth = originalImageSize.value.height * targetAspect
+         }
+         
+         // 确保扩图区域不小于原图尺寸
+         if (newWidth < originalImageSize.value.width) {
            newWidth = originalImageSize.value.width
            newHeight = newWidth / targetAspect
-         } else {
-           // 更高的比例，以高度为准
+         }
+         if (newHeight < originalImageSize.value.height) {
            newHeight = originalImageSize.value.height
            newWidth = newHeight * targetAspect
          }
+         
+         // 居中定位：原图在扩图区域中心
+         newX = (originalImageSize.value.width - newWidth) / 2
+         newY = (originalImageSize.value.height - newHeight) / 2
        }
        
-       // 确保扩图区域不小于原图尺寸（避免裁切）
-       const minWidth = originalImageSize.value.width
-       const minHeight = originalImageSize.value.height
-       
-       if (newWidth < minWidth) {
-         newWidth = minWidth
-         newHeight = newWidth * (ratio === 'original' ? originalImageSize.value.height / originalImageSize.value.width : newHeight / newWidth)
-       }
-       if (newHeight < minHeight) {
-         newHeight = minHeight
-         newWidth = newHeight * (ratio === 'original' ? originalImageSize.value.width / originalImageSize.value.height : newWidth / newHeight)
-       }
-       
-       // 扩图区域居中定位
-       const offsetX = (newWidth - originalImageSize.value.width) / 2
-       const offsetY = (newHeight - originalImageSize.value.height) / 2
-       
-       expansionX.value = -offsetX
-       expansionY.value = -offsetY
+       // 更新扩图区域
+       expansionX.value = newX
+       expansionY.value = newY
        expansionWidth.value = newWidth
        expansionHeight.value = newHeight
        
        console.log('比例设置完成:', {
          ratio,
          original: { width: originalImageSize.value.width, height: originalImageSize.value.height },
-         newSize: { width: newWidth, height: newHeight },
          expansion: { 
-           x: expansionX.value, 
-           y: expansionY.value, 
-           width: expansionWidth.value, 
-           height: expansionHeight.value 
-         }
+           x: newX, 
+           y: newY, 
+           width: newWidth, 
+           height: newHeight 
+         },
+         targetAspect: ratio !== 'original' ? (widthRatio / heightRatio).toFixed(2) : 'original',
+         actualAspect: (newWidth / newHeight).toFixed(2)
        })
      }
     

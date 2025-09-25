@@ -80,15 +80,22 @@ export default {
 
 <style scoped>
 .parameter-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   background: #2a2a2a;
   border-top: 1px solid #333;
   color: white;
-  max-width: 800px;
-  margin: 0 auto;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .panel-content {
   padding: 8px 12px;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .prompt-row {

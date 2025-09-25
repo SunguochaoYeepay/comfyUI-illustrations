@@ -95,13 +95,41 @@
 
     <!-- 主画布区域 -->
     <div class="canvas-wrapper" ref="canvasWrapper">
-      <canvas 
-        ref="canvasRef" 
-        class="outpainting-canvas"
-        @mousedown="handleMouseDown"
-        @mousemove="handleMouseMove"
-        @mouseup="handleMouseUp"
-      ></canvas>
+      <!-- 图片容器 - 用于扩图区域定位 -->
+      <div 
+        class="image-container" 
+        ref="imageContainer"
+        :style="imageContainerStyle"
+      >
+        <canvas 
+          ref="canvasRef" 
+          class="outpainting-canvas"
+          @mousedown="handleMouseDown"
+          @mousemove="handleMouseMove"
+          @mouseup="handleMouseUp"
+        ></canvas>
+        
+        <!-- 扩图区域指示器 -->
+        <div 
+          v-if="showExpansionArea"
+          class="expansion-area"
+          :style="expansionAreaStyle"
+          @mousedown="handleMouseDown"
+        >
+          <div class="expansion-info">
+            <span>{{ realExpansionWidth }} × {{ realExpansionHeight }}</span>
+          </div>
+          <!-- 调整大小手柄 -->
+          <div class="resize-handle resize-handle-n"></div>
+          <div class="resize-handle resize-handle-s"></div>
+          <div class="resize-handle resize-handle-e"></div>
+          <div class="resize-handle resize-handle-w"></div>
+          <div class="resize-handle resize-handle-nw"></div>
+          <div class="resize-handle resize-handle-ne"></div>
+          <div class="resize-handle resize-handle-sw"></div>
+          <div class="resize-handle resize-handle-se"></div>
+        </div>
+      </div>
       
       <!-- 上传按钮 - 当没有图像时显示 -->
       <div v-if="!currentImage" class="upload-overlay">
@@ -120,27 +148,6 @@
             选择图片
           </button>
         </div>
-      </div>
-      
-      <!-- 扩图区域指示器 -->
-      <div 
-        v-if="showExpansionArea"
-        class="expansion-area"
-        :style="expansionAreaStyle"
-        @mousedown="handleMouseDown"
-      >
-        <div class="expansion-info">
-          <span>{{ realExpansionWidth }} × {{ realExpansionHeight }}</span>
-        </div>
-        <!-- 调整大小手柄 -->
-        <div class="resize-handle resize-handle-n"></div>
-        <div class="resize-handle resize-handle-s"></div>
-        <div class="resize-handle resize-handle-e"></div>
-        <div class="resize-handle resize-handle-w"></div>
-        <div class="resize-handle resize-handle-nw"></div>
-        <div class="resize-handle resize-handle-ne"></div>
-        <div class="resize-handle resize-handle-sw"></div>
-        <div class="resize-handle resize-handle-se"></div>
       </div>
     </div>
     
@@ -198,6 +205,7 @@ export default {
     // 画布引用
     const canvasRef = ref(null)
     const canvasWrapper = ref(null)
+    const imageContainer = ref(null)
     const fileInput = ref(null)
     
     // 画布状态
@@ -241,36 +249,31 @@ export default {
     const canUndo = computed(() => historyIndex.value > 0)
     const canRedo = computed(() => historyIndex.value < history.value.length - 1)
     
-    // 计算真实的像素尺寸
+    // 计算真实的像素尺寸（无缩放）
     const realExpansionWidth = computed(() => {
-      return Math.round(expansionWidth.value / imageScaleX.value)
+      return expansionWidth.value
     })
     
     const realExpansionHeight = computed(() => {
-      return Math.round(expansionHeight.value / imageScaleY.value)
+      return expansionHeight.value
+    })
+    
+    // 图片容器样式 - 与图片尺寸相同
+    const imageContainerStyle = computed(() => {
+      if (!originalImageSize.value.width || !originalImageSize.value.height) {
+        return {}
+      }
+      return {
+        width: `${originalImageSize.value.width}px`,
+        height: `${originalImageSize.value.height}px`,
+        position: 'relative'
+      }
     })
     
     const expansionAreaStyle = computed(() => {
-      // 计算扩图区域在画布容器中的相对位置
-      const canvasElement = canvas.value
-      if (!canvasElement || !canvasWrapper.value) {
-        return {
-          left: `${expansionX.value}px`,
-          top: `${expansionY.value}px`,
-          width: `${expansionWidth.value}px`,
-          height: `${expansionHeight.value}px`
-        }
-      }
-      
-      // 获取画布在容器中的偏移量
-      const canvasRect = canvasElement.getBoundingClientRect()
-      const wrapperRect = canvasWrapper.value.getBoundingClientRect()
-      const offsetX = canvasRect.left - wrapperRect.left
-      const offsetY = canvasRect.top - wrapperRect.top
-      
       return {
-        left: `${expansionX.value + offsetX}px`,
-        top: `${expansionY.value + offsetY}px`,
+        left: `${expansionX.value}px`,
+        top: `${expansionY.value}px`,
         width: `${expansionWidth.value}px`,
         height: `${expansionHeight.value}px`
       }
@@ -286,80 +289,25 @@ export default {
       console.log('🎨 画布初始化完成，等待图片加载')
     }
     
-    // 根据图片尺寸设置画布大小（支持缩放）
+    // 根据图片尺寸设置画布大小（无缩放）
     const resizeCanvasForImage = (img) => {
       if (!canvas.value || !canvasWrapper.value) {
         console.log('⚠️ resizeCanvasForImage: canvas或canvasWrapper未准备好')
         return
       }
       
-      console.log('🔄 resizeCanvasForImage 开始执行（支持缩放）:', {
+      console.log('🔄 resizeCanvasForImage 开始执行（无缩放）:', {
         imgSize: { width: img.width, height: img.height },
         currentCanvas: { width: canvas.value.width, height: canvas.value.height }
       })
       
-      // 获取容器尺寸
-      const containerWidth = canvasWrapper.value.clientWidth
-      const containerHeight = canvasWrapper.value.clientHeight
+      // 直接使用图片原始尺寸，不进行缩放
+      const canvasWidth = img.width
+      const canvasHeight = img.height
       
-      console.log('🔍 容器尺寸检查:', {
-        containerWidth,
-        containerHeight,
-        imageSize: { width: img.width, height: img.height }
-      })
-      
-      // 如果容器尺寸为0，使用默认尺寸
-      if (containerWidth === 0 || containerHeight === 0) {
-        console.log('⚠️ 容器尺寸为0，使用默认尺寸')
-        
-        // 使用更合理的默认容器尺寸
-        const defaultMaxWidth = 1200
-        const defaultMaxHeight = 800
-        
-        // 计算缩放比例，保持宽高比
-        const scaleX = defaultMaxWidth / img.width
-        const scaleY = defaultMaxHeight / img.height
-        const scale = Math.min(scaleX, scaleY, 1)  // 不超过原始尺寸
-        
-        const canvasWidth = Math.round(img.width * scale)
-        const canvasHeight = Math.round(img.height * scale)
-        
-        imageScaleX.value = scale
-        imageScaleY.value = scale
-        
-        canvas.value.width = canvasWidth
-        canvas.value.height = canvasHeight
-        canvas.value.style.width = `${canvasWidth}px`
-        canvas.value.style.height = `${canvasHeight}px`
-        
-        const ctx = canvas.value.getContext('2d')
-        ctx.fillStyle = '#1a1a1a'
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-        
-        console.log('🎨 使用默认尺寸设置画布:', {
-          image: { width: img.width, height: img.height },
-          defaultMax: { width: defaultMaxWidth, height: defaultMaxHeight },
-          scale: scale,
-          canvas: { width: canvasWidth, height: canvasHeight }
-        })
-        return
-      }
-      
-      const maxWidth = containerWidth * 0.9  // 留一些边距
-      const maxHeight = containerHeight * 0.9
-      
-      // 计算缩放比例
-      const scaleX = maxWidth / img.width
-      const scaleY = maxHeight / img.height
-      const scale = Math.min(scaleX, scaleY, 1)  // 不超过原始尺寸
-      
-      // 计算画布尺寸
-      const canvasWidth = Math.round(img.width * scale)
-      const canvasHeight = Math.round(img.height * scale)
-      
-      // 保存缩放比例
-      imageScaleX.value = scale
-      imageScaleY.value = scale
+      // 设置缩放比例为1（无缩放）
+      imageScaleX.value = 1
+      imageScaleY.value = 1
       
       // 更新画布尺寸
       canvas.value.width = canvasWidth
@@ -372,11 +320,8 @@ export default {
       ctx.fillStyle = '#1a1a1a'
       ctx.fillRect(0, 0, canvasWidth, canvasHeight)
       
-      console.log('🎨 画布尺寸设置（缩放）:', {
+      console.log('🎨 画布尺寸设置（无缩放）:', {
         image: { width: img.width, height: img.height },
-        container: { width: containerWidth, height: containerHeight },
-        maxSize: { width: maxWidth, height: maxHeight },
-        scale: scale,
         canvas: { width: canvasWidth, height: canvasHeight }
       })
     }
@@ -478,7 +423,20 @@ export default {
             // 根据图片尺寸重新计算画布大小
             resizeCanvasForImage(img)
             drawImageToCanvas(img)
-            setupExpansionArea(img)
+            
+            // 只有在扩图区域未初始化时才设置扩图区域
+            if (expansionWidth.value === 512 && expansionHeight.value === 512) {
+              console.log('🔄 loadOriginalImage: 扩图区域未初始化，设置扩图区域为图片尺寸')
+              setupExpansionArea(img)
+            } else {
+              console.log('✅ loadOriginalImage: 扩图区域已调整，保持用户拖拽结果:', {
+                width: expansionWidth.value,
+                height: expansionHeight.value
+              })
+              // 确保扩图区域显示
+              showExpansionArea.value = true
+            }
+            
             saveToHistory()
             
             // 标记图片已加载
@@ -497,7 +455,7 @@ export default {
       }
     }
     
-    // 绘制图像到画布（支持缩放）
+    // 绘制图像到画布（无缩放）
     const drawImageToCanvas = (img) => {
       if (!canvas.value) return
       
@@ -509,39 +467,25 @@ export default {
       ctx.fillStyle = '#1a1a1a'
       ctx.fillRect(0, 0, canvasWidth, canvasHeight)
       
-      // 计算缩放后的图像尺寸
-      const scale = imageScaleX.value
-      const scaledImgWidth = img.width * scale
-      const scaledImgHeight = img.height * scale
+      // 直接绘制图像到画布左上角，不进行缩放
+      ctx.drawImage(img, 0, 0, img.width, img.height)
       
-      // 计算原图在画布中的居中位置
-      const centerX = canvasWidth / 2
-      const centerY = canvasHeight / 2
-      const imgX = centerX - scaledImgWidth / 2
-      const imgY = centerY - scaledImgHeight / 2
-      
-      // 绘制图像到画布中心（缩放）
-      ctx.drawImage(img, imgX, imgY, scaledImgWidth, scaledImgHeight)
-      
-      // 保存图像信息（使用缩放后的尺寸）
+      // 保存图像信息（使用原始尺寸）
       currentImage.value = {
         img,
-        x: imgX,
-        y: imgY,
-        width: scaledImgWidth,
-        height: scaledImgHeight,
+        x: 0,
+        y: 0,
+        width: img.width,
+        height: img.height,
         originalWidth: img.width,
         originalHeight: img.height,
-        scale: scale
+        scale: 1
       }
       
-      console.log('🎨 图片绘制完成（缩放居中）:', {
+      console.log('🎨 图片绘制完成（无缩放）:', {
         original: { width: img.width, height: img.height },
-        scaled: { width: scaledImgWidth, height: scaledImgHeight },
         canvas: { width: canvasWidth, height: canvasHeight },
-        drawArea: { x: imgX, y: imgY, width: scaledImgWidth, height: scaledImgHeight },
-        center: { x: centerX, y: centerY },
-        scale: scale
+        drawArea: { x: 0, y: 0, width: img.width, height: img.height }
       })
     }
     
@@ -552,32 +496,15 @@ export default {
       // 保存原始图像尺寸
       originalImageSize.value = { width: img.width, height: img.height }
       
-      // 先设置扩图区域的初始位置（居中）
-      const canvasWidth = canvas.value.width
-      const canvasHeight = canvas.value.height
-      const centerX = canvasWidth / 2
-      const centerY = canvasHeight / 2
-      
-      // 设置初始扩图区域，与缩放后的图片尺寸相同，居中对齐
-      // 扩图区域应该以缩放后的图片为中心，与缩放后的图片尺寸相同
-      const scale = imageScaleX.value
-      const scaledWidth = img.width * scale
-      const scaledHeight = img.height * scale
-      
-      // 计算缩放后图片在画布中的居中位置
-      const imgX = centerX - scaledWidth / 2
-      const imgY = centerY - scaledHeight / 2
-      
-      // 初始扩图区域与缩放后图片位置和尺寸相同
-      expansionX.value = imgX
-      expansionY.value = imgY
-      expansionWidth.value = scaledWidth
-      expansionHeight.value = scaledHeight
+      // 初始扩图区域与图片位置和尺寸相同（无缩放）
+      expansionX.value = 0
+      expansionY.value = 0
+      expansionWidth.value = img.width
+      expansionHeight.value = img.height
       
       console.log('🔍 扩图区域初始设置:', {
         imageSize: { width: img.width, height: img.height },
-        expansionSize: { width: expansionWidth.value, height: expansionHeight.value },
-        realExpansionSize: { width: realExpansionWidth.value, height: realExpansionHeight.value }
+        expansionSize: { width: expansionWidth.value, height: expansionHeight.value }
       })
       
       showExpansionArea.value = true
@@ -585,148 +512,81 @@ export default {
       // 延迟设置扩图区域，确保画布已经完全渲染
       nextTick(() => {
         setTimeout(() => {
-          console.log('🎯 setupExpansionArea: 开始设置扩图区域')
-          setAspectRatio(currentAspectRatio.value)
+          console.log('🎯 setupExpansionArea: 扩图区域设置完成')
         }, 50)
       })
     }
     
-    // 设置比例
+    // 设置比例（无缩放）
     const setAspectRatio = (ratio) => {
-currentAspectRatio.value = ratio
-      
+      currentAspectRatio.value = ratio
+       
       if (!canvas.value || !canvasWrapper.value) {
         console.log('⚠️ setAspectRatio: canvas或canvasWrapper未准备好')
         return
       }
-      
+       
       console.log('🔧 setAspectRatio 开始执行:', ratio)
-      
-      const canvasWidth = canvas.value.width
-      const canvasHeight = canvas.value.height
-      const centerX = canvasWidth / 2
-      const centerY = canvasHeight / 2
-      
+       
       let newWidth, newHeight
-      let widthRatio, heightRatio
-      
+       
       if (ratio === 'original') {
-        // 恢复原始比例 - 使用缩放后的图像尺寸，保持居中对齐
-        const scale = imageScaleX.value
-        newWidth = originalImageSize.value.width * scale
-        newHeight = originalImageSize.value.height * scale
-        widthRatio = originalImageSize.value.width
-        heightRatio = originalImageSize.value.height
-        
-        // 对于原始比例，扩图区域应该与缩放后图片位置相同（居中）
-        expansionX.value = centerX - newWidth / 2
-        expansionY.value = centerY - newHeight / 2
-        expansionWidth.value = newWidth
-        expansionHeight.value = newHeight
-        
-        console.log('原始比例设置完成（居中对齐）:', {
-          ratio,
-          canvas: { width: canvasWidth, height: canvasHeight },
-          center: { x: centerX, y: centerY },
-          expansion: { 
-            x: expansionX.value, 
-            y: expansionY.value, 
-            width: expansionWidth.value, 
-            height: expansionHeight.value 
-          }
-        })
-        return
-      } else {
-        // 设置固定比例
-        [widthRatio, heightRatio] = ratio.split(':').map(Number)
-        const targetAspect = widthRatio / heightRatio
-        
-        // 以画布中心为中心，计算新的扩图区域
-        const maxWidth = canvasWidth * 0.8
-        const maxHeight = canvasHeight * 0.8
-        
-        if (targetAspect > 1) {
-          // 更宽的比例，以宽度为准
-          newWidth = maxWidth
-          newHeight = newWidth / targetAspect
-        } else {
-          // 更高的比例，以高度为准
-          newHeight = maxHeight
-          newWidth = newHeight * targetAspect
-        }
-      }
-      
-      // 移除画布边界限制，允许扩图区域超出原图边界
-      // 这是扩图功能的核心 - 允许超出原图尺寸
-      
-      // 确保扩图区域不小于原图尺寸（避免裁切）
-      const minWidth = originalImageSize.value.width
-      const minHeight = originalImageSize.value.height
-      
-      if (newWidth < minWidth) {
-        newWidth = minWidth
-        newHeight = newWidth * (ratio === 'original' ? originalImageSize.value.height / originalImageSize.value.width : heightRatio / widthRatio)
-      }
-      if (newHeight < minHeight) {
-        newHeight = minHeight
-        newWidth = newHeight * (ratio === 'original' ? originalImageSize.value.width / originalImageSize.value.height : widthRatio / heightRatio)
-      }
-      
-      // 扩图框定位：居中对齐，支持向左扩图
-      // 计算原图在扩图区域中的位置，使原图居中
-      const originalWidth = originalImageSize.value.width
-      const originalHeight = originalImageSize.value.height
-      
-      // 原图在扩图区域中的偏移量（居中对齐）
-      const offsetX = (newWidth - originalWidth) / 2
-      const offsetY = (newHeight - originalHeight) / 2
-      
-      // 计算扩图区域在画布中的位置
-      // 原图在画布中的中心位置（使用之前声明的变量）
-      
-      // 扩图区域的左上角位置（支持向左扩图）
-      // 从原图中心减去偏移量，得到扩图区域的左上角
-      expansionX.value = centerX - originalWidth / 2 - offsetX
-      expansionY.value = centerY - originalHeight / 2 - offsetY
-      expansionWidth.value = newWidth
-      expansionHeight.value = newHeight
-      
-      console.log('比例设置完成（基于图片位置）:', {
-        ratio,
-        canvas: { width: canvasWidth, height: canvasHeight },
-        image: currentImage.value ? {
-          x: currentImage.value.x,
-          y: currentImage.value.y,
-          width: currentImage.value.width,
-          height: currentImage.value.height
-        } : null,
-        newSize: { width: newWidth, height: newHeight },
-        expansion: { 
-          x: expansionX.value, 
-          y: expansionY.value, 
-          width: expansionWidth.value, 
-          height: expansionHeight.value 
-        },
-        domInfo: {
-          canvasWrapper: {
-            clientWidth: canvasWrapper.value?.clientWidth,
-            clientHeight: canvasWrapper.value?.clientHeight,
-            offsetWidth: canvasWrapper.value?.offsetWidth,
-            offsetHeight: canvasWrapper.value?.offsetHeight
-          },
-          canvas: {
-            offsetLeft: canvas.value?.offsetLeft,
-            offsetTop: canvas.value?.offsetTop,
-            clientWidth: canvas.value?.clientWidth,
-            clientHeight: canvas.value?.clientHeight
-          },
-          positioning: {
-            finalX: expansionX.value,
-            finalY: expansionY.value
-          }
-        }
-      })
-    }
+         // 恢复原始比例
+         newWidth = originalImageSize.value.width
+         newHeight = originalImageSize.value.height
+       } else {
+         // 设置固定比例
+         const [widthRatio, heightRatio] = ratio.split(':').map(Number)
+         const targetAspect = widthRatio / heightRatio
+         
+         // 以原图尺寸为基础计算新的扩图区域
+         const originalAspect = originalImageSize.value.width / originalImageSize.value.height
+         
+         if (targetAspect > originalAspect) {
+           // 更宽的比例，以宽度为准
+           newWidth = originalImageSize.value.width
+           newHeight = newWidth / targetAspect
+         } else {
+           // 更高的比例，以高度为准
+           newHeight = originalImageSize.value.height
+           newWidth = newHeight * targetAspect
+         }
+       }
+       
+       // 确保扩图区域不小于原图尺寸（避免裁切）
+       const minWidth = originalImageSize.value.width
+       const minHeight = originalImageSize.value.height
+       
+       if (newWidth < minWidth) {
+         newWidth = minWidth
+         newHeight = newWidth * (ratio === 'original' ? originalImageSize.value.height / originalImageSize.value.width : newHeight / newWidth)
+       }
+       if (newHeight < minHeight) {
+         newHeight = minHeight
+         newWidth = newHeight * (ratio === 'original' ? originalImageSize.value.width / originalImageSize.value.height : newWidth / newHeight)
+       }
+       
+       // 扩图区域居中定位
+       const offsetX = (newWidth - originalImageSize.value.width) / 2
+       const offsetY = (newHeight - originalImageSize.value.height) / 2
+       
+       expansionX.value = -offsetX
+       expansionY.value = -offsetY
+       expansionWidth.value = newWidth
+       expansionHeight.value = newHeight
+       
+       console.log('比例设置完成:', {
+         ratio,
+         original: { width: originalImageSize.value.width, height: originalImageSize.value.height },
+         newSize: { width: newWidth, height: newHeight },
+         expansion: { 
+           x: expansionX.value, 
+           y: expansionY.value, 
+           width: expansionWidth.value, 
+           height: expansionHeight.value 
+         }
+       })
+     }
     
     // 重置扩图区域位置（不改变大小）
     const resetOutpainting = () => {
@@ -855,10 +715,9 @@ currentAspectRatio.value = ratio
         newY = resizeStart.value.startY + deltaY
       }
       
-      // 确保不小于缩放后的图片尺寸
-      const scale = imageScaleX.value
-      const minWidth = originalImageSize.value.width * scale
-      const minHeight = originalImageSize.value.height * scale
+       // 确保不小于原图尺寸
+       const minWidth = originalImageSize.value.width
+       const minHeight = originalImageSize.value.height
       
       if (newWidth < minWidth) {
         if (handle.includes('w')) {
@@ -977,82 +836,65 @@ currentAspectRatio.value = ratio
         finalPrompt: prompt
       })
       
-      // 计算传递给后端的参数
-      // 使用原始图片尺寸进行计算，而不是缩放后的尺寸
-      const originalWidth = currentImage.value.originalWidth || currentImage.value.width
-      const originalHeight = currentImage.value.originalHeight || currentImage.value.height
-      const scale = currentImage.value.scale || 1
-      
-      // 将缩放后的坐标转换为原始坐标
-      const originalImageX = currentImage.value.x / scale
-      const originalImageY = currentImage.value.y / scale
-      const originalExpansionX = expansionX.value / scale
-      const originalExpansionY = expansionY.value / scale
-      const originalExpansionWidth = expansionWidth.value / scale
-      const originalExpansionHeight = expansionHeight.value / scale
-      
-      // 扩图区域相对于原图左上角的偏移（使用原始坐标）
-      const expansion_x = originalExpansionX - originalImageX
-      const expansion_y = originalExpansionY - originalImageY
-      
-      console.log('🔍 扩图参数计算详情（缩放转换）:', {
-        scaling: {
-          scale: scale,
-          scaledImage: {
-            x: currentImage.value.x,
-            y: currentImage.value.y,
-            width: currentImage.value.width,
-            height: currentImage.value.height
-          },
-          originalImage: {
-            x: originalImageX,
-            y: originalImageY,
-            width: originalWidth,
-            height: originalHeight
-          }
-        },
-        expansionArea: {
-          scaled: {
-            x: expansionX.value,
-            y: expansionY.value,
-            width: expansionWidth.value,
-            height: expansionHeight.value
-          },
-          original: {
-            x: originalExpansionX,
-            y: originalExpansionY,
-            width: originalExpansionWidth,
-            height: originalExpansionHeight
-          }
-        },
-        calculatedOffsets: {
-          expansion_x: expansion_x,
-          expansion_y: expansion_y
-        }
-      })
+       // 计算传递给后端的参数（无缩放）
+       const originalWidth = currentImage.value.originalWidth || currentImage.value.width
+       const originalHeight = currentImage.value.originalHeight || currentImage.value.height
+       
+       // 直接使用前端扩图区域的坐标和尺寸，不进行缩放转换
+       const expansion_x = expansionX.value
+       const expansion_y = expansionY.value
+       const originalExpansionWidth = expansionWidth.value
+       const originalExpansionHeight = expansionHeight.value
+       
+       console.log('🔍 扩图参数计算（无缩放）:', {
+         original: { width: originalWidth, height: originalHeight },
+         expansion: { 
+           x: expansion_x, 
+           y: expansion_y, 
+           width: originalExpansionWidth, 
+           height: originalExpansionHeight 
+         }
+       })
       
       isProcessing.value = true
       processingMessage.value = '正在执行扩图...'
       console.log('⏳ 设置loading状态:', { isProcessing: isProcessing.value, processingMessage: processingMessage.value })
       emit('processing-start')
       
-      try {
-        // 生成扩图参数（使用原始尺寸）
-        const parameters = {
-          original_width: originalWidth,
-          original_height: originalHeight,
-          expansion_width: originalExpansionWidth,
-          expansion_height: originalExpansionHeight,
-          expansion_x: expansion_x,
-          expansion_y: expansion_y,
-          negative_prompt: '',
-          steps: 8,
-          cfg: 2.5,
-          denoise: 1.0,
-          target_size: 1024,
-          lora_strength: 1.0,
-          seed: -1
-        }
+       try {
+         // 计算四个方向的扩图参数
+         const left = Math.max(0, -expansion_x)
+         const top = Math.max(0, -expansion_y)
+         const right = Math.max(0, expansion_x + originalExpansionWidth - originalWidth)
+         const bottom = Math.max(0, expansion_y + originalExpansionHeight - originalHeight)
+         
+         console.log('🔍 扩图参数计算:', {
+           left, top, right, bottom,
+           expansion_x, expansion_y,
+           originalExpansionWidth, originalExpansionHeight,
+           originalWidth, originalHeight
+         })
+         
+         // 生成扩图参数（使用原始尺寸）
+         const parameters = {
+           original_width: originalWidth,
+           original_height: originalHeight,
+           expansion_width: originalExpansionWidth,
+           expansion_height: originalExpansionHeight,
+           expansion_x: expansion_x,
+           expansion_y: expansion_y,
+           left: left,
+           top: top,
+           right: right,
+           bottom: bottom,
+           negative_prompt: '',
+           steps: 8,
+           cfg: 2.5,
+           denoise: 1.0,
+           target_size: 1024,
+           lora_strength: 1.0,
+           seed: -1
+         }
         
         // 准备图像文件
         let sourceImageFile
@@ -1351,24 +1193,13 @@ currentAspectRatio.value = ratio
       
       await loadOriginalImage()
       
-      // 等待图片加载完成后再设置扩图区域
-      if (currentImage.value && canvas.value) {
-        console.log('🔄 图片加载完成，重新计算扩图区域初始位置')
-        const img = currentImage.value.img
-        if (img) {
-          // 重新设置扩图区域
-          setupExpansionArea(img)
-        }
-      } else {
-        console.log('⚠️ 图片加载失败或画布未初始化')
-      }
-      
       executeOutpainting()
     }
     
     return {
       canvasRef,
       canvasWrapper,
+      imageContainer,
       fileInput,
       currentImage,
       showExpansionArea,
@@ -1382,6 +1213,7 @@ currentAspectRatio.value = ratio
       processingMessage,
       canUndo,
       canRedo,
+      imageContainerStyle,
       expansionAreaStyle,
       currentAspectRatio,
       currentMode: ref('outpainting'), // 添加调试用的模式
@@ -1506,6 +1338,11 @@ currentAspectRatio.value = ratio
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.image-container {
+  position: relative;
+  display: inline-block;
 }
 
 .outpainting-canvas {

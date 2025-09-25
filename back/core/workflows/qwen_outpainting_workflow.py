@@ -73,7 +73,7 @@ class QwenOutpaintingWorkflow:
         if "3" in workflow:
             print(f"   节点3 (负面提示词): {workflow['3']['inputs']['text']}")
         if "12" in workflow:
-            print(f"   节点12 (外补画板): left={workflow['12']['inputs']['left']}, top={workflow['12']['inputs']['top']}")
+            print(f"   节点12 (外补画板): left={workflow['12']['inputs']['left']}, top={workflow['12']['inputs']['top']}, right={workflow['12']['inputs']['right']}, bottom={workflow['12']['inputs']['bottom']}")
         if "21" in workflow:
             print(f"   节点21 (SaveImage): {workflow['21']['inputs']['filename_prefix']}")
         

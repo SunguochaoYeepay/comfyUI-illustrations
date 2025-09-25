@@ -16,6 +16,7 @@ from core.workflows import FluxWorkflow, QwenWorkflow
 from core.workflows import WanWorkflow
 from core.workflows.seedream4_workflow import Seedream4Workflow
 from core.workflows.joycaption_workflow import JoyCaptionWorkflow
+from core.workflows.qwen_outpainting_workflow import QwenOutpaintingWorkflow
 
 
 class WorkflowTemplate:
@@ -55,6 +56,12 @@ class WorkflowTemplate:
             parameters: 生成参数
             model_name: 模型名称（必填）
         """
+        # 特殊处理：qwen-outpainting 直接使用内置工作流，不需要配置
+        if model_name == "qwen-outpainting":
+            print(f"🎯 使用内置Qwen扩图工作流")
+            workflow_creator = QwenOutpaintingWorkflow()
+            return workflow_creator.create_workflow(reference_image_path, description, parameters)
+        
         # 获取模型配置 - 使用配置客户端
         model_config = await self._get_model_config_from_client(model_name)
         if not model_config:
@@ -165,6 +172,17 @@ class WorkflowTemplate:
                     model_name_field = model.get("name")
                     if model_code == model_name or model_name_field == model_name:
                         return model
+                
+                # 如果请求的是qwen-outpainting但没有找到，尝试返回qwen-image配置
+                if model_name == "qwen-outpainting":
+                    print(f"⚠️ 未找到qwen-outpainting模型配置，尝试使用qwen-image配置")
+                    for model in models:
+                        model_code = model.get("code")
+                        model_name_field = model.get("name")
+                        if model_code == "qwen-image" or model_name_field == "qwen-image":
+                            print(f"✅ 使用qwen-image模型配置作为扩图模型")
+                            return model
+            
             return None
         except Exception as e:
             print(f"⚠️ 从配置客户端获取模型配置失败: {e}")

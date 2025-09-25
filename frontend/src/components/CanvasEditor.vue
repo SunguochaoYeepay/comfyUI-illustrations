@@ -1,7 +1,8 @@
 <template>
   <div class="canvas-editor">
-    <!-- 顶部工具栏 -->
+    <!-- 顶部工具栏 - 扩图模式下隐藏 -->
     <CanvasTopToolbar
+      v-if="currentMode !== 'outpainting'"
       :can-undo="currentHistoryIndex > 0"
       :can-redo="currentHistoryIndex < historyRecords.length - 1"
       :current-canvas-size="currentCanvasSize"
@@ -45,7 +46,7 @@
     />
     
     <!-- 主内容区域 -->
-    <div class="main-content" :class="{ 'full-width': isInpaintingMode || !showHistory }" @click="handleMainContentClick">
+    <div class="main-content" :class="{ 'full-width': isInpaintingMode || currentMode === 'outpainting' || !showHistory }" @click="handleMainContentClick">
       <!-- 主画板 -->
       <MainCanvas
         v-if="currentMode === ''"
@@ -77,15 +78,39 @@
         @zoom-changed="handleZoomChanged"
       />
       
+      <!-- 扩图画板 -->
+      <OutpaintingCanvas
+        v-show="currentMode === 'outpainting'"
+        ref="outpaintingCanvasRef"
+        :original-image="currentImageData"
+        :original-image-file="currentImageFile"
+        :prompt="parameters.prompt"
+        :zoom-level="currentZoomLevel"
+        @outpainting-complete="handleOutpaintingComplete"
+        @processing-start="handleProcessingStart"
+        @processing-end="handleProcessingEnd"
+        @zoom-changed="handleZoomChanged"
+        @file-upload="handleFileUpload"
+        @exit-outpainting="handleExitOutpainting"
+      />
+      
       <!-- 调试信息 -->
-      <div v-if="currentMode !== '' && currentMode !== 'inpainting'" class="debug-mode">
+      <div v-if="currentMode !== '' && currentMode !== 'inpainting' && currentMode !== 'outpainting'" class="debug-mode">
         <p>未知模式: {{ currentMode }}</p>
       </div>
       
       <!-- 参数面板 -->
       <CanvasParameterPanel
+        v-if="currentMode === 'inpainting'"
         v-model:prompt="parameters.prompt"
         @execute="handleExecuteInpainting"
+      />
+      
+      <!-- 扩图参数面板 -->
+      <OutpaintingParameterPanel
+        v-if="currentMode === 'outpainting'"
+        v-model:prompt="parameters.prompt"
+        @execute="handleExecuteOutpainting"
       />
       
       <!-- 隐藏的执行按钮，用于触发局部重绘 -->
@@ -98,7 +123,7 @@
     
     <!-- 历史面板 - 通过顶部工具栏的历史按钮控制显示 -->
     <CanvasHistoryPanel
-      v-if="!isInpaintingMode && showHistory"
+      v-if="!isInpaintingMode && currentMode !== 'outpainting' && showHistory"
       v-model="historyRecords"
       v-model:current-index="currentHistoryIndex"
       @switch-history="handleSwitchHistory"
@@ -113,9 +138,11 @@ import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import CanvasTopToolbar from './CanvasTopToolbar.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import CanvasParameterPanel from './CanvasParameterPanel.vue'
+import OutpaintingParameterPanel from './OutpaintingParameterPanel.vue'
 import CanvasHistoryPanel from './CanvasHistoryPanel.vue'
 import MainCanvas from './MainCanvas.vue'
 import InpaintingCanvas from './InpaintingCanvas.vue'
+import OutpaintingCanvas from './OutpaintingCanvas.vue'
 
 export default {
   name: 'CanvasEditor',
@@ -123,9 +150,11 @@ export default {
     CanvasTopToolbar,
     CanvasToolbar,
     CanvasParameterPanel,
+    OutpaintingParameterPanel,
     CanvasHistoryPanel,
     MainCanvas,
-    InpaintingCanvas
+    InpaintingCanvas,
+    OutpaintingCanvas
   },
   setup() {
     // 响应式数据
@@ -142,6 +171,7 @@ export default {
     const currentZoomLevel = ref(1)
     const mainCanvasRef = ref(null)
     const inpaintingCanvasRef = ref(null)
+    const outpaintingCanvasRef = ref(null)
     const showHistory = ref(false)
     
     // 参数配置
@@ -176,8 +206,16 @@ export default {
       isInpaintingMode.value = mode === 'inpainting'
       
       // 进入局部重绘模式时，InpaintingCanvas会自动适应画布显示全图
+      // 进入扩图模式时，OutpaintingCanvas会自动适应画布显示全图
       
       console.log('✅ 模式已切换到:', mode, '局部重绘模式:', isInpaintingMode.value)
+    }
+    
+    // 退出扩图模式
+    const exitOutpaintingMode = () => {
+      console.log('退出扩图模式')
+      currentMode.value = ''
+      isInpaintingMode.value = false
     }
     
     // 处理绘制工具变化
@@ -236,10 +274,48 @@ export default {
       addToHistory(historyRecord)
     }
     
+    // 处理扩图完成
+    const handleOutpaintingComplete = (result) => {
+      console.log('Outpainting complete:', result)
+      
+      // 检查是否是退出扩图模式
+      if (result.action === 'exit') {
+        console.log('退出扩图模式')
+        exitOutpaintingMode()
+        return
+      }
+      
+      // 添加到历史记录
+      const historyRecord = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        prompt: parameters.prompt,
+        originalImageUrl: originalImageUrl.value,
+        resultImageUrl: result.resultImageUrl,
+        parameters: result.parameters,
+        type: 'outpainting'
+      }
+      
+      addToHistory(historyRecord)
+    }
+    
+    // 处理退出扩图模式
+    const handleExitOutpainting = () => {
+      console.log('收到退出扩图模式请求')
+      exitOutpaintingMode()
+    }
+    
     // 处理处理开始
     const handleProcessingStart = () => {
       isProcessing.value = true
-      processingMessage.value = '正在执行局部重绘...'
+      // 根据当前模式设置不同的处理消息
+      if (currentMode.value === 'inpainting') {
+        processingMessage.value = '正在执行局部重绘...'
+      } else if (currentMode.value === 'outpainting') {
+        processingMessage.value = '正在执行扩图...'
+      } else {
+        processingMessage.value = '正在处理...'
+      }
     }
     
     // 处理处理结束
@@ -268,10 +344,31 @@ export default {
       window.dispatchEvent(new CustomEvent('execute-inpainting'))
     }
     
+    // 处理执行扩图
+    const handleExecuteOutpainting = async () => {
+      console.log('执行扩图')
+      console.log('当前模式:', currentMode.value)
+      
+      if (currentMode.value !== 'outpainting') {
+        console.error('当前不在扩图模式')
+        return
+      }
+      
+      // 使用事件通信触发执行
+      console.log('通过事件触发扩图执行')
+      window.dispatchEvent(new CustomEvent('execute-outpainting'))
+    }
+    
     // 触发局部重绘执行（备用方法）
     const triggerInpaintingExecution = () => {
       console.log('通过按钮触发局部重绘执行')
       window.dispatchEvent(new CustomEvent('execute-inpainting'))
+    }
+    
+    // 触发扩图执行（备用方法）
+    const triggerOutpaintingExecution = () => {
+      console.log('通过按钮触发扩图执行')
+      window.dispatchEvent(new CustomEvent('execute-outpainting'))
     }
     
     // 历史管理方法
@@ -406,6 +503,9 @@ export default {
       if (inpaintingCanvasRef.value) {
         inpaintingCanvasRef.value.zoomIn()
       }
+      if (outpaintingCanvasRef.value) {
+        outpaintingCanvasRef.value.zoomIn()
+      }
     }
     
     const handleZoomOut = () => {
@@ -415,6 +515,9 @@ export default {
       }
       if (inpaintingCanvasRef.value) {
         inpaintingCanvasRef.value.zoomOut()
+      }
+      if (outpaintingCanvasRef.value) {
+        outpaintingCanvasRef.value.zoomOut()
       }
     }
     
@@ -426,6 +529,9 @@ export default {
       if (inpaintingCanvasRef.value) {
         inpaintingCanvasRef.value.zoomFit()
       }
+      if (outpaintingCanvasRef.value) {
+        outpaintingCanvasRef.value.resetZoom()
+      }
     }
     
     const handleZoom100 = () => {
@@ -435,6 +541,9 @@ export default {
       }
       if (inpaintingCanvasRef.value) {
         inpaintingCanvasRef.value.zoom100()
+      }
+      if (outpaintingCanvasRef.value) {
+        outpaintingCanvasRef.value.resetZoom()
       }
     }
     
@@ -533,10 +642,14 @@ export default {
       handleImageLoaded,
       handleImageCleared,
       handleInpaintingComplete,
+      handleOutpaintingComplete,
+      handleExitOutpainting,
       handleProcessingStart,
       handleProcessingEnd,
       handleSaveImage,
       handleExecuteInpainting,
+      handleExecuteOutpainting,
+      exitOutpaintingMode,
       handleSwitchHistory,
       handleUndo,
       handleRedo,

@@ -1750,6 +1750,104 @@ async def execute_qwen_edit(
         raise HTTPException(status_code=500, detail=f"创建Qwen-Edit任务失败: {str(e)}")
 
 
+@app.post("/api/outpainting", response_model=TaskResponse)
+async def execute_outpainting(
+    image: UploadFile = File(...),
+    prompt: str = Form(""),
+    parameters: str = Form(...)
+):
+    """执行扩图任务"""
+    try:
+        print(f"🖼️ 开始执行扩图任务")
+        print(f"🔍 扩图API被调用")
+        
+        # 解析参数
+        try:
+            params = json.loads(parameters)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="参数格式错误")
+        
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+        print(f"📋 任务ID: {task_id}")
+        
+        # 保存上传的图像
+        image_filename = f"{task_id}_image_{image.filename}"
+        image_path = UPLOAD_DIR / image_filename
+        
+        # 读取并保存图像文件
+        content = await image.read()
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="图像文件为空")
+        
+        async with aiofiles.open(image_path, 'wb') as f:
+            await f.write(content)
+        print(f"✅ 图像文件保存成功: {image_path}")
+        
+        # 准备扩图参数（只包含扩图相关的参数，采样参数使用工作流默认值）
+        outpainting_parameters = {
+            "original_width": params.get("original_width", 512),
+            "original_height": params.get("original_height", 512),
+            "expansion_width": params.get("expansion_width", 1024),
+            "expansion_height": params.get("expansion_height", 1024),
+            "expansion_x": params.get("expansion_x", 0),
+            "expansion_y": params.get("expansion_y", 0)
+        }
+        
+        print(f"🔧 扩图参数: {outpainting_parameters}")
+        
+        # 创建任务到数据库
+        try:
+            print(f"🔍 准备保存任务到数据库: {task_id}")
+            print(f"🔍 数据库管理器: {db_manager}")
+            print(f"🔍 任务描述: 扩图: {prompt}")
+            print(f"🔍 图像路径: {image_path}")
+            
+            db_manager.create_task(
+                task_id=task_id,
+                description=f"扩图: {prompt}",
+                reference_image_path=str(image_path),
+                parameters=outpainting_parameters
+            )
+            print(f"✅ 任务已保存到数据库: {task_id}")
+            
+            # 验证任务是否真的保存了
+            saved_task = db_manager.get_task(task_id)
+            print(f"🔍 验证任务保存: {saved_task is not None}")
+            
+        except Exception as db_error:
+            print(f"❌ 数据库保存失败: {db_error}")
+            import traceback
+            print(f"数据库错误详情: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"数据库保存失败: {str(db_error)}")
+        
+        # 使用现有的任务管理器实例
+        task_manager = get_task_manager()
+        
+        # 异步执行扩图任务
+        import asyncio
+        asyncio.create_task(task_manager.execute_outpainting_task(
+            task_id=task_id,
+            image_path=str(image_path),
+            prompt=prompt,
+            parameters=outpainting_parameters
+        ))
+        
+        print(f"✅ 扩图任务创建成功: {task_id}")
+        
+        return TaskResponse(
+            task_id=task_id,
+            status="pending",
+            message="扩图任务已提交"
+        )
+        
+    except Exception as e:
+        print(f"❌ 创建扩图任务失败: {e}")
+        import traceback
+        print(f"详细错误信息: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"创建扩图任务失败: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=9000)

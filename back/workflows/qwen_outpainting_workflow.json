@@ -1,0 +1,293 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIP加载器"
+    }
+  },
+  "2": {
+    "inputs": {
+      "unet_name": "qwen_image_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNET加载器"
+    }
+  },
+  "3": {
+    "inputs": {
+      "text": " ",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAE加载器"
+    }
+  },
+  "5": {
+    "inputs": {
+      "pixels": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE编码"
+    }
+  },
+  "6": {
+    "inputs": {
+      "pixels": [
+        "31",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE编码"
+    }
+  },
+  "8": {
+    "inputs": {
+      "lora_name": "qwen\\Qwen-Image-Lightning-4steps-V1.0.safetensors",
+      "strength_model": 1,
+      "model": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器(仅模型)"
+    }
+  },
+  "12": {
+    "inputs": {
+      "left": 104,
+      "top": 200,
+      "right": 104,
+      "bottom": 800,
+      "feathering": 40,
+      "image": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "外补画板"
+    }
+  },
+  "13": {
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
+    }
+  },
+  "14": {
+    "inputs": {
+      "control_net_name": "qwen\\Qwen-Image-ControlNet-Inpainting.safetensors"
+    },
+    "class_type": "ControlNetLoader",
+    "_meta": {
+      "title": "ControlNet加载器"
+    }
+  },
+  "15": {
+    "inputs": {
+      "image": "generated-image-1758603421601.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "18": {
+    "inputs": {
+      "strength": 1,
+      "start_percent": 0,
+      "end_percent": 1,
+      "positive": [
+        "28",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "control_net": [
+        "14",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ],
+      "image": [
+        "31",
+        0
+      ],
+      "mask": [
+        "31",
+        1
+      ]
+    },
+    "class_type": "ControlNetInpaintingAliMamaApply",
+    "_meta": {
+      "title": "ControlNet应用_阿里妈妈局部重绘"
+    }
+  },
+  "20": {
+    "inputs": {
+      "purge_cache": true,
+      "purge_models": true,
+      "anything": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "LayerUtility: PurgeVRAM",
+    "_meta": {
+      "title": "LayerUtility: Purge VRAM"
+    }
+  },
+  "21": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "22": {
+    "inputs": {
+      "shift": 3.1,
+      "model": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "模型采样算法AuraFlow"
+    }
+  },
+  "24": {
+    "inputs": {
+      "samples": [
+        "27",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "27": {
+    "inputs": {
+      "seed": 562476227555982,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "22",
+        0
+      ],
+      "positive": [
+        "18",
+        0
+      ],
+      "negative": [
+        "18",
+        1
+      ],
+      "latent_image": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "28": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "31": {
+    "inputs": {
+      "aspect_ratio": "original",
+      "proportional_width": 1,
+      "proportional_height": 1,
+      "fit": "letterbox",
+      "method": "lanczos",
+      "round_to_multiple": "8",
+      "scale_to_side": "longest",
+      "scale_to_length": 1328,
+      "background_color": "#000000",
+      "image": [
+        "12",
+        0
+      ],
+      "mask": [
+        "12",
+        1
+      ]
+    },
+    "class_type": "LayerUtility: ImageScaleByAspectRatio V2",
+    "_meta": {
+      "title": "按宽高比缩放_V2"
+    }
+  }
+}

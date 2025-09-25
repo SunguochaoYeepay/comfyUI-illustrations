@@ -354,6 +354,82 @@ class TaskManager:
             cache_manager.invalidate_history_cache()
             cache_manager.invalidate_task_cache(task_id)
     
+    async def execute_outpainting_task(self, task_id: str, image_path: str, prompt: str, parameters: Dict[str, Any]):
+        """执行扩图任务
+        
+        Args:
+            task_id: 任务ID
+            image_path: 原始图像路径
+            prompt: 扩图提示词
+            parameters: 扩图参数
+        """
+        try:
+            print(f"🖼️ 开始执行扩图任务: {task_id}")
+            print(f"   提示词: {prompt}")
+            print(f"   参数: {parameters}")
+            
+            # 更新状态为处理中
+            self.db.update_task_status(task_id, "processing")
+            
+            # 获取模型名称 - 使用qwen-outpainting模型
+            model_name = parameters.get("model", "qwen-outpainting")
+            
+            # 扩图不需要翻译提示词，直接使用原始提示词
+            print(f"📝 使用原始提示词: {prompt}")
+            
+            # 准备工作流
+            print(f"🔧 准备扩图工作流...")
+            workflow = await self.workflow_template.customize_workflow(
+                image_path, prompt, parameters, model_name
+            )
+            print(f"✅ 扩图工作流准备完成")
+            
+            # 提交到ComfyUI
+            print(f"📤 提交扩图工作流到ComfyUI...")
+            prompt_id = await self.comfyui.submit_workflow(workflow)
+            print(f"✅ 已提交扩图工作流，prompt_id: {prompt_id}")
+            
+            # 等待完成
+            print(f"⏳ 等待扩图任务完成...")
+            result_paths = await self.wait_for_completion(task_id, prompt_id)
+            
+            if result_paths:
+                # 扩图通常只生成一张结果图像
+                if len(result_paths) == 1:
+                    print(f"💾 保存扩图结果: {result_paths[0]}")
+                    self.db.update_task_status(task_id, "completed", result_path=result_paths[0])
+                    # 清除历史记录缓存
+                    cache_manager = get_cache_manager()
+                    cache_manager.invalidate_history_cache()
+                else:
+                    # 如果有多张结果，保存为JSON
+                    result_data = json.dumps(result_paths)
+                    print(f"💾 保存扩图结果JSON: {result_data}")
+                    self.db.update_task_status(task_id, "completed", result_path=result_data)
+                    # 清除历史记录缓存
+                    cache_manager = get_cache_manager()
+                    cache_manager.invalidate_history_cache()
+            else:
+                error_msg = "扩图任务失败，没有生成结果"
+                print(f"❌ {error_msg}")
+                self.db.update_task_status(task_id, "failed", error=error_msg)
+                # 清除相关缓存
+                cache_manager = get_cache_manager()
+                cache_manager.invalidate_history_cache()
+                cache_manager.invalidate_task_cache(task_id)
+                
+        except Exception as e:
+            error_msg = f"扩图任务执行失败: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            print(f"详细错误信息:")
+            print(traceback.format_exc())
+            self.db.update_task_status(task_id, "failed", error=error_msg)
+            # 清除相关缓存
+            cache_manager = get_cache_manager()
+            cache_manager.invalidate_history_cache()
+            cache_manager.invalidate_task_cache(task_id)
+
     async def wait_for_completion(self, task_id: str, prompt_id: str, max_wait_time: int = MAX_WAIT_TIME) -> Optional[list]:
         """等待任务完成
         
@@ -400,6 +476,7 @@ class TaskManager:
                                     if (filename.startswith("qwen-edit-") or 
                                         filename.startswith("pl-qwen-edit") or
                                         filename.startswith("yeepay_") or
+                                        filename.startswith("outpainting-") or
                                         filename.startswith("ComfyUI_") and not filename.startswith("ComfyUI_temp_")):
                                         is_save_image_output = True
                                         break

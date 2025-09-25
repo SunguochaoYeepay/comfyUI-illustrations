@@ -198,8 +198,13 @@ class QwenWorkflow(BaseWorkflow):
             if parameters.get("steps"):
                 workflow["20"]["inputs"]["steps"] = parameters["steps"]
             if parameters.get("seed"):
-                workflow["20"]["inputs"]["seed"] = parameters["seed"]
-            print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 8)}, 种子={parameters.get('seed', 'random')}")
+                # 处理种子值，-1表示随机种子，需要转换为0或正数
+                seed = parameters["seed"]
+                if seed == -1:
+                    import random
+                    seed = random.randint(0, 2**32 - 1)
+                workflow["20"]["inputs"]["seed"] = seed
+            print(f"✅ 更新KSampler参数: 步数={parameters.get('steps', 8)}, 种子={workflow['20']['inputs']['seed'] if '20' in workflow else parameters.get('seed', 'random')}")
         
         # 图像尺寸更新已移到单独的步骤
         

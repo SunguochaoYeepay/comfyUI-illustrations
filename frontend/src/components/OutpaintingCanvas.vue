@@ -245,9 +245,26 @@ export default {
     })
     
     const expansionAreaStyle = computed(() => {
+      // 计算扩图区域在画布容器中的相对位置
+      const canvasElement = canvas.value
+      if (!canvasElement || !canvasWrapper.value) {
+        return {
+          left: `${expansionX.value}px`,
+          top: `${expansionY.value}px`,
+          width: `${expansionWidth.value}px`,
+          height: `${expansionHeight.value}px`
+        }
+      }
+      
+      // 获取画布在容器中的偏移量
+      const canvasRect = canvasElement.getBoundingClientRect()
+      const wrapperRect = canvasWrapper.value.getBoundingClientRect()
+      const offsetX = canvasRect.left - wrapperRect.left
+      const offsetY = canvasRect.top - wrapperRect.top
+      
       return {
-        left: `${expansionX.value}px`,
-        top: `${expansionY.value}px`,
+        left: `${expansionX.value + offsetX}px`,
+        top: `${expansionY.value + offsetY}px`,
         width: `${expansionWidth.value}px`,
         height: `${expansionHeight.value}px`
       }
@@ -392,8 +409,16 @@ export default {
       ctx.fillStyle = '#1a1a1a'
       ctx.fillRect(0, 0, canvasWidth, canvasHeight)
       
-      // 直接绘制图像到整个画布（不缩放）
-      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight)
+      // 计算原图在画布中的居中位置
+      const imgWidth = img.width
+      const imgHeight = img.height
+      const centerX = canvasWidth / 2
+      const centerY = canvasHeight / 2
+      const imgX = centerX - imgWidth / 2
+      const imgY = centerY - imgHeight / 2
+      
+      // 绘制图像到画布中心（不缩放）
+      ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight)
       
       // 图像缩放比例为1（不缩放）
       imageScaleX.value = 1
@@ -402,16 +427,17 @@ export default {
       // 保存图像信息
       currentImage.value = {
         img,
-        x: 0,
-        y: 0,
-        width: canvasWidth,
-        height: canvasHeight
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight
       }
       
-      console.log('🎨 图片绘制完成（原始尺寸）:', {
-        image: { width: img.width, height: img.height },
+      console.log('🎨 图片绘制完成（居中对齐）:', {
+        image: { width: imgWidth, height: imgHeight },
         canvas: { width: canvasWidth, height: canvasHeight },
-        drawArea: { x: 0, y: 0, width: canvasWidth, height: canvasHeight }
+        drawArea: { x: imgX, y: imgY, width: imgWidth, height: imgHeight },
+        center: { x: centerX, y: centerY }
       })
     }
     
@@ -428,11 +454,20 @@ export default {
       const centerX = canvasWidth / 2
       const centerY = canvasHeight / 2
       
-      // 设置初始扩图区域，与画布（原图）尺寸相同
-      expansionX.value = 0
-      expansionY.value = 0
-      expansionWidth.value = img.width
-      expansionHeight.value = img.height
+      // 设置初始扩图区域，与原图尺寸相同，居中对齐
+      // 扩图区域应该以原图为中心，与原图尺寸相同
+      const originalWidth = img.width
+      const originalHeight = img.height
+      
+      // 计算原图在画布中的居中位置
+      const imgX = centerX - originalWidth / 2
+      const imgY = centerY - originalHeight / 2
+      
+      // 初始扩图区域与原图位置和尺寸相同
+      expansionX.value = imgX
+      expansionY.value = imgY
+      expansionWidth.value = originalWidth
+      expansionHeight.value = originalHeight
       
       console.log('🔍 扩图区域初始设置:', {
         imageSize: { width: img.width, height: img.height },
@@ -453,7 +488,7 @@ export default {
     
     // 设置比例
     const setAspectRatio = (ratio) => {
-      currentAspectRatio.value = ratio
+currentAspectRatio.value = ratio
       
       if (!canvas.value || !canvasWrapper.value) {
         console.log('⚠️ setAspectRatio: canvas或canvasWrapper未准备好')
@@ -470,9 +505,28 @@ export default {
       let newWidth, newHeight
       
       if (ratio === 'original') {
-        // 恢复原始比例 - 使用图像的原始尺寸
+        // 恢复原始比例 - 使用图像的原始尺寸，保持居中对齐
         newWidth = originalImageSize.value.width
         newHeight = originalImageSize.value.height
+        
+        // 对于原始比例，扩图区域应该与原图位置相同（居中）
+        expansionX.value = centerX - newWidth / 2
+        expansionY.value = centerY - newHeight / 2
+        expansionWidth.value = newWidth
+        expansionHeight.value = newHeight
+        
+        console.log('原始比例设置完成（居中对齐）:', {
+          ratio,
+          canvas: { width: canvasWidth, height: canvasHeight },
+          center: { x: centerX, y: centerY },
+          expansion: { 
+            x: expansionX.value, 
+            y: expansionY.value, 
+            width: expansionWidth.value, 
+            height: expansionHeight.value 
+          }
+        })
+        return
       } else {
         // 设置固定比例
         const [widthRatio, heightRatio] = ratio.split(':').map(Number)
@@ -509,9 +563,22 @@ export default {
         newWidth = newHeight * (ratio === 'original' ? originalImageSize.value.width / originalImageSize.value.height : widthRatio / heightRatio)
       }
       
-      // 扩图框定位：从画布顶部开始
-      expansionX.value = 0
-      expansionY.value = 0
+      // 扩图框定位：居中对齐，支持向左扩图
+      // 计算原图在扩图区域中的位置，使原图居中
+      const originalWidth = originalImageSize.value.width
+      const originalHeight = originalImageSize.value.height
+      
+      // 原图在扩图区域中的偏移量（居中对齐）
+      const offsetX = (newWidth - originalWidth) / 2
+      const offsetY = (newHeight - originalHeight) / 2
+      
+      // 计算扩图区域在画布中的位置
+      // 原图在画布中的中心位置（使用之前声明的变量）
+      
+      // 扩图区域的左上角位置（支持向左扩图）
+      // 从原图中心减去偏移量，得到扩图区域的左上角
+      expansionX.value = centerX - originalWidth / 2 - offsetX
+      expansionY.value = centerY - originalHeight / 2 - offsetY
       expansionWidth.value = newWidth
       expansionHeight.value = newHeight
       
@@ -766,19 +833,43 @@ export default {
       })
       
       // 计算传递给后端的参数
+      // 现在原图在画布中心，需要计算扩图区域相对于原图的位置
+      const originalWidth = currentImage.value.width
+      const originalHeight = currentImage.value.height
+      const originalCenterX = currentImage.value.x + originalWidth / 2
+      const originalCenterY = currentImage.value.y + originalHeight / 2
+      
+      // 扩图区域中心相对于原图中心的偏移
+      const expansionCenterX = expansionX.value + expansionWidth.value / 2
+      const expansionCenterY = expansionY.value + expansionHeight.value / 2
+      
+      // 扩图区域相对于原图左上角的偏移（支持向左扩图）
       const expansion_x = expansionX.value - currentImage.value.x
       const expansion_y = expansionY.value - currentImage.value.y
-      console.log('🔍 扩图参数计算详情:', {
-        expansionX: expansionX.value,
-        expansionY: expansionY.value,
-        currentImageX: currentImage.value.x,
-        currentImageY: currentImage.value.y,
-        calculatedExpansionX: expansion_x,
-        calculatedExpansionY: expansion_y,
-        expansionWidth: expansionWidth.value,
-        expansionHeight: expansionHeight.value,
-        originalWidth: currentImage.value.width,
-        originalHeight: currentImage.value.height
+      
+      console.log('🔍 扩图参数计算详情（居中对齐）:', {
+        originalImage: {
+          x: currentImage.value.x,
+          y: currentImage.value.y,
+          width: originalWidth,
+          height: originalHeight,
+          centerX: originalCenterX,
+          centerY: originalCenterY
+        },
+        expansionArea: {
+          x: expansionX.value,
+          y: expansionY.value,
+          width: expansionWidth.value,
+          height: expansionHeight.value,
+          centerX: expansionCenterX,
+          centerY: expansionCenterY
+        },
+        calculatedOffsets: {
+          expansion_x: expansion_x,
+          expansion_y: expansion_y,
+          centerOffsetX: expansionCenterX - originalCenterX,
+          centerOffsetY: expansionCenterY - originalCenterY
+        }
       })
       
       isProcessing.value = true
@@ -1172,6 +1263,9 @@ export default {
   background: #1a1a1a;
   box-sizing: border-box;
   min-height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .outpainting-canvas {

@@ -164,17 +164,14 @@ class QwenOutpaintingWorkflow:
                 # expansion_x, expansion_y 是扩图区域相对于原图的位置
                 # 需要计算left, top, right, bottom
                 
-                # 扩图区域在原图中的位置
-                left = expansion_x
-                top = expansion_y
-                right = expansion_x + expansion_width - original_width
-                bottom = expansion_y + expansion_height - original_height
+                # 直接计算ImagePadForOutpaint的四个边界参数
+                # 这些参数表示在图像的四个方向添加多少像素
                 
-                # 确保边界值不为负数
-                left = max(0, left)
-                top = max(0, top)
-                right = max(0, right)
-                bottom = max(0, bottom)
+                # 计算四个方向的扩图像素数
+                left = max(0, -expansion_x)  # 向左扩图：expansion_x为负数时
+                top = max(0, -expansion_y)   # 向上扩图：expansion_y为负数时
+                right = max(0, expansion_x + expansion_width - original_width)   # 向右扩图
+                bottom = max(0, expansion_y + expansion_height - original_height) # 向下扩图
                 
                 # 更新外补画板参数
                 workflow["12"]["inputs"]["left"] = left

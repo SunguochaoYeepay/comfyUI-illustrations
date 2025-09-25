@@ -280,21 +280,80 @@ export default {
       console.log('🎨 画布初始化完成，等待图片加载')
     }
     
-    // 根据图片尺寸设置画布大小（不缩放，使用原始尺寸）
+    // 根据图片尺寸设置画布大小（支持缩放）
     const resizeCanvasForImage = (img) => {
       if (!canvas.value || !canvasWrapper.value) {
         console.log('⚠️ resizeCanvasForImage: canvas或canvasWrapper未准备好')
         return
       }
       
-      console.log('🔄 resizeCanvasForImage 开始执行（使用原始尺寸）:', {
+      console.log('🔄 resizeCanvasForImage 开始执行（支持缩放）:', {
         imgSize: { width: img.width, height: img.height },
         currentCanvas: { width: canvas.value.width, height: canvas.value.height }
       })
       
-      // 直接使用图片的原始尺寸
-      const canvasWidth = img.width
-      const canvasHeight = img.height
+      // 获取容器尺寸
+      const containerWidth = canvasWrapper.value.clientWidth
+      const containerHeight = canvasWrapper.value.clientHeight
+      
+      console.log('🔍 容器尺寸检查:', {
+        containerWidth,
+        containerHeight,
+        imageSize: { width: img.width, height: img.height }
+      })
+      
+      // 如果容器尺寸为0，使用默认尺寸
+      if (containerWidth === 0 || containerHeight === 0) {
+        console.log('⚠️ 容器尺寸为0，使用默认尺寸')
+        
+        // 使用更合理的默认容器尺寸
+        const defaultMaxWidth = 1200
+        const defaultMaxHeight = 800
+        
+        // 计算缩放比例，保持宽高比
+        const scaleX = defaultMaxWidth / img.width
+        const scaleY = defaultMaxHeight / img.height
+        const scale = Math.min(scaleX, scaleY, 1)  // 不超过原始尺寸
+        
+        const canvasWidth = Math.round(img.width * scale)
+        const canvasHeight = Math.round(img.height * scale)
+        
+        imageScaleX.value = scale
+        imageScaleY.value = scale
+        
+        canvas.value.width = canvasWidth
+        canvas.value.height = canvasHeight
+        canvas.value.style.width = `${canvasWidth}px`
+        canvas.value.style.height = `${canvasHeight}px`
+        
+        const ctx = canvas.value.getContext('2d')
+        ctx.fillStyle = '#1a1a1a'
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+        
+        console.log('🎨 使用默认尺寸设置画布:', {
+          image: { width: img.width, height: img.height },
+          defaultMax: { width: defaultMaxWidth, height: defaultMaxHeight },
+          scale: scale,
+          canvas: { width: canvasWidth, height: canvasHeight }
+        })
+        return
+      }
+      
+      const maxWidth = containerWidth * 0.9  // 留一些边距
+      const maxHeight = containerHeight * 0.9
+      
+      // 计算缩放比例
+      const scaleX = maxWidth / img.width
+      const scaleY = maxHeight / img.height
+      const scale = Math.min(scaleX, scaleY, 1)  // 不超过原始尺寸
+      
+      // 计算画布尺寸
+      const canvasWidth = Math.round(img.width * scale)
+      const canvasHeight = Math.round(img.height * scale)
+      
+      // 保存缩放比例
+      imageScaleX.value = scale
+      imageScaleY.value = scale
       
       // 更新画布尺寸
       canvas.value.width = canvasWidth
@@ -307,8 +366,11 @@ export default {
       ctx.fillStyle = '#1a1a1a'
       ctx.fillRect(0, 0, canvasWidth, canvasHeight)
       
-      console.log('🎨 画布尺寸设置为图片原始尺寸:', {
+      console.log('🎨 画布尺寸设置（缩放）:', {
         image: { width: img.width, height: img.height },
+        container: { width: containerWidth, height: containerHeight },
+        maxSize: { width: maxWidth, height: maxHeight },
+        scale: scale,
         canvas: { width: canvasWidth, height: canvasHeight }
       })
     }
@@ -321,10 +383,35 @@ export default {
         isImageLoaded: isImageLoaded.value
       })
       
-      // 如果图片已经加载过，跳过重复加载
+      // 检查是否需要重新加载图片
+      // 如果图片已经加载过，但props没有变化，则跳过重复加载
       if (isImageLoaded.value && currentImage.value) {
-        console.log('⏭️ 图片已加载，跳过重复加载')
-        return
+        // 检查当前图片是否与props中的图片一致
+        const currentImageUrl = currentImage.value.imageUrl || currentImage.value.src
+        let propsImageUrl = ''
+        
+        if (props.originalImageFile && props.originalImageFile instanceof File) {
+          propsImageUrl = URL.createObjectURL(props.originalImageFile)
+        } else if (props.originalImage) {
+          if (typeof props.originalImage === 'string') {
+            propsImageUrl = props.originalImage
+          } else if (props.originalImage.imageUrl) {
+            propsImageUrl = props.originalImage.imageUrl
+          } else if (props.originalImage.url) {
+            propsImageUrl = props.originalImage.url
+          }
+        }
+        
+        // 如果图片URL相同，跳过重复加载
+        if (currentImageUrl && propsImageUrl && currentImageUrl === propsImageUrl) {
+          console.log('⏭️ 图片未变化，跳过重复加载')
+          return
+        } else {
+          console.log('🔄 检测到图片变化，需要重新加载:', {
+            currentImageUrl: currentImageUrl?.substring(0, 50) + '...',
+            propsImageUrl: propsImageUrl?.substring(0, 50) + '...'
+          })
+        }
       }
       
       // 检查是否有有效的图片数据
@@ -397,7 +484,7 @@ export default {
       }
     }
     
-    // 绘制图像到画布（不缩放，使用原始尺寸）
+    // 绘制图像到画布（支持缩放）
     const drawImageToCanvas = (img) => {
       if (!canvas.value) return
       
@@ -409,35 +496,39 @@ export default {
       ctx.fillStyle = '#1a1a1a'
       ctx.fillRect(0, 0, canvasWidth, canvasHeight)
       
+      // 计算缩放后的图像尺寸
+      const scale = imageScaleX.value
+      const scaledImgWidth = img.width * scale
+      const scaledImgHeight = img.height * scale
+      
       // 计算原图在画布中的居中位置
-      const imgWidth = img.width
-      const imgHeight = img.height
       const centerX = canvasWidth / 2
       const centerY = canvasHeight / 2
-      const imgX = centerX - imgWidth / 2
-      const imgY = centerY - imgHeight / 2
+      const imgX = centerX - scaledImgWidth / 2
+      const imgY = centerY - scaledImgHeight / 2
       
-      // 绘制图像到画布中心（不缩放）
-      ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight)
+      // 绘制图像到画布中心（缩放）
+      ctx.drawImage(img, imgX, imgY, scaledImgWidth, scaledImgHeight)
       
-      // 图像缩放比例为1（不缩放）
-      imageScaleX.value = 1
-      imageScaleY.value = 1
-      
-      // 保存图像信息
+      // 保存图像信息（使用缩放后的尺寸）
       currentImage.value = {
         img,
         x: imgX,
         y: imgY,
-        width: imgWidth,
-        height: imgHeight
+        width: scaledImgWidth,
+        height: scaledImgHeight,
+        originalWidth: img.width,
+        originalHeight: img.height,
+        scale: scale
       }
       
-      console.log('🎨 图片绘制完成（居中对齐）:', {
-        image: { width: imgWidth, height: imgHeight },
+      console.log('🎨 图片绘制完成（缩放居中）:', {
+        original: { width: img.width, height: img.height },
+        scaled: { width: scaledImgWidth, height: scaledImgHeight },
         canvas: { width: canvasWidth, height: canvasHeight },
-        drawArea: { x: imgX, y: imgY, width: imgWidth, height: imgHeight },
-        center: { x: centerX, y: centerY }
+        drawArea: { x: imgX, y: imgY, width: scaledImgWidth, height: scaledImgHeight },
+        center: { x: centerX, y: centerY },
+        scale: scale
       })
     }
     
@@ -454,20 +545,21 @@ export default {
       const centerX = canvasWidth / 2
       const centerY = canvasHeight / 2
       
-      // 设置初始扩图区域，与原图尺寸相同，居中对齐
-      // 扩图区域应该以原图为中心，与原图尺寸相同
-      const originalWidth = img.width
-      const originalHeight = img.height
+      // 设置初始扩图区域，与缩放后的图片尺寸相同，居中对齐
+      // 扩图区域应该以缩放后的图片为中心，与缩放后的图片尺寸相同
+      const scale = imageScaleX.value
+      const scaledWidth = img.width * scale
+      const scaledHeight = img.height * scale
       
-      // 计算原图在画布中的居中位置
-      const imgX = centerX - originalWidth / 2
-      const imgY = centerY - originalHeight / 2
+      // 计算缩放后图片在画布中的居中位置
+      const imgX = centerX - scaledWidth / 2
+      const imgY = centerY - scaledHeight / 2
       
-      // 初始扩图区域与原图位置和尺寸相同
+      // 初始扩图区域与缩放后图片位置和尺寸相同
       expansionX.value = imgX
       expansionY.value = imgY
-      expansionWidth.value = originalWidth
-      expansionHeight.value = originalHeight
+      expansionWidth.value = scaledWidth
+      expansionHeight.value = scaledHeight
       
       console.log('🔍 扩图区域初始设置:', {
         imageSize: { width: img.width, height: img.height },
@@ -505,11 +597,12 @@ currentAspectRatio.value = ratio
       let newWidth, newHeight
       
       if (ratio === 'original') {
-        // 恢复原始比例 - 使用图像的原始尺寸，保持居中对齐
-        newWidth = originalImageSize.value.width
-        newHeight = originalImageSize.value.height
+        // 恢复原始比例 - 使用缩放后的图像尺寸，保持居中对齐
+        const scale = imageScaleX.value
+        newWidth = originalImageSize.value.width * scale
+        newHeight = originalImageSize.value.height * scale
         
-        // 对于原始比例，扩图区域应该与原图位置相同（居中）
+        // 对于原始比例，扩图区域应该与缩放后图片位置相同（居中）
         expansionX.value = centerX - newWidth / 2
         expansionY.value = centerY - newHeight / 2
         expansionWidth.value = newWidth
@@ -833,42 +926,56 @@ currentAspectRatio.value = ratio
       })
       
       // 计算传递给后端的参数
-      // 现在原图在画布中心，需要计算扩图区域相对于原图的位置
-      const originalWidth = currentImage.value.width
-      const originalHeight = currentImage.value.height
-      const originalCenterX = currentImage.value.x + originalWidth / 2
-      const originalCenterY = currentImage.value.y + originalHeight / 2
+      // 使用原始图片尺寸进行计算，而不是缩放后的尺寸
+      const originalWidth = currentImage.value.originalWidth || currentImage.value.width
+      const originalHeight = currentImage.value.originalHeight || currentImage.value.height
+      const scale = currentImage.value.scale || 1
       
-      // 扩图区域中心相对于原图中心的偏移
-      const expansionCenterX = expansionX.value + expansionWidth.value / 2
-      const expansionCenterY = expansionY.value + expansionHeight.value / 2
+      // 将缩放后的坐标转换为原始坐标
+      const originalImageX = currentImage.value.x / scale
+      const originalImageY = currentImage.value.y / scale
+      const originalExpansionX = expansionX.value / scale
+      const originalExpansionY = expansionY.value / scale
+      const originalExpansionWidth = expansionWidth.value / scale
+      const originalExpansionHeight = expansionHeight.value / scale
       
-      // 扩图区域相对于原图左上角的偏移（支持向左扩图）
-      const expansion_x = expansionX.value - currentImage.value.x
-      const expansion_y = expansionY.value - currentImage.value.y
+      // 扩图区域相对于原图左上角的偏移（使用原始坐标）
+      const expansion_x = originalExpansionX - originalImageX
+      const expansion_y = originalExpansionY - originalImageY
       
-      console.log('🔍 扩图参数计算详情（居中对齐）:', {
-        originalImage: {
-          x: currentImage.value.x,
-          y: currentImage.value.y,
-          width: originalWidth,
-          height: originalHeight,
-          centerX: originalCenterX,
-          centerY: originalCenterY
+      console.log('🔍 扩图参数计算详情（缩放转换）:', {
+        scaling: {
+          scale: scale,
+          scaledImage: {
+            x: currentImage.value.x,
+            y: currentImage.value.y,
+            width: currentImage.value.width,
+            height: currentImage.value.height
+          },
+          originalImage: {
+            x: originalImageX,
+            y: originalImageY,
+            width: originalWidth,
+            height: originalHeight
+          }
         },
         expansionArea: {
-          x: expansionX.value,
-          y: expansionY.value,
-          width: expansionWidth.value,
-          height: expansionHeight.value,
-          centerX: expansionCenterX,
-          centerY: expansionCenterY
+          scaled: {
+            x: expansionX.value,
+            y: expansionY.value,
+            width: expansionWidth.value,
+            height: expansionHeight.value
+          },
+          original: {
+            x: originalExpansionX,
+            y: originalExpansionY,
+            width: originalExpansionWidth,
+            height: originalExpansionHeight
+          }
         },
         calculatedOffsets: {
           expansion_x: expansion_x,
-          expansion_y: expansion_y,
-          centerOffsetX: expansionCenterX - originalCenterX,
-          centerOffsetY: expansionCenterY - originalCenterY
+          expansion_y: expansion_y
         }
       })
       
@@ -878,14 +985,14 @@ currentAspectRatio.value = ratio
       emit('processing-start')
       
       try {
-        // 生成扩图参数
+        // 生成扩图参数（使用原始尺寸）
         const parameters = {
-          original_width: currentImage.value.width,
-          original_height: currentImage.value.height,
-          expansion_width: expansionWidth.value,
-          expansion_height: expansionHeight.value,
-          expansion_x: expansionX.value - currentImage.value.x,
-          expansion_y: expansionY.value - currentImage.value.y,
+          original_width: originalWidth,
+          original_height: originalHeight,
+          expansion_width: originalExpansionWidth,
+          expansion_height: originalExpansionHeight,
+          expansion_x: expansion_x,
+          expansion_y: expansion_y,
           negative_prompt: '',
           steps: 8,
           cfg: 2.5,
@@ -1066,18 +1173,32 @@ currentAspectRatio.value = ratio
     
     // 监听props变化
     watch(() => props.originalImage, (newValue, oldValue) => {
-      console.log('🔄 originalImage props变化:', { newValue, oldValue })
-      if (newValue && newValue !== oldValue) {
+      console.log('🔄 originalImage props变化:', { 
+        newValue, 
+        oldValue, 
+        hasChanged: newValue !== oldValue,
+        newValueType: typeof newValue,
+        oldValueType: typeof oldValue
+      })
+      if (newValue !== oldValue) {
+        console.log('✅ originalImage发生变化，重新加载图片')
         loadOriginalImage()
       }
-    })
+    }, { immediate: false })
     
     watch(() => props.originalImageFile, (newValue, oldValue) => {
-      console.log('🔄 originalImageFile props变化:', { newValue, oldValue })
-      if (newValue && newValue !== oldValue) {
+      console.log('🔄 originalImageFile props变化:', { 
+        newValue, 
+        oldValue, 
+        hasChanged: newValue !== oldValue,
+        newValueType: typeof newValue,
+        oldValueType: typeof oldValue
+      })
+      if (newValue !== oldValue) {
+        console.log('✅ originalImageFile发生变化，重新加载图片')
         loadOriginalImage()
       }
-    })
+    }, { immediate: false })
     
     
     // 生命周期
@@ -1117,13 +1238,39 @@ currentAspectRatio.value = ratio
     })
     
     // 暴露方法给父组件
-    const triggerOutpaintingExecution = () => {
+    const triggerOutpaintingExecution = async () => {
       console.log('🚀 OutpaintingCanvas: 收到扩图执行事件')
       console.log('🎯 当前状态检查:', {
         currentImage: currentImage.value,
         isProcessing: isProcessing.value,
-        canvas: canvas.value
+        canvas: canvas.value,
+        props: {
+          originalImage: props.originalImage,
+          originalImageFile: props.originalImageFile
+        }
       })
+      
+      // 强制重新加载图片（解决换图片后缓存问题）
+      console.log('🔄 强制重新加载图片，确保使用最新图片数据')
+      
+      // 清除当前缓存的图片数据，强制重新加载
+      currentImage.value = null
+      isImageLoaded.value = false
+      
+      await loadOriginalImage()
+      
+      // 等待图片加载完成后再设置扩图区域
+      if (currentImage.value && canvas.value) {
+        console.log('🔄 图片加载完成，重新计算扩图区域初始位置')
+        const img = currentImage.value.img
+        if (img) {
+          // 重新设置扩图区域
+          setupExpansionArea(img)
+        }
+      } else {
+        console.log('⚠️ 图片加载失败或画布未初始化')
+      }
+      
       executeOutpainting()
     }
     

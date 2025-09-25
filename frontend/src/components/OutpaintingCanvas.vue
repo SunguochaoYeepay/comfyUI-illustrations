@@ -625,6 +625,13 @@ export default {
     
     // 退出扩图模式
     const exitOutpainting = () => {
+      // 重置扩图区域状态，下次进入时会重新初始化
+      showExpansionArea.value = false
+      expansionX.value = 0
+      expansionY.value = 0
+      expansionWidth.value = 512
+      expansionHeight.value = 512
+      
       emit('exit-outpainting')
     }
     

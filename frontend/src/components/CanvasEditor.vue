@@ -156,7 +156,17 @@ export default {
     InpaintingCanvas,
     OutpaintingCanvas
   },
-  setup() {
+  props: {
+    initialImageData: {
+      type: Object,
+      default: null
+    },
+    initialMode: {
+      type: String,
+      default: ''
+    }
+  },
+  setup(props) {
     // 响应式数据
     const currentMode = ref('')
     const isInpaintingMode = ref(false)
@@ -599,9 +609,41 @@ export default {
       console.log('📋 CanvasEditor 组件挂载，初始状态:')
       console.log('  - currentMode:', currentMode.value)
       console.log('  - isInpaintingMode:', isInpaintingMode.value)
+      console.log('  - initialImageData:', props.initialImageData)
+      console.log('  - initialMode:', props.initialMode)
       
       startAutoSave()
       await loadCanvasState()
+      
+      // 如果有初始数据，设置图片和模式
+      if (props.initialImageData) {
+        console.log('🎨 设置初始图片数据:', props.initialImageData)
+        currentImageData.value = props.initialImageData
+        // 如果有图片URL，创建图片对象
+        if (props.initialImageData.url) {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.onload = () => {
+            console.log('✅ 初始图片加载完成')
+            // 图片加载完成后，如果指定了模式，切换到对应模式
+            if (props.initialMode) {
+              console.log('🎨 切换到初始模式:', props.initialMode)
+              currentMode.value = props.initialMode
+              if (props.initialMode === 'inpainting') {
+                isInpaintingMode.value = true
+              }
+            }
+          }
+          img.src = props.initialImageData.url
+        }
+      } else if (props.initialMode) {
+        // 即使没有图片数据，也要设置模式
+        console.log('🎨 设置初始模式:', props.initialMode)
+        currentMode.value = props.initialMode
+        if (props.initialMode === 'inpainting') {
+          isInpaintingMode.value = true
+        }
+      }
       
       console.log('📋 状态加载完成后:')
       console.log('  - currentMode:', currentMode.value)

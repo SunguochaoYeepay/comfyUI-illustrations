@@ -166,6 +166,7 @@
       @upscale="handleUpscaleFromPreview"
       @refreshHistory="handleRefreshHistory"
       @video-task-created="handleVideoTaskCreated"
+      @navigate-to-canvas="handleNavigateToCanvas"
     />
     </div>
   </div>
@@ -248,7 +249,8 @@ const emit = defineEmits([
   'filterChange',
   'upscale',
   'refreshHistory',
-  'video-task-created'
+  'video-task-created',
+  'navigate-to-canvas'
 ])
 
 // 筛选器相关
@@ -448,6 +450,13 @@ const handleVideoTaskCreated = (taskId) => {
 // 处理刷新历史记录
 const handleRefreshHistory = () => {
   emit('refreshHistory')
+}
+
+// 处理跳转到画布页面
+const handleNavigateToCanvas = (data) => {
+  console.log('🎨 跳转到画布页面:', data)
+  // 发送事件到父组件，跳转到画布页面
+  emit('navigate-to-canvas', data)
 }
 
 // 处理手动刷新

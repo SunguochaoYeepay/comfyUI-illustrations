@@ -840,8 +840,59 @@ export default {
           selectable: false,
           evented: false
         })
+      } else if (imageData.url) {
+        // 从生图详情页面传递的图像URL（新格式）
+        console.log('📋 使用生图详情页面的图像URL创建新图像')
+        const imageElement = new Image()
+        imageElement.crossOrigin = 'anonymous'
+        imageElement.onload = () => {
+          console.log('📸 图片元素加载完成，尺寸:', imageElement.width, 'x', imageElement.height)
+          const fabricImg = new fabric.Image(imageElement, {
+            left: 0,
+            top: 0,
+            selectable: false,
+            evented: false
+          })
+          addImageToCanvas(fabricImg)
+        }
+        imageElement.onerror = (error) => {
+          console.error('❌ 图片加载失败:', error)
+        }
+        imageElement.src = imageData.url
+        return // 异步加载，直接返回
+      } else if (imageData.directUrl) {
+        // 使用directUrl作为备选
+        console.log('📋 使用directUrl创建新图像')
+        const imageElement = new Image()
+        imageElement.crossOrigin = 'anonymous'
+        imageElement.onload = () => {
+          console.log('📸 图片元素加载完成，尺寸:', imageElement.width, 'x', imageElement.height)
+          const fabricImg = new fabric.Image(imageElement, {
+            left: 0,
+            top: 0,
+            selectable: false,
+            evented: false
+          })
+          addImageToCanvas(fabricImg)
+        }
+        imageElement.onerror = (error) => {
+          console.error('❌ 图片加载失败:', error)
+        }
+        imageElement.src = imageData.directUrl
+        return // 异步加载，直接返回
       } else {
         console.error('❌ InpaintingCanvas: 无法识别的图像数据格式', imageData)
+        return
+      }
+      
+      // 对于同步加载的图片（Fabric.js对象或imageUrl），直接处理
+      addImageToCanvas(img)
+    }
+    
+    // 添加图片到画布的通用方法
+    const addImageToCanvas = (img) => {
+      if (!canvas.value || !img) {
+        console.log('❌ InpaintingCanvas: 缺少画布或图像对象')
         return
       }
       

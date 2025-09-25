@@ -5,6 +5,8 @@
     <div class="demo-content">
       <CanvasEditor 
         ref="canvasEditor"
+        :initial-image-data="initialImageData"
+        :initial-mode="initialMode"
         @file-upload="handleFileUpload"
         @save-image="handleSaveImage"
       />
@@ -14,7 +16,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import CanvasEditor from './CanvasEditor.vue'
 
 export default {
@@ -24,6 +26,34 @@ export default {
   },
   setup() {
     const canvasEditor = ref(null)
+    const initialImageData = ref(null)
+    const initialMode = ref('')
+    
+    // 从localStorage读取画布数据
+    const loadCanvasData = () => {
+      try {
+        const canvasDataStr = localStorage.getItem('canvasData')
+        if (canvasDataStr) {
+          const canvasData = JSON.parse(canvasDataStr)
+          console.log('🎨 CanvasDemo 加载画布数据:', canvasData)
+          
+          // 设置初始图片数据
+          if (canvasData.imageData) {
+            initialImageData.value = canvasData.imageData
+          }
+          
+          // 设置初始模式
+          if (canvasData.mode) {
+            initialMode.value = canvasData.mode
+          }
+          
+          // 清除localStorage中的数据，避免重复加载
+          localStorage.removeItem('canvasData')
+        }
+      } catch (error) {
+        console.error('❌ 加载画布数据失败:', error)
+      }
+    }
     
     const handleFileUpload = (file) => {
       console.log('CanvasDemo: File uploaded:', file.name)
@@ -35,8 +65,14 @@ export default {
       // 这里可以添加保存图像的逻辑
     }
     
+    onMounted(() => {
+      loadCanvasData()
+    })
+    
     return {
       canvasEditor,
+      initialImageData,
+      initialMode,
       handleFileUpload,
       handleSaveImage
     }

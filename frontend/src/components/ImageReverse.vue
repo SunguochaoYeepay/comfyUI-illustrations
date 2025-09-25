@@ -93,6 +93,22 @@ const handleReverse = async () => {
   try {
     console.log('开始图片反推，图片URL:', props.imageUrl)
     
+    // 处理图片URL格式
+    let imageUrl = props.imageUrl
+    
+    // 如果是相对路径，转换为完整的URL
+    if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://') && !imageUrl.startsWith('blob:')) {
+      // 相对路径，需要转换为完整的URL
+      if (imageUrl.startsWith('/')) {
+        // 已经是绝对路径，直接添加协议和域名
+        imageUrl = `${window.location.protocol}//${window.location.host}${imageUrl}`
+      } else {
+        // 相对路径，需要添加基础路径
+        imageUrl = `${window.location.protocol}//${window.location.host}/${imageUrl}`
+      }
+      console.log('转换后的完整URL:', imageUrl)
+    }
+    
     // 调用图片反推API
     const response = await fetch('/api/image/reverse', {
       method: 'POST',
@@ -100,7 +116,7 @@ const handleReverse = async () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        image_url: props.imageUrl
+        image_url: imageUrl
       })
     })
     

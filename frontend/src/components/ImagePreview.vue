@@ -49,7 +49,7 @@
                 @error="handleImageError"
               />
               
-              <!-- 图片反推按钮 -->
+              <!-- 图片反推按钮和收藏按钮 -->
               <div class="image-reverse-overlay">
                 <a-button 
                   type="primary" 
@@ -61,6 +61,21 @@
                 >
                   <template #icon>
                     <SearchOutlined />
+                  </template>
+                </a-button>
+                
+                <!-- 收藏按钮 -->
+                <a-button 
+                  type="default" 
+                  shape="circle" 
+                  size="large"
+                  :class="['favorite-btn', { 'favorited': imageData.isFavorited }]" 
+                  @click.stop="toggleFavorite"
+                  :title="imageData.isFavorited ? '取消收藏' : '收藏'"
+                >
+                  <template #icon>
+                    <HeartFilled v-if="imageData.isFavorited" />
+                    <HeartOutlined v-else />
                   </template>
                 </a-button>
               </div>
@@ -101,35 +116,14 @@
              <a-button type="primary" @click="downloadImage">
                <DownloadOutlined /> {{ isVideoTask ? '下载视频' : '下载' }}
              </a-button>
-             <!-- 收藏按钮 -->
-             <a-button 
-               type="default" 
-               :class="['action-btn', 'favorite-btn', { 'favorited': imageData.isFavorited }]" 
-               @click="toggleFavorite"
-             >
-               {{ imageData.isFavorited ? '取消收藏' : '收藏' }}
-             </a-button>
-             <!-- 图片任务才显示放大和生成视频按钮 -->
+             <!-- 图片任务才显示局部重绘和扩图按钮 -->
              <template v-if="!isVideoTask">
-               <a-dropdown :disabled="isUpscaling">
-                 <a-button type="primary" ghost :loading="isUpscaling">
-                   <ZoomInOutlined /> 高清放大
-                   <DownOutlined />
-                 </a-button>
-                 <template #overlay>
-                   <a-menu @click="handleUpscaleSelect">
-                     <a-menu-item key="2" :disabled="isUpscaling">
-                       <ZoomInOutlined /> 2倍放大 (1024×1024)
-                     </a-menu-item>
-                     <a-menu-item key="3" :disabled="isUpscaling">
-                       <ZoomInOutlined /> 3倍放大 (1536×1536)
-                     </a-menu-item>
-                     <a-menu-item key="4" :disabled="isUpscaling">
-                       <ZoomInOutlined /> 4倍放大 (2048×2048)
-                     </a-menu-item>
-                   </a-menu>
-                 </template>
-               </a-dropdown>
+               <a-button type="primary" ghost @click="goToInpainting">
+                 <EditOutlined /> 局部重绘
+               </a-button>
+               <a-button type="primary" ghost @click="goToOutpainting">
+                 <ExpandOutlined /> 扩图
+               </a-button>
                <a-button type="primary" ghost @click="showVideoGenerator">
                  <VideoCameraOutlined /> 生成视频
                </a-button>
@@ -288,7 +282,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined, HeartOutlined, HeartFilled, SearchOutlined } from '@ant-design/icons-vue'
+import { CloseOutlined, DownloadOutlined, ZoomInOutlined, LeftOutlined, RightOutlined, DownOutlined, VideoCameraOutlined, HeartOutlined, HeartFilled, SearchOutlined, EditOutlined, ExpandOutlined } from '@ant-design/icons-vue'
 import VideoGenerator from './VideoGenerator.vue'
 import ImageReverse from './ImageReverse.vue'
 
@@ -317,7 +311,7 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['close', 'navigate', 'upscale', 'refreshHistory', 'video-task-created'])
+const emit = defineEmits(['close', 'navigate', 'upscale', 'refreshHistory', 'video-task-created', 'navigate-to-canvas'])
 
 // 计算属性：判断是否为视频任务
 const isVideoTask = computed(() => {
@@ -633,6 +627,30 @@ const navigatePrev = () => {
   }
 }
 
+// 跳转到局部重绘画布
+const goToInpainting = () => {
+  console.log('跳转到局部重绘画布')
+  // 关闭当前预览
+  closePreview()
+  // 发送事件到父组件，跳转到画布页面并进入局部重绘模式
+  emit('navigate-to-canvas', {
+    mode: 'inpainting',
+    imageData: props.imageData
+  })
+}
+
+// 跳转到扩图画布
+const goToOutpainting = () => {
+  console.log('跳转到扩图画布')
+  // 关闭当前预览
+  closePreview()
+  // 发送事件到父组件，跳转到画布页面并进入扩图模式
+  emit('navigate-to-canvas', {
+    mode: 'outpainting',
+    imageData: props.imageData
+  })
+}
+
 // 键盘事件处理
 const handleKeydown = (e) => {
   if (!props.visible) return
@@ -868,12 +886,15 @@ onUnmounted(() => {
   border-radius: 8px;
 }
 
-/* 图片反推按钮样式 */
+/* 图片反推按钮和收藏按钮样式 */
 .image-reverse-overlay {
   position: absolute;
   top: 16px;
   right: 16px;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .reverse-btn {
@@ -889,6 +910,33 @@ onUnmounted(() => {
   border-color: rgba(102, 126, 234, 1) !important;
   transform: scale(1.05);
   box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+/* 收藏按钮样式 */
+.favorite-btn {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s ease;
+}
+
+.favorite-btn:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: rgba(255, 255, 255, 1) !important;
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.favorite-btn.favorited {
+  background: rgba(255, 77, 79, 0.9) !important;
+  border-color: rgba(255, 77, 79, 0.9) !important;
+  color: white !important;
+}
+
+.favorite-btn.favorited:hover {
+  background: rgba(255, 77, 79, 1) !important;
+  border-color: rgba(255, 77, 79, 1) !important;
 }
 
 /* 反推面板样式 */

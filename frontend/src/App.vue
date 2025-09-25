@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import NavigationSidebar from './components/NavigationSidebar.vue'
 import ImageGenerator from './components/ImageGenerator.vue'
@@ -13,6 +13,14 @@ const selectedItem = ref(null)
 
 const handleTabChange = (tab) => {
   activeTab.value = tab
+}
+
+// 处理跳转到画布页面的事件
+const handleNavigateToCanvas = (event) => {
+  console.log('🎨 App.vue 接收到跳转到画布页面事件:', event.detail)
+  // 切换到画布标签
+  activeTab.value = 'canvas'
+  message.success('已跳转到画布页面')
 }
 
 const handleShowDetail = (item) => {
@@ -77,6 +85,17 @@ const handleRegenerate = (regenerateData) => {
     console.log('参数已回填到生图页面')
   }, 100)
 }
+
+// 生命周期钩子
+onMounted(() => {
+  // 添加事件监听器
+  window.addEventListener('navigate-to-canvas', handleNavigateToCanvas)
+})
+
+onUnmounted(() => {
+  // 移除事件监听器
+  window.removeEventListener('navigate-to-canvas', handleNavigateToCanvas)
+})
 </script>
 
 <template>

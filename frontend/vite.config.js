@@ -22,7 +22,7 @@ export default defineConfig(({ command, mode }) => {
     server: isDev ? {
       proxy: {
         '/api': {
-          target: 'http://localhost:9001',
+          target: 'http://localhost:9000',
           changeOrigin: true,
           secure: false
         }

@@ -29,6 +29,7 @@
         @upscale="handleUpscale"
         @refreshHistory="(options) => loadHistoryWrapper(1, false, {}, options)"
         @video-task-created="handleVideoTaskCreated"
+        @navigate-to-canvas="handleNavigateToCanvas"
       />
 
       <!-- 控制面板 -->
@@ -1030,6 +1031,19 @@ const handleVideoTaskCreated = async (taskId) => {
     isVideoGenerating.value = false
     currentVideoTaskId.value = null
   }
+}
+
+// 处理跳转到画布页面
+const handleNavigateToCanvas = (data) => {
+  console.log('🎨 跳转到画布页面:', data)
+  
+  // 将画布数据存储到localStorage，供CanvasDemo组件使用
+  localStorage.setItem('canvasData', JSON.stringify(data))
+  
+  // 切换到画布标签
+  // 这里需要访问父组件的activeTab，但由于没有emit，我们需要使用其他方式
+  // 可以通过window事件或者直接操作父组件
+  window.dispatchEvent(new CustomEvent('navigate-to-canvas', { detail: data }))
 }
 
 // pollUpscaleStatus 函数已提取到 services/pollingService.js

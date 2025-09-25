@@ -79,6 +79,12 @@
       </div>
       
       <div class="toolbar-right">
+        <button class="toolbar-btn" @click="resetOutpainting" title="重置扩图区域">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+          </svg>
+          重置
+        </button>
         <button class="toolbar-btn" @click="exitOutpainting">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -405,7 +411,7 @@ export default {
         // 如果图片URL相同，跳过重复加载
         if (currentImageUrl && propsImageUrl && currentImageUrl === propsImageUrl) {
           console.log('⏭️ 图片未变化，跳过重复加载')
-          return
+          return Promise.resolve(currentImage.value.img)
         } else {
           console.log('🔄 检测到图片变化，需要重新加载:', {
             currentImageUrl: currentImageUrl?.substring(0, 50) + '...',
@@ -418,7 +424,7 @@ export default {
       const hasImageData = props.originalImage || props.originalImageFile
       if (!hasImageData) {
         console.log('⚠️ 没有图片数据，跳过加载')
-        return
+        return Promise.reject(new Error('没有图片数据'))
       }
       
       console.log('🔍 检查图片数据类型:', {
@@ -456,29 +462,36 @@ export default {
         console.log('🔗 最终图片URL:', imageUrl)
         
         if (!imageUrl) {
-          return
+          return Promise.reject(new Error('没有有效的图片URL'))
         }
         
         const img = new Image()
-        img.onload = () => {
-          console.log('📸 图片加载完成，开始重新计算画布尺寸:', {
-            imageSize: { width: img.width, height: img.height },
-            currentCanvas: { width: canvas.value?.width, height: canvas.value?.height }
-          })
-          
-          // 根据图片尺寸重新计算画布大小
-          resizeCanvasForImage(img)
-          drawImageToCanvas(img)
-          setupExpansionArea(img)
-          saveToHistory()
-          
-          // 标记图片已加载
-          isImageLoaded.value = true
-        }
-        img.onerror = (error) => {
-          console.error('图像加载失败:', error)
-        }
-        img.src = imageUrl
+        
+        // 返回Promise，等待图片加载完成
+        return new Promise((resolve, reject) => {
+          img.onload = () => {
+            console.log('📸 图片加载完成，开始重新计算画布尺寸:', {
+              imageSize: { width: img.width, height: img.height },
+              currentCanvas: { width: canvas.value?.width, height: canvas.value?.height }
+            })
+            
+            // 根据图片尺寸重新计算画布大小
+            resizeCanvasForImage(img)
+            drawImageToCanvas(img)
+            setupExpansionArea(img)
+            saveToHistory()
+            
+            // 标记图片已加载
+            isImageLoaded.value = true
+            
+            resolve(img)
+          }
+          img.onerror = (error) => {
+            console.error('图像加载失败:', error)
+            reject(error)
+          }
+          img.src = imageUrl
+        })
       } catch (error) {
         console.error('加载图像失败:', error)
       }
@@ -595,12 +608,15 @@ currentAspectRatio.value = ratio
       const centerY = canvasHeight / 2
       
       let newWidth, newHeight
+      let widthRatio, heightRatio
       
       if (ratio === 'original') {
         // 恢复原始比例 - 使用缩放后的图像尺寸，保持居中对齐
         const scale = imageScaleX.value
         newWidth = originalImageSize.value.width * scale
         newHeight = originalImageSize.value.height * scale
+        widthRatio = originalImageSize.value.width
+        heightRatio = originalImageSize.value.height
         
         // 对于原始比例，扩图区域应该与缩放后图片位置相同（居中）
         expansionX.value = centerX - newWidth / 2
@@ -622,7 +638,7 @@ currentAspectRatio.value = ratio
         return
       } else {
         // 设置固定比例
-        const [widthRatio, heightRatio] = ratio.split(':').map(Number)
+        [widthRatio, heightRatio] = ratio.split(':').map(Number)
         const targetAspect = widthRatio / heightRatio
         
         // 以画布中心为中心，计算新的扩图区域
@@ -710,6 +726,41 @@ currentAspectRatio.value = ratio
           }
         }
       })
+    }
+    
+    // 重置扩图区域位置（不改变大小）
+    const resetOutpainting = () => {
+      console.log('🔄 重置扩图区域位置')
+      
+      if (currentImage.value && canvas.value) {
+        const img = currentImage.value.img
+        if (img) {
+          console.log('✅ 重新定位扩图区域，保持当前大小')
+          
+          // 只重新定位，不改变大小
+          const canvasWidth = canvas.value.width
+          const canvasHeight = canvas.value.height
+          const centerX = canvasWidth / 2
+          const centerY = canvasHeight / 2
+          
+          // 保持当前的扩图区域大小，只重新居中定位
+          expansionX.value = centerX - expansionWidth.value / 2
+          expansionY.value = centerY - expansionHeight.value / 2
+          
+          console.log('🎯 扩图区域重新居中:', {
+            size: { width: expansionWidth.value, height: expansionHeight.value },
+            position: { x: expansionX.value, y: expansionY.value },
+            center: { x: centerX, y: centerY }
+          })
+        } else {
+          console.log('⚠️ 没有找到图片数据，重新加载图片')
+          loadOriginalImage()
+        }
+      } else {
+        console.log('⚠️ 画布未初始化，重新初始化')
+        initCanvas()
+        loadOriginalImage()
+      }
     }
     
     // 退出扩图模式
@@ -804,9 +855,10 @@ currentAspectRatio.value = ratio
         newY = resizeStart.value.startY + deltaY
       }
       
-      // 确保不小于原图尺寸
-      const minWidth = originalImageSize.value.width
-      const minHeight = originalImageSize.value.height
+      // 确保不小于缩放后的图片尺寸
+      const scale = imageScaleX.value
+      const minWidth = originalImageSize.value.width * scale
+      const minHeight = originalImageSize.value.height * scale
       
       if (newWidth < minWidth) {
         if (handle.includes('w')) {
@@ -1119,9 +1171,9 @@ currentAspectRatio.value = ratio
           } else if (statusResult.status === 'failed') {
             throw new Error(statusResult.error || '扩图任务失败')
           } else if (statusResult.status === 'processing') {
-            processingMessage.value = `正在处理扩图... (${attempts}/${maxAttempts})`
+            processingMessage.value = `正在处理扩图... `
           } else {
-            processingMessage.value = `等待扩图任务... (${attempts}/${maxAttempts})`
+            processingMessage.value = `等待扩图任务... `
           }
           
         } catch (error) {
@@ -1200,6 +1252,38 @@ currentAspectRatio.value = ratio
       }
     }, { immediate: false })
     
+    // 监听组件可见性变化（解决v-show模式下不重新初始化的问题）
+    const isVisible = ref(false)
+    const checkVisibility = () => {
+      const canvasElement = canvasWrapper.value
+      if (canvasElement) {
+        const rect = canvasElement.getBoundingClientRect()
+        const visible = rect.width > 0 && rect.height > 0
+        if (visible !== isVisible.value) {
+          console.log('🔄 OutpaintingCanvas可见性变化:', { 
+            wasVisible: isVisible.value, 
+            nowVisible: visible,
+            rect: { width: rect.width, height: rect.height }
+          })
+          isVisible.value = visible
+          
+          if (visible) {
+            console.log('✅ OutpaintingCanvas变为可见，重新初始化')
+            // 组件变为可见时，重新初始化
+            nextTick(() => {
+              setTimeout(() => {
+                initCanvas()
+                loadOriginalImage()
+              }, 100)
+            })
+          }
+        }
+      }
+    }
+    
+    // 定期检查可见性
+    let visibilityCheckInterval = null
+    
     
     // 生命周期
     onMounted(() => {
@@ -1218,6 +1302,9 @@ currentAspectRatio.value = ratio
           }
         }, 500)
         
+        // 启动可见性检查
+        visibilityCheckInterval = setInterval(checkVisibility, 500)
+        
         // 监听窗口大小变化
         window.addEventListener('resize', initCanvas)
         
@@ -1231,6 +1318,11 @@ currentAspectRatio.value = ratio
     })
     
     onUnmounted(() => {
+      // 清理可见性检查
+      if (visibilityCheckInterval) {
+        clearInterval(visibilityCheckInterval)
+      }
+      
       window.removeEventListener('resize', initCanvas)
       window.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('mousemove', handleMouseMove)
@@ -1303,6 +1395,7 @@ currentAspectRatio.value = ratio
       pollTaskStatus,
       triggerOutpaintingExecution,
       setAspectRatio,
+      resetOutpainting,
       exitOutpainting,
       handleUploadClick,
       handleFileSelect

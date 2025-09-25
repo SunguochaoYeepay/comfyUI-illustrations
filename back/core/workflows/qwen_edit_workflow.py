@@ -433,29 +433,32 @@ class QwenEditWorkflow(BaseWorkflow):
         original_filename = os.path.basename(image_path)
         name, ext = os.path.splitext(original_filename)
         
-        # 使用固定的文件名，避免缓存问题
-        unique_filename = f"{name}_latest{ext}"
+        # 生成安全的文件名（避免中文编码问题）
+        # 使用UUID + 时间戳生成安全的文件名
+        safe_filename = f"qwen_edit_{uuid.uuid4().hex[:8]}{ext}"
         
         if is_mask:
             # 遮罩文件复制到clipspace目录
             clipspace_dir = COMFYUI_INPUT_DIR / "clipspace"
             clipspace_dir.mkdir(exist_ok=True)
-            dest_path = clipspace_dir / unique_filename
-            comfyui_path = f"clipspace/{unique_filename}"
+            dest_path = clipspace_dir / safe_filename
+            comfyui_path = f"clipspace/{safe_filename}"
         else:
             # 图像文件复制到input根目录
-            dest_path = COMFYUI_INPUT_DIR / unique_filename
-            comfyui_path = unique_filename
+            dest_path = COMFYUI_INPUT_DIR / safe_filename
+            comfyui_path = safe_filename
         
         try:
             # 复制文件到ComfyUI的input目录
             shutil.copy2(image_path, dest_path)
-            print(f"✅ 文件复制: {os.path.basename(image_path)} -> {comfyui_path}")
+            print(f"✅ 文件复制: {original_filename} -> {comfyui_path}")
             
             # 返回ComfyUI期望的格式
             return comfyui_path
         except Exception as e:
             print(f"❌ 文件复制失败: {e}")
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
             # 如果复制失败，返回文件名（假设文件已经在正确位置）
             return comfyui_path
     

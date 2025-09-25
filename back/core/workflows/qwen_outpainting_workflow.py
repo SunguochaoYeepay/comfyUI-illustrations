@@ -219,25 +219,36 @@ class QwenOutpaintingWorkflow:
             ComfyUI中的图像文件名
         """
         try:
-            # ComfyUI输入目录路径
-            comfyui_input_dir = Path("E:/AI-Image/ComfyUI-aki-v1.4/input")
+            from config.settings import COMFYUI_INPUT_DIR
+            
+            # 使用配置中的ComfyUI输入目录路径
+            comfyui_input_dir = Path(COMFYUI_INPUT_DIR)
             
             # 确保目录存在
             comfyui_input_dir.mkdir(parents=True, exist_ok=True)
             
-            # 获取文件名
-            filename = Path(image_path).name
+            # 获取文件名，处理中文文件名编码问题
+            original_filename = Path(image_path).name
+            
+            # 生成安全的文件名（避免中文编码问题）
+            import uuid
+            import re
+            name, ext = os.path.splitext(original_filename)
+            # 使用UUID + 时间戳生成安全的文件名
+            safe_filename = f"outpainting_{uuid.uuid4().hex[:8]}{ext}"
             
             # 目标路径
-            target_path = comfyui_input_dir / filename
+            target_path = comfyui_input_dir / safe_filename
             
             # 复制文件
             shutil.copy2(image_path, target_path)
             
-            print(f"✅ 图像已复制到ComfyUI输入目录: {filename}")
-            return filename
+            print(f"✅ 图像已复制到ComfyUI输入目录: {original_filename} -> {safe_filename}")
+            return safe_filename
             
         except Exception as e:
             print(f"❌ 复制图像到ComfyUI输入目录失败: {e}")
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
             # 返回原始文件名作为降级方案
             return Path(image_path).name

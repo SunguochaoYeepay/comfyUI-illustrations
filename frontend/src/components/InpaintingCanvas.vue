@@ -527,8 +527,8 @@ export default {
           sourceImageFile = props.originalImageFile
         }
         
-        // 调用API
-        const API_BASE = 'http://localhost:9000'
+        // 调用API - 使用相对路径，通过Vite代理
+        const API_BASE = ''
         
         const result = await new Promise((resolve, reject) => {
           executeQwenEdit(

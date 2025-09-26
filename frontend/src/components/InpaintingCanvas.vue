@@ -1355,9 +1355,8 @@ export default {
 
 .canvas-wrapper {
   position: relative;
-  border: 2px solid #333;
+  border: 1px solid #333;
   background: #2a2a2a;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   max-width: 100%;
   max-height: 100%;
   display: flex;

@@ -94,39 +94,7 @@
         </button>
       </div>
 
-      <!-- 历史操作 -->
-      <div class="history-group">
-        <button 
-          class="history-btn" 
-          @click="handleToggleHistory"
-          :class="{ active: showHistory }"
-          title="历史记录"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3"/>
-          </svg>
-        </button>
-        <button 
-          class="history-btn" 
-          @click="handleUndo"
-          :disabled="!canUndo"
-          title="撤销"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22,15.28C20.64,11.19 16.95,8 12.5,8Z"/>
-          </svg>
-        </button>
-        <button 
-          class="history-btn" 
-          @click="handleRedo"
-          :disabled="!canRedo"
-          title="重做"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18.4,10.6C16.55,9 14.15,8 11.5,8C7.05,8 3.36,11.19 2,15.28L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z"/>
-          </svg>
-        </button>
-      </div>
+ 
 
       <!-- 文件操作 -->
       <div class="file-group">
@@ -145,16 +113,18 @@
 
       <!-- 右侧按钮组 - 右对齐 -->
       <div class="toolbar-right">
-        <button class="action-btn clear" @click="handleClear" title="清除">
+        <button 
+          class="history-btn" 
+          @click="handleToggleHistory"
+          @mousedown="console.log('🔄 历史按钮 mousedown 事件')"
+          :class="{ active: showHistory }"
+          title="历史记录"
+        >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+            <path d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3"/>
           </svg>
         </button>
-        <button class="action-btn download" @click="handleDownload" title="下载">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
-          </svg>
-        </button>
+        
       </div>
 
     <!-- 隐藏的文件输入 -->
@@ -242,6 +212,7 @@ export default {
 
     // 历史操作
     const handleToggleHistory = () => {
+      console.log('🔄 CanvasTopToolbar: 历史按钮被点击')
       emit('toggle-history')
     }
 
@@ -291,6 +262,7 @@ export default {
       handleZoomOut,
       handleZoomFit,
       handleZoom100,
+      handleToggleHistory,
       handleUndo,
       handleRedo,
       handleUpload,

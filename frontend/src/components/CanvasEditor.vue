@@ -111,6 +111,8 @@
       @redo="handleRedo"
     />
     
+    
+    
     <!-- 漂浮的参数面板 -->
     <CanvasParameterPanel
       v-if="currentMode === 'inpainting'"
@@ -635,6 +637,12 @@ export default {
     // 处理历史窗口切换
     const handleToggleHistory = () => {
       showHistory.value = !showHistory.value
+      console.log('🔄 历史窗口切换:', {
+        showHistory: showHistory.value,
+        isInpaintingMode: isInpaintingMode.value,
+        currentMode: currentMode.value,
+        shouldShow: !isInpaintingMode.value && currentMode.value !== 'outpainting' && showHistory.value
+      })
     }
     
     // 处理主内容区域点击
@@ -770,7 +778,8 @@ export default {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-right: 320px;
+  /* 历史抽屉是漂浮的，不需要右边距 */
+  margin-right: 0;
   transition: margin-right 0.3s ease;
 }
 

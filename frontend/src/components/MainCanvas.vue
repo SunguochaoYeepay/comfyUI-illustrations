@@ -63,6 +63,15 @@ export default {
       // 计算适应画布的缩放比例，确保图片完整显示
       const scaleX = canvasWidth / imgWidth
       const scaleY = canvasHeight / imgHeight
+      
+      console.log('🔍 缩放计算详情:', {
+        imgWidth, imgHeight,
+        canvasWidth, canvasHeight,
+        scaleX, scaleY,
+        minScale: Math.min(scaleX, scaleY),
+        maxScale: Math.max(scaleX, scaleY)
+      })
+      
       // 使用较小的缩放比例，确保图片完全适应画布
       return Math.min(scaleX, scaleY)
     }
@@ -76,7 +85,8 @@ export default {
         imageData: props.imageData,
         hasImageData: !!props.imageData,
         imageWidth: props.imageData?.width,
-        imageHeight: props.imageData?.height
+        imageHeight: props.imageData?.height,
+        currentImage: currentImage.value
       })
       
       switch (props.canvasSize) {
@@ -90,11 +100,21 @@ export default {
           return { width: baseSize, height: Math.round(baseSize * 9 / 16) }
         case 'fit':
         default:
-          // 适应内容：如果有图片，使用图片尺寸；否则使用默认尺寸
+          // 适应内容：优先使用图片尺寸
           if (props.imageData && props.imageData.width && props.imageData.height) {
-            console.log('✅ 使用图片尺寸:', props.imageData.width, 'x', props.imageData.height)
+            console.log('✅ 使用 imageData 尺寸:', props.imageData.width, 'x', props.imageData.height)
             return { width: props.imageData.width, height: props.imageData.height }
           }
+          
+          // 如果没有 imageData，尝试从当前图片获取尺寸
+          if (currentImage.value && currentImage.value._originalElement) {
+            const img = currentImage.value._originalElement
+            if (img.width && img.height) {
+              console.log('✅ 使用当前图片尺寸:', img.width, 'x', img.height)
+              return { width: img.width, height: img.height }
+            }
+          }
+          
           console.log('⚠️ 没有图片尺寸信息，使用默认尺寸 800x600')
           return { width: 800, height: 600 }
       }
@@ -188,14 +208,21 @@ export default {
           evented: true
         })
         
-        // 获取画布尺寸
-        const { width: canvasWidth, height: canvasHeight } = getCanvasSize()
-        
-        // 计算图片适应画布的缩放比例
-        const scale = calculateImageScale(img.width, img.height, canvasWidth, canvasHeight)
-        
-        // 设置图片的缩放比例
-        fabricImg.scale(scale)
+        // 在 'fit' 模式下，直接使用图片尺寸作为画布尺寸
+        if (props.canvasSize === 'fit') {
+          console.log('🎨 fit模式：直接使用图片尺寸作为画布尺寸')
+          const { width: newWidth, height: newHeight } = { width: img.width, height: img.height }
+          console.log('🔍 设置画布尺寸:', newWidth, 'x', newHeight)
+          canvas.value.setDimensions({ width: newWidth, height: newHeight })
+          // 不进行缩放，使用原始尺寸
+        } else {
+          // 其他模式使用原来的逻辑
+          const { width: canvasWidth, height: canvasHeight } = getCanvasSize()
+          const scale = calculateImageScale(img.width, img.height, canvasWidth, canvasHeight)
+          console.log('🔍 计算缩放比例:', { imgWidth: img.width, imgHeight: img.height, canvasWidth, canvasHeight, scale })
+          // 设置图片的缩放比例
+          fabricImg.scale(scale)
+        }
         
         // 添加图像到画布
         canvas.value.add(fabricImg)
@@ -224,6 +251,8 @@ export default {
             const { width, height } = getCanvasSize()
             console.log('🎨 重新设置画布尺寸:', width, 'x', height)
             canvas.value.setDimensions({ width, height })
+            // 重新居中图片
+            canvas.value.centerObject(fabricImg)
             canvas.value.renderAll()
           })
         }
@@ -261,14 +290,21 @@ export default {
           evented: true
         })
         
-        // 获取画布尺寸
-        const { width: canvasWidth, height: canvasHeight } = getCanvasSize()
-        
-        // 计算图片适应画布的缩放比例
-        const scale = calculateImageScale(img.width, img.height, canvasWidth, canvasHeight)
-        
-        // 设置图片的缩放比例
-        fabricImg.scale(scale)
+        // 在 'fit' 模式下，直接使用图片尺寸作为画布尺寸
+        if (props.canvasSize === 'fit') {
+          console.log('🎨 fit模式：直接使用图片尺寸作为画布尺寸')
+          const { width: newWidth, height: newHeight } = { width: img.width, height: img.height }
+          console.log('🔍 设置画布尺寸:', newWidth, 'x', newHeight)
+          canvas.value.setDimensions({ width: newWidth, height: newHeight })
+          // 不进行缩放，使用原始尺寸
+        } else {
+          // 其他模式使用原来的逻辑
+          const { width: canvasWidth, height: canvasHeight } = getCanvasSize()
+          const scale = calculateImageScale(img.width, img.height, canvasWidth, canvasHeight)
+          console.log('🔍 计算缩放比例:', { imgWidth: img.width, imgHeight: img.height, canvasWidth, canvasHeight, scale })
+          // 设置图片的缩放比例
+          fabricImg.scale(scale)
+        }
         
         // 添加图像到画布
         canvas.value.add(fabricImg)
@@ -297,6 +333,8 @@ export default {
             const { width, height } = getCanvasSize()
             console.log('🎨 重新设置画布尺寸:', width, 'x', height)
             canvas.value.setDimensions({ width, height })
+            // 重新居中图片
+            canvas.value.centerObject(fabricImg)
             canvas.value.renderAll()
           })
         }
@@ -366,6 +404,18 @@ export default {
     const zoomFit = () => {
       if (!canvasWrapper.value || !currentImage.value) return
       
+      // 如果是 'fit' 模式，重新计算画布尺寸
+      if (props.canvasSize === 'fit') {
+        console.log('🔄 zoomFit: 重新计算画布尺寸')
+        const { width, height } = getCanvasSize()
+        console.log('🎨 zoomFit: 设置画布尺寸:', width, 'x', height)
+        canvas.value.setDimensions({ width, height })
+        canvas.value.centerObject(currentImage.value)
+        canvas.value.renderAll()
+        return
+      }
+      
+      // 其他模式使用原来的缩放逻辑
       const containerWidth = canvasWrapper.value.parentElement.clientWidth
       const containerHeight = canvasWrapper.value.parentElement.clientHeight
       const imageWidth = currentImage.value.width

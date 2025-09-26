@@ -46,6 +46,7 @@
         :image-data="currentImageData"
         :is-selected="isMainCanvasSelected"
         :zoom-level="currentZoomLevel"
+        :canvas-size="currentCanvasSize"
         @image-loaded="handleImageLoaded"
         @image-cleared="handleImageCleared"
         @canvas-selected="handleMainCanvasSelected"
@@ -413,7 +414,30 @@ export default {
     // 持久化功能
     const saveCanvasState = () => {
       try {
-        localStorage.setItem(STORAGE_KEYS.HISTORY_RECORDS, JSON.stringify(historyRecords.value))
+        // 限制历史记录数量，避免存储空间超限
+        const maxHistoryRecords = 10
+        let recordsToSave = historyRecords.value
+        
+        if (recordsToSave.length > maxHistoryRecords) {
+          // 保留最新的记录，删除最旧的
+          recordsToSave = recordsToSave.slice(-maxHistoryRecords)
+          console.log(`📝 历史记录过多，已清理为最新 ${maxHistoryRecords} 条`)
+        }
+        
+        // 压缩历史记录数据，移除不必要的字段
+        const compressedRecords = recordsToSave.map(record => ({
+          id: record.id,
+          timestamp: record.timestamp,
+          mode: record.mode,
+          prompt: record.prompt,
+          // 移除大的图片数据，只保留必要信息
+          imageInfo: record.imageData ? {
+            filename: record.imageData.filename,
+            task_id: record.imageData.task_id
+          } : null
+        }))
+        
+        localStorage.setItem(STORAGE_KEYS.HISTORY_RECORDS, JSON.stringify(compressedRecords))
         localStorage.setItem(STORAGE_KEYS.CURRENT_INDEX, currentHistoryIndex.value.toString())
         if (originalImageUrl.value) {
           localStorage.setItem(STORAGE_KEYS.ORIGINAL_IMAGE, originalImageUrl.value)
@@ -422,6 +446,19 @@ export default {
         console.log('✅ 画布状态已保存到localStorage')
       } catch (error) {
         console.error('❌ 保存画布状态失败:', error)
+        // 如果存储失败，尝试清理所有画布相关数据
+        if (error.name === 'QuotaExceededError') {
+          console.log('🧹 存储空间不足，清理画布历史数据')
+          try {
+            localStorage.removeItem(STORAGE_KEYS.HISTORY_RECORDS)
+            localStorage.removeItem(STORAGE_KEYS.CURRENT_INDEX)
+            localStorage.removeItem(STORAGE_KEYS.ORIGINAL_IMAGE)
+            localStorage.removeItem(STORAGE_KEYS.PARAMETERS)
+            console.log('✅ 已清理画布历史数据')
+          } catch (cleanError) {
+            console.error('❌ 清理数据也失败:', cleanError)
+          }
+        }
       }
     }
     
@@ -472,7 +509,7 @@ export default {
         if (historyRecords.value.length > 0) {
           saveCanvasState()
         }
-      }, 30000)
+      }, 60000) // 改为60秒保存一次，减少存储压力
     }
     
     const stopAutoSave = () => {
@@ -543,7 +580,8 @@ export default {
         inpaintingCanvasRef.value.zoomFit()
       }
       if (outpaintingCanvasRef.value) {
-        outpaintingCanvasRef.value.resetZoom()
+        // OutpaintingCanvas 没有缩放功能，跳过
+        console.log('🔍 OutpaintingCanvas 跳过缩放操作')
       }
     }
     
@@ -556,7 +594,8 @@ export default {
         inpaintingCanvasRef.value.zoom100()
       }
       if (outpaintingCanvasRef.value) {
-        outpaintingCanvasRef.value.resetZoom()
+        // OutpaintingCanvas 没有缩放功能，跳过
+        console.log('🔍 OutpaintingCanvas 跳过缩放操作')
       }
     }
     

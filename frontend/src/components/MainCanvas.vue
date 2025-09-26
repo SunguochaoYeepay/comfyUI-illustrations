@@ -43,6 +43,10 @@ export default {
     zoomLevel: {
       type: Number,
       default: 1
+    },
+    canvasSize: {
+      type: String,
+      default: 'fit'
     }
   },
   emits: ['image-loaded', 'image-cleared', 'canvas-selected', 'canvas-deselected', 'zoom-changed'],
@@ -63,17 +67,47 @@ export default {
       return Math.min(scaleX, scaleY)
     }
     
-    // 获取固定的画布尺寸
+    // 获取画布尺寸
     const getCanvasSize = () => {
-      return { width: 800, height: 600 }
+      const baseSize = 800
+      
+      console.log('🔍 getCanvasSize 调用:', {
+        canvasSize: props.canvasSize,
+        imageData: props.imageData,
+        hasImageData: !!props.imageData,
+        imageWidth: props.imageData?.width,
+        imageHeight: props.imageData?.height
+      })
+      
+      switch (props.canvasSize) {
+        case '1:1':
+          return { width: baseSize, height: baseSize }
+        case '4:3':
+          return { width: baseSize, height: Math.round(baseSize * 3 / 4) }
+        case '3:2':
+          return { width: baseSize, height: Math.round(baseSize * 2 / 3) }
+        case '16:9':
+          return { width: baseSize, height: Math.round(baseSize * 9 / 16) }
+        case 'fit':
+        default:
+          // 适应内容：如果有图片，使用图片尺寸；否则使用默认尺寸
+          if (props.imageData && props.imageData.width && props.imageData.height) {
+            console.log('✅ 使用图片尺寸:', props.imageData.width, 'x', props.imageData.height)
+            return { width: props.imageData.width, height: props.imageData.height }
+          }
+          console.log('⚠️ 没有图片尺寸信息，使用默认尺寸 800x600')
+          return { width: 800, height: 600 }
+      }
     }
     
     // 初始化画布
     const initCanvas = () => {
       if (!canvasElement.value) return
       
-      // 使用固定的画布尺寸
+      // 获取画布尺寸
       const { width, height } = getCanvasSize()
+      console.log('🎨 initCanvas 创建画布，尺寸:', width, 'x', height)
+      
       canvas.value = new fabric.Canvas(canvasElement.value, {
         width: width,
         height: height,
@@ -178,8 +212,21 @@ export default {
         emit('image-loaded', {
           image: fabricImg,
           file: file,
-          imageUrl: imageUrl
+          imageUrl: imageUrl,
+          width: img.width,
+          height: img.height
         })
+        
+        // 如果当前是 'fit' 模式，需要重新计算画布尺寸
+        if (props.canvasSize === 'fit') {
+          console.log('🔄 图片加载完成，重新计算画布尺寸')
+          nextTick(() => {
+            const { width, height } = getCanvasSize()
+            console.log('🎨 重新设置画布尺寸:', width, 'x', height)
+            canvas.value.setDimensions({ width, height })
+            canvas.value.renderAll()
+          })
+        }
         
         console.log('备用方法图像加载完成')
       }
@@ -233,6 +280,26 @@ export default {
         
         currentImage.value = fabricImg
         isLoading.value = false
+        
+        // 通知父组件图像已加载
+        emit('image-loaded', {
+          image: fabricImg,
+          file: imageData.file,
+          imageUrl: imageData.imageUrl,
+          width: img.width,
+          height: img.height
+        })
+        
+        // 如果当前是 'fit' 模式，需要重新计算画布尺寸
+        if (props.canvasSize === 'fit') {
+          console.log('🔄 图片加载完成，重新计算画布尺寸')
+          nextTick(() => {
+            const { width, height } = getCanvasSize()
+            console.log('🎨 重新设置画布尺寸:', width, 'x', height)
+            canvas.value.setDimensions({ width, height })
+            canvas.value.renderAll()
+          })
+        }
         
         console.log('MainCanvas: 从数据恢复图像完成')
       }
@@ -386,6 +453,18 @@ export default {
       if (canvas.value) {
         canvas.value.dispose()
       }
+    })
+    
+    // 监听画布尺寸变化
+    watch(() => props.canvasSize, () => {
+      console.log('🔄 MainCanvas: 画布尺寸变化，重新初始化')
+      nextTick(() => {
+        initCanvas()
+        // 如果有图片数据，重新加载
+        if (props.imageData) {
+          loadImageFromData(props.imageData)
+        }
+      })
     })
     
     return {

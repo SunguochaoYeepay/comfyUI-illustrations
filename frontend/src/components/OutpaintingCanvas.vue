@@ -525,6 +525,7 @@ export default {
        
       let newWidth, newHeight
       let newX, newY
+      let targetAspect = 1 // 默认值
        
       if (ratio === 'original') {
          // 原始比例：扩图区域 = 原图尺寸，居中显示
@@ -532,10 +533,11 @@ export default {
          newHeight = originalImageSize.value.height
          newX = 0
          newY = 0
+         targetAspect = originalImageSize.value.width / originalImageSize.value.height
        } else {
          // 设置固定比例：以原图中心为基准向外扩展
          const [widthRatio, heightRatio] = ratio.split(':').map(Number)
-         const targetAspect = widthRatio / heightRatio
+         targetAspect = widthRatio / heightRatio
          const originalAspect = originalImageSize.value.width / originalImageSize.value.height
          
          if (targetAspect > originalAspect) {
@@ -578,7 +580,7 @@ export default {
            width: newWidth, 
            height: newHeight 
          },
-         targetAspect: ratio !== 'original' ? (widthRatio / heightRatio).toFixed(2) : 'original',
+         targetAspect: ratio !== 'original' ? targetAspect.toFixed(2) : 'original',
          actualAspect: (newWidth / newHeight).toFixed(2)
        })
      }

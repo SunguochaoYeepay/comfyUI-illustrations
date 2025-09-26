@@ -166,11 +166,9 @@ export default {
       // 设置事件监听
       setupCanvasEvents()
       
-      console.log('局部重绘画布初始化完成')
       
       // 检查是否有待加载的图像
       if (props.originalImage) {
-        console.log('🔄 画布初始化完成，检查是否有待加载的图像')
         nextTick(() => {
           loadOriginalImage(props.originalImage)
         })
@@ -412,8 +410,6 @@ export default {
       const tempCtx = tempCanvas.getContext('2d')
       
       // 确保画布尺寸正确
-      console.log(`🖼️ 临时画布尺寸: ${tempCanvas.width}x${tempCanvas.height}`)
-      console.log(`🖼️ 原始图像尺寸: ${originalWidth}x${originalHeight}`)
       
       // 1. 先绘制原图作为背景
       tempCtx.drawImage(currentImage.value._originalElement, 0, 0, originalWidth, originalHeight)
@@ -446,25 +442,14 @@ export default {
       // 将画布坐标转换为图像坐标
       try {
         const canvasTransform = canvas.value.getViewportTransform()
-        console.log(`   画布变换矩阵: [${canvasTransform.map(v => v.toFixed(2)).join(', ')}]`)
       } catch (error) {
-        console.log(`   画布变换矩阵: 无法获取 (${error.message})`)
+        // 画布变换矩阵获取失败
       }
       
       // 计算图像在画布上的实际左上角坐标
       const imageCanvasLeft = imageBounds.left
       const imageCanvasTop = imageBounds.top
       
-      console.log('📏 遮罩生成调试信息:')
-      console.log(`   原始图像尺寸: ${originalWidth}x${originalHeight}`)
-      console.log(`   绘制对象数量: ${drawnObjects.length}`)
-      console.log(`   画布图像尺寸: ${currentImage.value.width}x${currentImage.value.height}`)
-      console.log(`   画布图像缩放: ${currentImage.value.scaleX}x${currentImage.value.scaleY}`)
-      console.log(`   画布图像角度: ${currentImage.value.angle}°`)
-      console.log(`   画布图像翻转: 水平=${currentImage.value.flipX}, 垂直=${currentImage.value.flipY}`)
-      console.log(`   显示尺寸: ${displayWidth}x${displayHeight}`)
-      console.log(`   图像中心: (${currentImage.value.left.toFixed(1)}, ${currentImage.value.top.toFixed(1)})`)
-      console.log(`   缩放比例: X=${scaleX.toFixed(3)}, Y=${scaleY.toFixed(3)}`)
       
       // 3. 在要重绘的区域绘制纯黑色（Alpha=0，完全透明）
       drawnObjects.forEach((obj, index) => {
@@ -497,13 +482,6 @@ export default {
           const finalOriginalLeft = originalLeft + offsetX
           const finalOriginalTop = originalTop + offsetY
           
-          console.log(`🎯 遮罩对象 ${index + 1}:`)
-          console.log(`   画布中心: (${objCanvasCenterX.toFixed(1)}, ${objCanvasCenterY.toFixed(1)}), 半径: ${obj.radius.toFixed(1)}`)
-          console.log(`   图像左上角: (${imageCanvasLeft.toFixed(1)}, ${imageCanvasTop.toFixed(1)})`)
-          console.log(`   相对图像左上角: (${relativeLeft.toFixed(1)}, ${relativeTop.toFixed(1)})`)
-          console.log(`   显示到原始缩放: X=${displayToOriginalScaleX.toFixed(3)}, Y=${displayToOriginalScaleY.toFixed(3)}`)
-          console.log(`   原始图像坐标: (${originalLeft.toFixed(1)}, ${originalTop.toFixed(1)}), 半径: ${originalRadius.toFixed(1)}`)
-          console.log(`   修正后坐标: (${finalOriginalLeft.toFixed(1)}, ${finalOriginalTop.toFixed(1)})`)
           
           // 检查坐标是否在画布范围内
           if (finalOriginalLeft >= 0 && finalOriginalLeft <= originalWidth && 
@@ -514,9 +492,7 @@ export default {
             tempCtx.arc(finalOriginalLeft, finalOriginalTop, originalRadius, 0, 2 * Math.PI)
             tempCtx.fill()
             tempCtx.globalCompositeOperation = 'source-over' // 重置合成模式
-            console.log(`✅ 成功绘制透明遮罩对象 ${index + 1}`)
           } else {
-            console.log(`❌ 遮罩对象 ${index + 1} 坐标超出画布范围，跳过绘制`)
           }
         }
       })
@@ -668,6 +644,7 @@ export default {
         })
         
         if (result.success) {
+          console.log('✅ 局部重绘成功，准备加载结果图像:', result.imageUrl)
           // 加载新图像
           await loadResultImage(result.imageUrl)
           
@@ -684,6 +661,11 @@ export default {
           console.log('🧹 重绘成功，已清除遮罩对象，数量:', drawnObjects.length)
           
           // 通知父组件
+          console.log('📤 发送inpainting-complete事件:', {
+            resultImageUrl: result.imageUrl,
+            maskDataUrl: result.maskDataUrl,
+            prompt: props.prompt
+          })
           emit('inpainting-complete', {
             resultImageUrl: result.imageUrl,
             maskDataUrl: result.maskDataUrl,
@@ -1027,16 +1009,12 @@ export default {
     
     // 监听props变化
     watch(() => props.originalImage, (newImage) => {
-      console.log('🔄 InpaintingCanvas: 检测到originalImage变化', newImage)
       if (newImage && canvas.value) {
-        console.log('✅ 画布已初始化，立即加载图像')
         loadOriginalImage(newImage)
       } else if (newImage && !canvas.value) {
-        console.log('⏳ 画布未初始化，等待初始化完成')
         // 画布未初始化，等待初始化完成
         nextTick(() => {
           if (canvas.value) {
-            console.log('✅ 画布初始化完成，现在加载图像')
             loadOriginalImage(newImage)
           }
         })

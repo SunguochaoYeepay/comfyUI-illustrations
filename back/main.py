@@ -42,6 +42,9 @@ from core.thumbnail_manager import get_thumbnail_manager
 # 导入放大服务
 from api.upscale_routes import router as upscale_router
 
+# 导入画布历史记录服务
+from api.canvas_history_routes import router as canvas_history_router
+
 # 导入翻译服务
 from core.translation_client import get_translation_client
 
@@ -343,6 +346,7 @@ async def delete_lora(filename: str):
 
 # 注册放大服务路由
 app.include_router(upscale_router)
+app.include_router(canvas_history_router)
 
 # 放大图片路由已在 upscale_routes.py 中定义，这里删除重复的路由
 

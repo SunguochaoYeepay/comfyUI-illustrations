@@ -95,11 +95,15 @@
     <!-- 历史面板 - 通过顶部工具栏的历史按钮控制显示 -->
     <CanvasHistoryPanel
       v-if="!isInpaintingMode && currentMode !== 'outpainting' && showHistory"
-      v-model="historyRecords"
+      v-model="safeHistoryRecords"
       v-model:current-index="currentHistoryIndex"
+      :is-loading="isLoadingHistory"
+      :error="historyError"
+      :is-online="isOnline"
       @switch-history="handleSwitchHistory"
       @undo="handleUndo"
       @redo="handleRedo"
+      @delete-history="deleteHistoryRecord"
     />
     
     
@@ -123,7 +127,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import CanvasTopToolbar from './CanvasTopToolbar.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import CanvasParameterPanel from './CanvasParameterPanel.vue'
@@ -132,6 +136,7 @@ import CanvasHistoryPanel from './CanvasHistoryPanel.vue'
 import MainCanvas from './MainCanvas.vue'
 import InpaintingCanvas from './InpaintingCanvas.vue'
 import OutpaintingCanvas from './OutpaintingCanvas.vue'
+import { CanvasHistoryService, offlineManager } from '../services/canvasHistoryService.js'
 
 export default {
   name: 'CanvasEditor',
@@ -182,6 +187,21 @@ export default {
     const historyRecords = ref([])
     const currentHistoryIndex = ref(-1)
     const originalImageUrl = ref(null)
+    
+    // 确保传递给 CanvasHistoryPanel 的始终是数组
+    const safeHistoryRecords = computed(() => {
+      if (Array.isArray(historyRecords.value)) {
+        return historyRecords.value
+      } else {
+        console.warn('⚠️ historyRecords 不是数组，返回空数组:', historyRecords.value)
+        return []
+      }
+    })
+    
+    // 网络状态和加载状态
+    const isOnline = ref(navigator.onLine)
+    const isLoadingHistory = ref(false)
+    const historyError = ref(null)
     
     // 持久化存储键名
     const STORAGE_KEYS = {
@@ -379,21 +399,100 @@ export default {
     }
     
     // 历史管理方法
-    const addToHistory = (record) => {
-      historyRecords.value = historyRecords.value.slice(0, currentHistoryIndex.value + 1)
-      historyRecords.value.push(record)
-      currentHistoryIndex.value = historyRecords.value.length - 1
-      console.log('历史记录已添加:', record)
+    const addToHistory = async (record) => {
+      try {
+        console.log('📝 准备添加历史记录:', {
+          id: record.id,
+          resultImageUrl: record.resultImageUrl,
+          originalImageUrl: record.originalImageUrl,
+          prompt: record.prompt,
+          timestamp: record.timestamp
+        })
+        
+        // 添加到本地历史记录
+        historyRecords.value = historyRecords.value.slice(0, currentHistoryIndex.value + 1)
+        historyRecords.value.push(record)
+        currentHistoryIndex.value = historyRecords.value.length - 1
+        console.log('✅ 历史记录已添加到本地:', record)
+        
+        // 保存到云端
+        if (isOnline.value) {
+          try {
+            await CanvasHistoryService.saveHistoryRecord(record)
+            console.log('✅ 历史记录已保存到云端')
+          } catch (error) {
+            console.warn('⚠️ 云端保存失败，保存到离线存储:', error)
+            offlineManager.saveOffline(record)
+          }
+        } else {
+          console.log('📱 离线模式，保存到离线存储')
+          offlineManager.saveOffline(record)
+        }
+      } catch (error) {
+        console.error('❌ 添加历史记录失败:', error)
+        historyError.value = error.message
+      }
     }
     
     const handleSwitchHistory = (record) => {
       console.log('🔄 切换到历史记录:', record)
+      console.log('📋 历史记录详细信息:', {
+        id: record.id,
+        resultImageUrl: record.resultImageUrl,
+        originalImageUrl: record.originalImageUrl,
+        prompt: record.prompt,
+        timestamp: record.timestamp
+      })
+      
+      // 如果有结果图片URL，加载到画布
+      if (record.resultImageUrl) {
+        console.log('📸 加载历史记录图片到画布:', record.resultImageUrl)
+        
+        // 修复图片URL，确保是完整的绝对路径
+        let imageUrl = record.resultImageUrl
+        if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+          // 如果是相对路径，转换为绝对路径
+          imageUrl = window.location.origin + imageUrl
+          console.log('🔗 修复后的图片URL:', imageUrl)
+        }
+        
+        // 创建图片数据对象
+        const imageData = {
+          imageUrl: imageUrl,
+          filename: `history_${record.id}.png`,
+          task_id: record.id,
+          timestamp: record.timestamp
+        }
+        
+        // 设置当前图片数据
+        currentImageData.value = imageData
+        originalImageUrl.value = imageUrl
+        
+        // 如果有提示词，回填到参数中
+        if (record.prompt) {
+          parameters.prompt = record.prompt
+        }
+        
+        // 如果有参数，回填其他参数
+        if (record.parameters) {
+          Object.assign(parameters, record.parameters)
+        }
+        
+        console.log('✅ 历史记录已加载到画布')
+      } else {
+        console.warn('⚠️ 历史记录没有结果图片URL')
+      }
     }
     
     const handleUndo = () => {
       console.log('↶ 撤销操作')
       if (currentHistoryIndex.value > 0) {
         currentHistoryIndex.value--
+        // 加载对应的历史记录
+        const record = historyRecords.value[currentHistoryIndex.value]
+        if (record) {
+          handleSwitchHistory(record)
+        }
       }
     }
     
@@ -401,6 +500,11 @@ export default {
       console.log('↷ 重做操作')
       if (currentHistoryIndex.value < historyRecords.value.length - 1) {
         currentHistoryIndex.value++
+        // 加载对应的历史记录
+        const record = historyRecords.value[currentHistoryIndex.value]
+        if (record) {
+          handleSwitchHistory(record)
+        }
       }
     }
     
@@ -457,11 +561,43 @@ export default {
     
     const loadCanvasState = async () => {
       try {
-        const historyStr = localStorage.getItem(STORAGE_KEYS.HISTORY_RECORDS)
-        if (historyStr) {
-          historyRecords.value = JSON.parse(historyStr)
+        isLoadingHistory.value = true
+        historyError.value = null
+        
+        // 从云端加载历史记录
+        if (isOnline.value) {
+          try {
+            const cloudHistoryResponse = await CanvasHistoryService.getHistoryRecords()
+            console.log('📋 云端响应数据:', cloudHistoryResponse)
+            
+            // 确保 historyRecords 始终是数组
+            if (cloudHistoryResponse && Array.isArray(cloudHistoryResponse.records)) {
+              historyRecords.value = cloudHistoryResponse.records
+            } else if (Array.isArray(cloudHistoryResponse)) {
+              historyRecords.value = cloudHistoryResponse
+            } else {
+              historyRecords.value = []
+            }
+            console.log('✅ 从云端加载历史记录:', historyRecords.value.length, '条')
+            
+            // 同步离线记录
+            try {
+              await offlineManager.syncOfflineRecords()
+              console.log('✅ 离线记录同步完成')
+            } catch (syncError) {
+              console.warn('⚠️ 离线记录同步失败:', syncError)
+            }
+          } catch (error) {
+            console.warn('⚠️ 云端加载失败，使用离线数据:', error)
+            historyError.value = '云端加载失败，使用离线数据'
+            await loadOfflineHistory()
+          }
+        } else {
+          console.log('📱 离线模式，加载离线历史记录')
+          await loadOfflineHistory()
         }
         
+        // 加载其他本地状态
         const indexStr = localStorage.getItem(STORAGE_KEYS.CURRENT_INDEX)
         if (indexStr) {
           currentHistoryIndex.value = parseInt(indexStr)
@@ -478,9 +614,31 @@ export default {
           Object.assign(parameters, savedParams)
         }
         
-        console.log('✅ 所有状态已从localStorage恢复')
+        console.log('✅ 画布状态加载完成')
       } catch (error) {
         console.error('❌ 加载画布状态失败:', error)
+        historyError.value = error.message
+      } finally {
+        isLoadingHistory.value = false
+      }
+    }
+    
+    // 加载离线历史记录
+    const loadOfflineHistory = async () => {
+      try {
+        const offlineRecords = offlineManager.getOfflineRecords()
+        console.log('📋 离线记录数据:', offlineRecords)
+        
+        // 确保 historyRecords 始终是数组
+        if (Array.isArray(offlineRecords)) {
+          historyRecords.value = offlineRecords
+        } else {
+          historyRecords.value = []
+        }
+        console.log('✅ 从离线存储加载历史记录:', historyRecords.value.length, '条')
+      } catch (error) {
+        console.error('❌ 加载离线历史记录失败:', error)
+        historyRecords.value = []
       }
     }
     
@@ -519,15 +677,68 @@ export default {
     }
     
     // 处理清除状态
-    const handleClearState = () => {
-      clearSavedState()
-      historyRecords.value = []
-      currentHistoryIndex.value = -1
-      originalImageUrl.value = null
-      parameters.prompt = ''
-      currentImageData.value = null
-      currentImageFile.value = null
-      alert('所有状态已清除！')
+    const handleClearState = async () => {
+      try {
+        // 清除云端历史记录
+        if (isOnline.value && historyRecords.value.length > 0) {
+          for (const record of historyRecords.value) {
+            try {
+              await CanvasHistoryService.deleteHistoryRecord(record.id)
+            } catch (error) {
+              console.warn('⚠️ 删除云端历史记录失败:', record.id, error)
+            }
+          }
+        }
+        
+        // 清除本地状态
+        clearSavedState()
+        offlineManager.clearOfflineRecords()
+        historyRecords.value = []
+        currentHistoryIndex.value = -1
+        originalImageUrl.value = null
+        parameters.prompt = ''
+        currentImageData.value = null
+        currentImageFile.value = null
+        
+        console.log('✅ 所有状态已清除')
+        alert('所有状态已清除！')
+      } catch (error) {
+        console.error('❌ 清除状态失败:', error)
+        alert('清除状态失败，请重试')
+      }
+    }
+    
+    // 删除单个历史记录
+    const deleteHistoryRecord = async (recordId) => {
+      try {
+        // 从云端删除
+        if (isOnline.value) {
+          try {
+            await CanvasHistoryService.deleteHistoryRecord(recordId)
+            console.log('✅ 云端历史记录删除成功:', recordId)
+          } catch (error) {
+            console.warn('⚠️ 云端删除失败:', recordId, error)
+          }
+        }
+        
+        // 从本地删除
+        const index = historyRecords.value.findIndex(record => record.id === recordId)
+        if (index !== -1) {
+          historyRecords.value.splice(index, 1)
+          
+          // 调整当前索引
+          if (index < currentHistoryIndex.value) {
+            currentHistoryIndex.value--
+          } else if (index === currentHistoryIndex.value) {
+            currentHistoryIndex.value = Math.max(0, currentHistoryIndex.value - 1)
+          }
+          
+          console.log('✅ 本地历史记录删除成功:', recordId)
+        }
+      } catch (error) {
+        console.error('❌ 删除历史记录失败:', error)
+        throw error
+      }
     }
     
     // 处理画布尺寸变化
@@ -628,12 +839,6 @@ export default {
     // 处理历史窗口切换
     const handleToggleHistory = () => {
       showHistory.value = !showHistory.value
-      console.log('🔄 历史窗口切换:', {
-        showHistory: showHistory.value,
-        isInpaintingMode: isInpaintingMode.value,
-        currentMode: currentMode.value,
-        shouldShow: !isInpaintingMode.value && currentMode.value !== 'outpainting' && showHistory.value
-      })
     }
     
     // 处理主内容区域点击
@@ -645,6 +850,25 @@ export default {
       }
     }
     
+    // 网络状态监听
+    const handleOnline = () => {
+      isOnline.value = true
+      console.log('🌐 网络已连接')
+      
+      // 网络恢复时同步离线记录
+      if (offlineManager.getOfflineRecords().length > 0) {
+        console.log('🔄 网络恢复，开始同步离线记录')
+        offlineManager.syncOfflineRecords().catch(error => {
+          console.warn('⚠️ 离线记录同步失败:', error)
+        })
+      }
+    }
+    
+    const handleOffline = () => {
+      isOnline.value = false
+      console.log('📱 网络已断开，切换到离线模式')
+    }
+    
     // 生命周期
     onMounted(async () => {
       console.log('📋 CanvasEditor 组件挂载，初始状态:')
@@ -652,6 +876,11 @@ export default {
       console.log('  - isInpaintingMode:', isInpaintingMode.value)
       console.log('  - initialImageData:', props.initialImageData)
       console.log('  - initialMode:', props.initialMode)
+      console.log('  - isOnline:', isOnline.value)
+      
+      // 添加网络状态监听
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
       
       startAutoSave()
       await loadCanvasState()
@@ -694,6 +923,12 @@ export default {
     onUnmounted(() => {
       stopAutoSave()
       saveCanvasState()
+      
+      // 移除网络状态监听
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+      
+      console.log('CanvasEditor 组件卸载')
     })
     
     return {
@@ -714,7 +949,14 @@ export default {
       
       // 历史管理
       historyRecords,
+      safeHistoryRecords,
       currentHistoryIndex,
+      originalImageUrl,
+      
+      // 网络状态和加载状态
+      isOnline,
+      isLoadingHistory,
+      historyError,
       
       // 方法
       handleModeChange,
@@ -750,7 +992,9 @@ export default {
       handleMainCanvasDeselected,
       handleMainContentClick,
       showHistory,
-      handleToggleHistory
+      handleToggleHistory,
+      deleteHistoryRecord,
+      loadOfflineHistory
     }
   }
 }

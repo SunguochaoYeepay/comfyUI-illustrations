@@ -112,7 +112,6 @@
         <button 
           class="history-btn" 
           @click="handleToggleHistory"
-          @mousedown="console.log('🔄 历史按钮 mousedown 事件')"
           :class="{ active: showHistory }"
           title="历史记录"
         >
@@ -212,7 +211,6 @@ export default {
 
     // 历史操作
     const handleToggleHistory = () => {
-      console.log('🔄 CanvasTopToolbar: 历史按钮被点击')
       emit('toggle-history')
     }
 

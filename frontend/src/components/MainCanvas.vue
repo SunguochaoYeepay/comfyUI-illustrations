@@ -64,13 +64,6 @@ export default {
       const scaleX = canvasWidth / imgWidth
       const scaleY = canvasHeight / imgHeight
       
-      console.log('🔍 缩放计算详情:', {
-        imgWidth, imgHeight,
-        canvasWidth, canvasHeight,
-        scaleX, scaleY,
-        minScale: Math.min(scaleX, scaleY),
-        maxScale: Math.max(scaleX, scaleY)
-      })
       
       // 使用较小的缩放比例，确保图片完全适应画布
       return Math.min(scaleX, scaleY)
@@ -80,14 +73,6 @@ export default {
     const getCanvasSize = () => {
       const baseSize = 800
       
-      console.log('🔍 getCanvasSize 调用:', {
-        canvasSize: props.canvasSize,
-        imageData: props.imageData,
-        hasImageData: !!props.imageData,
-        imageWidth: props.imageData?.width,
-        imageHeight: props.imageData?.height,
-        currentImage: currentImage.value
-      })
       
       switch (props.canvasSize) {
         case '1:1':
@@ -102,7 +87,6 @@ export default {
         default:
           // 适应内容：优先使用图片尺寸
           if (props.imageData && props.imageData.width && props.imageData.height) {
-            console.log('✅ 使用 imageData 尺寸:', props.imageData.width, 'x', props.imageData.height)
             return { width: props.imageData.width, height: props.imageData.height }
           }
           
@@ -110,12 +94,10 @@ export default {
           if (currentImage.value && currentImage.value._originalElement) {
             const img = currentImage.value._originalElement
             if (img.width && img.height) {
-              console.log('✅ 使用当前图片尺寸:', img.width, 'x', img.height)
               return { width: img.width, height: img.height }
             }
           }
           
-          console.log('⚠️ 没有图片尺寸信息，使用默认尺寸 800x600')
           return { width: 800, height: 600 }
       }
     }
@@ -126,7 +108,6 @@ export default {
       
       // 获取画布尺寸
       const { width, height } = getCanvasSize()
-      console.log('🎨 initCanvas 创建画布，尺寸:', width, 'x', height)
       
       canvas.value = new fabric.Canvas(canvasElement.value, {
         width: width,
@@ -141,16 +122,13 @@ export default {
       // 添加点击事件处理
       canvas.value.on('mouse:down', handleCanvasClick)
       
-      console.log('主画布初始化完成')
       
       // 检查是否有待加载的图像
       if (props.imageFile) {
-        console.log('🔄 画布初始化完成，检查是否有待加载的图像文件')
         nextTick(() => {
           loadImage(props.imageFile)
         })
       } else if (props.imageData && props.imageData.imageUrl) {
-        console.log('🔄 画布初始化完成，检查是否有待加载的图像数据')
         nextTick(() => {
           loadImageFromData(props.imageData)
         })
@@ -161,16 +139,13 @@ export default {
     const loadImage = (file) => {
       if (!file || !canvas.value) return
       
-      console.log('开始加载图像:', file.name)
       isLoading.value = true
       
       const reader = new FileReader()
       reader.onload = (e) => {
         const imageUrl = e.target.result
-        console.log('FileReader完成，开始加载图像')
         
         // 直接使用备用方法，因为fabric.Image.fromURL有问题
-        console.log('🔄 使用备用方法加载图像')
         loadImageFallback(imageUrl, file)
       }
       
@@ -184,7 +159,6 @@ export default {
     
     // 备用图像加载方法
     const loadImageFallback = (imageUrl, file) => {
-      console.log('🔄 使用备用方法加载图像')
       
       // 设置备用方法的超时
       const fallbackTimeout = setTimeout(() => {
@@ -195,7 +169,6 @@ export default {
       const img = new Image()
       img.onload = () => {
         clearTimeout(fallbackTimeout)
-        console.log('✅ 备用方法图像加载成功，尺寸:', img.width, 'x', img.height)
         
         // 清除画布
         canvas.value.clear()
@@ -210,16 +183,13 @@ export default {
         
         // 在 'fit' 模式下，直接使用图片尺寸作为画布尺寸
         if (props.canvasSize === 'fit') {
-          console.log('🎨 fit模式：直接使用图片尺寸作为画布尺寸')
           const { width: newWidth, height: newHeight } = { width: img.width, height: img.height }
-          console.log('🔍 设置画布尺寸:', newWidth, 'x', newHeight)
           canvas.value.setDimensions({ width: newWidth, height: newHeight })
           // 不进行缩放，使用原始尺寸
         } else {
           // 其他模式使用原来的逻辑
           const { width: canvasWidth, height: canvasHeight } = getCanvasSize()
           const scale = calculateImageScale(img.width, img.height, canvasWidth, canvasHeight)
-          console.log('🔍 计算缩放比例:', { imgWidth: img.width, imgHeight: img.height, canvasWidth, canvasHeight, scale })
           // 设置图片的缩放比例
           fabricImg.scale(scale)
         }
@@ -246,10 +216,8 @@ export default {
         
         // 如果当前是 'fit' 模式，需要重新计算画布尺寸
         if (props.canvasSize === 'fit') {
-          console.log('🔄 图片加载完成，重新计算画布尺寸')
           nextTick(() => {
             const { width, height } = getCanvasSize()
-            console.log('🎨 重新设置画布尺寸:', width, 'x', height)
             canvas.value.setDimensions({ width, height })
             // 重新居中图片
             canvas.value.centerObject(fabricImg)
@@ -257,7 +225,6 @@ export default {
           })
         }
         
-        console.log('备用方法图像加载完成')
       }
       
       img.onerror = (error) => {
@@ -273,11 +240,9 @@ export default {
     const loadImageFromData = (imageData) => {
       if (!canvas.value || !imageData) return
       
-      console.log('🔄 MainCanvas: 从图像数据加载图像')
       
       const img = new Image()
       img.onload = () => {
-        console.log('✅ MainCanvas: 从数据恢复图像成功，尺寸:', img.width, 'x', img.height)
         
         // 清除画布
         canvas.value.clear()
@@ -292,16 +257,13 @@ export default {
         
         // 在 'fit' 模式下，直接使用图片尺寸作为画布尺寸
         if (props.canvasSize === 'fit') {
-          console.log('🎨 fit模式：直接使用图片尺寸作为画布尺寸')
           const { width: newWidth, height: newHeight } = { width: img.width, height: img.height }
-          console.log('🔍 设置画布尺寸:', newWidth, 'x', newHeight)
           canvas.value.setDimensions({ width: newWidth, height: newHeight })
           // 不进行缩放，使用原始尺寸
         } else {
           // 其他模式使用原来的逻辑
           const { width: canvasWidth, height: canvasHeight } = getCanvasSize()
           const scale = calculateImageScale(img.width, img.height, canvasWidth, canvasHeight)
-          console.log('🔍 计算缩放比例:', { imgWidth: img.width, imgHeight: img.height, canvasWidth, canvasHeight, scale })
           // 设置图片的缩放比例
           fabricImg.scale(scale)
         }
@@ -328,10 +290,8 @@ export default {
         
         // 如果当前是 'fit' 模式，需要重新计算画布尺寸
         if (props.canvasSize === 'fit') {
-          console.log('🔄 图片加载完成，重新计算画布尺寸')
           nextTick(() => {
             const { width, height } = getCanvasSize()
-            console.log('🎨 重新设置画布尺寸:', width, 'x', height)
             canvas.value.setDimensions({ width, height })
             // 重新居中图片
             canvas.value.centerObject(fabricImg)
@@ -339,11 +299,9 @@ export default {
           })
         }
         
-        console.log('MainCanvas: 从数据恢复图像完成')
       }
       
       img.onerror = (error) => {
-        console.error('❌ MainCanvas: 从数据恢复图像失败:', error)
         isLoading.value = false
       }
       
@@ -356,19 +314,16 @@ export default {
         canvas.value.clear()
         currentImage.value = null
         emit('image-cleared')
-        console.log('主画布图像已清除')
       }
     }
     
     // 处理图像被选中
     const handleImageSelected = (e) => {
-      console.log('图像被选中')
       emit('canvas-selected')
     }
     
     // 处理图像取消选择
     const handleImageDeselected = (e) => {
-      console.log('图像取消选择')
       emit('canvas-deselected')
     }
     
@@ -376,7 +331,6 @@ export default {
     const handleCanvasClick = (e) => {
       // 如果点击的是空白区域（没有对象被选中）
       if (!e.target) {
-        console.log('点击画布空白区域')
         // 清除所有选择
         canvas.value.discardActiveObject()
         canvas.value.renderAll()
@@ -406,9 +360,7 @@ export default {
       
       // 如果是 'fit' 模式，重新计算画布尺寸
       if (props.canvasSize === 'fit') {
-        console.log('🔄 zoomFit: 重新计算画布尺寸')
         const { width, height } = getCanvasSize()
-        console.log('🎨 zoomFit: 设置画布尺寸:', width, 'x', height)
         canvas.value.setDimensions({ width, height })
         canvas.value.centerObject(currentImage.value)
         canvas.value.renderAll()
@@ -467,33 +419,49 @@ export default {
     }
     
     // 监听props变化
-    watch(() => props.imageFile, (newFile) => {
-      console.log('🔄 MainCanvas: 检测到imageFile变化', newFile?.name || 'null')
+    watch(() => props.imageFile, (newFile, oldFile) => {
       if (newFile && canvas.value) {
-        console.log('✅ MainCanvas: 画布已初始化，开始加载图像文件:', newFile.name)
-        loadImage(newFile)
+        // 检查是否是相同的文件，避免重复加载
+        if (!oldFile || oldFile.name !== newFile.name || oldFile.size !== newFile.size) {
+          loadImage(newFile)
+        }
       } else if (newFile && !canvas.value) {
-        console.log('⏳ MainCanvas: 画布未初始化，等待初始化完成')
         // 画布未初始化，等待初始化完成
         nextTick(() => {
           if (canvas.value) {
-            console.log('✅ MainCanvas: 画布初始化完成，现在加载图像')
             loadImage(newFile)
           }
         })
       } else {
-        console.log('❌ MainCanvas: 没有图像文件，检查是否有图像数据')
         // 如果没有文件但有图像数据，尝试从图像数据恢复
         if (props.imageData && props.imageData.imageUrl && canvas.value) {
-          console.log('🔄 MainCanvas: 尝试从图像数据恢复图像')
           loadImageFromData(props.imageData)
         }
       }
     }, { immediate: true })
     
+    // 监听imageData变化
+    watch(() => props.imageData, (newImageData, oldImageData) => {
+      // 防止重复加载相同的图片
+      if (newImageData && newImageData.imageUrl && canvas.value) {
+        // 检查是否是相同的图片URL，避免重复加载
+        if (!oldImageData || oldImageData.imageUrl !== newImageData.imageUrl) {
+          loadImageFromData(newImageData)
+        }
+      } else if (newImageData && newImageData.imageUrl && !canvas.value) {
+        // 画布未初始化，等待初始化完成
+        nextTick(() => {
+          if (canvas.value) {
+            loadImageFromData(newImageData)
+          }
+        })
+      } else if (!newImageData && canvas.value) {
+        clearImage()
+      }
+    }, { immediate: true })
+    
     // 生命周期
     onMounted(() => {
-      console.log('📋 MainCanvas: 组件挂载，props.imageFile:', props.imageFile?.name || 'null')
       nextTick(() => {
         initCanvas()
       })
@@ -507,7 +475,6 @@ export default {
     
     // 监听画布尺寸变化
     watch(() => props.canvasSize, () => {
-      console.log('🔄 MainCanvas: 画布尺寸变化，重新初始化')
       nextTick(() => {
         initCanvas()
         // 如果有图片数据，重新加载

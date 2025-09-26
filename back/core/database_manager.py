@@ -59,6 +59,21 @@ class DatabaseManager:
             )
         """)
         
+        # 创建画布历史记录表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS canvas_history (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                prompt TEXT,
+                original_image_url TEXT,
+                result_image_url TEXT NOT NULL,
+                parameters TEXT,
+                timestamp INTEGER NOT NULL,
+                type TEXT DEFAULT 'inpainting',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         # 检查是否需要添加字段（兼容旧数据库）
         cursor.execute("PRAGMA table_info(tasks)")
         columns = [column[1] for column in cursor.fetchall()]
@@ -841,3 +856,239 @@ class DatabaseManager:
         
         # 返回result_path，即使是None也表示删除成功
         return result_path
+    
+    # =============================================================================
+    # 画布历史记录相关方法
+    # =============================================================================
+    
+    def create_canvas_history_record(self, record_data: Dict[str, Any]) -> None:
+        """创建画布历史记录
+        
+        Args:
+            record_data: 历史记录数据
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO canvas_history (
+                id, task_id, prompt, original_image_url, result_image_url, 
+                parameters, timestamp, type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            record_data['id'],
+            record_data['task_id'],
+            record_data.get('prompt', ''),
+            record_data.get('original_image_url'),
+            record_data['result_image_url'],
+            json.dumps(record_data.get('parameters', {})),
+            record_data['timestamp'],
+            record_data.get('type', 'inpainting'),
+            datetime.now()
+        ))
+        
+        conn.commit()
+        conn.close()
+    
+    def get_canvas_history_records(self, limit: int = 50, offset: int = 0, 
+                                 order: str = "desc") -> Dict[str, Any]:
+        """获取画布历史记录列表
+        
+        Args:
+            limit: 限制数量
+            offset: 偏移量
+            order: 排序方式 (asc/desc)
+            
+        Returns:
+            包含历史记录列表和统计信息的字典
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 获取总数
+        cursor.execute("SELECT COUNT(*) FROM canvas_history")
+        total_count = cursor.fetchone()[0]
+        
+        # 构建查询
+        order_clause = "ORDER BY timestamp ASC" if order == "asc" else "ORDER BY timestamp DESC"
+        limit_clause = f"LIMIT {limit} OFFSET {offset}"
+        
+        query = f"""
+            SELECT id, task_id, prompt, original_image_url, result_image_url, 
+                   parameters, timestamp, type, created_at
+            FROM canvas_history
+            {order_clause}
+            {limit_clause}
+        """
+        
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # 处理结果
+        records = []
+        for row in rows:
+            record = {
+                'id': row[0],
+                'task_id': row[1],
+                'prompt': row[2],
+                'original_image_url': row[3],
+                'result_image_url': row[4],
+                'parameters': json.loads(row[5]) if row[5] else {},
+                'timestamp': row[6],
+                'type': row[7],
+                'created_at': row[8]
+            }
+            records.append(record)
+        
+        # 计算是否有更多数据
+        has_more = (offset + limit) < total_count
+        
+        return {
+            "records": records,
+            "total": total_count,
+            "has_more": has_more,
+            "limit": limit,
+            "offset": offset,
+            "order": order
+        }
+    
+    def get_canvas_history_record(self, record_id: str) -> Optional[Dict[str, Any]]:
+        """获取单个画布历史记录
+        
+        Args:
+            record_id: 历史记录ID
+            
+        Returns:
+            历史记录字典，如果不存在返回None
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, task_id, prompt, original_image_url, result_image_url, 
+                   parameters, timestamp, type, created_at
+            FROM canvas_history
+            WHERE id = ?
+        """, (record_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'id': row[0],
+                'task_id': row[1],
+                'prompt': row[2],
+                'original_image_url': row[3],
+                'result_image_url': row[4],
+                'parameters': json.loads(row[5]) if row[5] else {},
+                'timestamp': row[6],
+                'type': row[7],
+                'created_at': row[8]
+            }
+        return None
+    
+    def update_canvas_history_record(self, record_id: str, updates: Dict[str, Any]) -> bool:
+        """更新画布历史记录
+        
+        Args:
+            record_id: 历史记录ID
+            updates: 更新数据
+            
+        Returns:
+            是否更新成功
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 构建更新字段
+        update_fields = []
+        values = []
+        
+        if 'prompt' in updates:
+            update_fields.append("prompt = ?")
+            values.append(updates['prompt'])
+        
+        if 'parameters' in updates:
+            update_fields.append("parameters = ?")
+            values.append(json.dumps(updates['parameters']))
+        
+        if not update_fields:
+            conn.close()
+            return False
+        
+        values.append(record_id)
+        
+        cursor.execute(f"""
+            UPDATE canvas_history 
+            SET {', '.join(update_fields)}
+            WHERE id = ?
+        """, values)
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        
+        return success
+    
+    def delete_canvas_history_record(self, record_id: str) -> bool:
+        """删除画布历史记录
+        
+        Args:
+            record_id: 历史记录ID
+            
+        Returns:
+            是否删除成功
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM canvas_history WHERE id = ?", (record_id,))
+        success = cursor.rowcount > 0
+        
+        conn.commit()
+        conn.close()
+        
+        return success
+    
+    def batch_create_canvas_history_records(self, records: List[Dict[str, Any]]) -> int:
+        """批量创建画布历史记录
+        
+        Args:
+            records: 历史记录列表
+            
+        Returns:
+            成功创建的记录数
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        success_count = 0
+        for record_data in records:
+            try:
+                cursor.execute("""
+                    INSERT INTO canvas_history (
+                        id, task_id, prompt, original_image_url, result_image_url, 
+                        parameters, timestamp, type, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    record_data['id'],
+                    record_data['task_id'],
+                    record_data.get('prompt', ''),
+                    record_data.get('original_image_url'),
+                    record_data['result_image_url'],
+                    json.dumps(record_data.get('parameters', {})),
+                    record_data['timestamp'],
+                    record_data.get('type', 'inpainting'),
+                    datetime.now()
+                ))
+                success_count += 1
+            except sqlite3.IntegrityError:
+                # 如果记录已存在，跳过
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        return success_count

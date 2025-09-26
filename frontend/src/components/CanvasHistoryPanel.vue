@@ -3,6 +3,9 @@
     <div class="history-header">
       <h3>变更历史</h3>
       <div class="history-controls">
+        <div class="network-status" :class="{ offline: !isOnline }" :title="isOnline ? '在线' : '离线'">
+          {{ isOnline ? '🌐' : '📱' }}
+        </div>
         <button 
           @click="undo" 
           :disabled="!canUndo"
@@ -22,15 +25,27 @@
       </div>
     </div>
     
-    <div class="history-list">
+    <!-- 错误提示 -->
+    <div v-if="error" class="error-message">
+      <div class="error-icon">⚠️</div>
+      <div class="error-text">{{ error }}</div>
+    </div>
+    
+    <!-- 加载状态 -->
+    <div v-if="isLoading" class="loading-state">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">加载历史记录中...</div>
+    </div>
+    
+    <div class="history-list" v-else>
       <div 
         v-for="(record, index) in historyRecords" 
         :key="record.id"
-        :class="['history-item', { active: index === currentIndex }]"
+        :class="['history-item', { active: index === currentIndex, offline: record.offline }]"
         @click="switchToHistory(index)"
       >
         <div class="history-preview">
-          <img :src="record.resultImageUrl" :alt="`历史记录 ${index + 1}`" />
+          <img :src="fixImageUrl(record.resultImageUrl)" :alt="`历史记录 ${index + 1}`" />
         </div>
         <div class="history-info">
           <div class="history-prompt">{{ record.prompt }}</div>
@@ -69,9 +84,21 @@ export default {
     currentIndex: {
       type: Number,
       default: -1
+    },
+    isLoading: {
+      type: Boolean,
+      default: false
+    },
+    error: {
+      type: String,
+      default: null
+    },
+    isOnline: {
+      type: Boolean,
+      default: true
     }
   },
-  emits: ['update:modelValue', 'update:currentIndex', 'switch-history', 'undo', 'redo'],
+  emits: ['update:modelValue', 'update:currentIndex', 'switch-history', 'undo', 'redo', 'delete-history'],
   setup(props, { emit }) {
     const historyRecords = computed({
       get: () => props.modelValue,
@@ -80,6 +107,15 @@ export default {
     
     const canUndo = computed(() => props.currentIndex > 0)
     const canRedo = computed(() => props.currentIndex < historyRecords.value.length - 1)
+    
+    // 修复图片URL，确保是完整的绝对路径
+    const fixImageUrl = (url) => {
+      if (!url) return url
+      if (url.startsWith('/') && !url.startsWith('//')) {
+        return window.location.origin + url
+      }
+      return url
+    }
     
     const switchToHistory = (index) => {
       emit('update:currentIndex', index)
@@ -102,20 +138,32 @@ export default {
       }
     }
     
-    const deleteHistory = (index) => {
-      const newHistory = [...historyRecords.value]
-      newHistory.splice(index, 1)
+    const deleteHistory = async (index) => {
+      const record = historyRecords.value[index]
+      if (!record) return
       
-      // 调整当前索引
-      let newCurrentIndex = props.currentIndex
-      if (index < props.currentIndex) {
-        newCurrentIndex = props.currentIndex - 1
-      } else if (index === props.currentIndex) {
-        newCurrentIndex = Math.max(0, props.currentIndex - 1)
+      try {
+        // 发送删除事件给父组件
+        await emit('delete-history', record.id)
+        
+        // 从本地列表中移除
+        const newHistory = [...historyRecords.value]
+        newHistory.splice(index, 1)
+        
+        // 调整当前索引
+        let newCurrentIndex = props.currentIndex
+        if (index < props.currentIndex) {
+          newCurrentIndex = props.currentIndex - 1
+        } else if (index === props.currentIndex) {
+          newCurrentIndex = Math.max(0, props.currentIndex - 1)
+        }
+        
+        emit('update:modelValue', newHistory)
+        emit('update:currentIndex', newCurrentIndex)
+      } catch (error) {
+        console.error('删除历史记录失败:', error)
+        // 可以在这里显示错误提示
       }
-      
-      emit('update:modelValue', newHistory)
-      emit('update:currentIndex', newCurrentIndex)
     }
     
     const formatTime = (timestamp) => {
@@ -134,7 +182,8 @@ export default {
       undo,
       redo,
       deleteHistory,
-      formatTime
+      formatTime,
+      fixImageUrl
     }
   }
 }
@@ -175,6 +224,21 @@ export default {
 .history-controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.network-status {
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 4px;
+  background: #28a745;
+  color: white;
+  transition: all 0.3s;
+}
+
+.network-status.offline {
+  background: #ffc107;
+  color: #333;
 }
 
 .control-btn {
@@ -228,6 +292,27 @@ export default {
 .history-item.active {
   border-color: var(--primary-color, #007bff);
   background: var(--active-bg, #f8f9ff);
+}
+
+.history-item.offline {
+  border-color: #ffc107;
+  background: #fff8e1;
+}
+
+.history-item.offline::after {
+  content: '📱';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 12px;
+  background: #ffc107;
+  color: #333;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .history-preview {
@@ -317,6 +402,55 @@ export default {
   font-size: 12px;
   line-height: 1.4;
   max-width: 200px;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  margin: 8px;
+  background: #ffebee;
+  border: 1px solid #ffcdd2;
+  border-radius: 6px;
+  color: #c62828;
+}
+
+.error-icon {
+  font-size: 16px;
+}
+
+.error-text {
+  font-size: 12px;
+  flex: 1;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 12px;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #e0e0e0;
+  border-top: 2px solid var(--primary-color, #007bff);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  color: var(--text-secondary, #666);
+  font-size: 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* 暗色主题适配 */

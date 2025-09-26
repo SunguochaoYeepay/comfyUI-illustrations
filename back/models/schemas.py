@@ -155,3 +155,70 @@ class FavoritesResponse(BaseModel):
     total: int = Field(..., description="总数")
     images: int = Field(..., description="图片数量")
     videos: int = Field(..., description="视频数量")
+
+
+# =============================================================================
+# 画布历史记录相关模型
+# =============================================================================
+
+class CanvasHistoryRecord(BaseModel):
+    """画布历史记录"""
+    id: str = Field(..., description="历史记录ID")
+    task_id: str = Field(..., description="任务ID")
+    prompt: str = Field(..., description="提示词")
+    original_image_url: Optional[str] = Field(None, description="原始图片URL")
+    result_image_url: str = Field(..., description="结果图片URL")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="参数")
+    timestamp: int = Field(..., description="时间戳")
+    type: str = Field(default="inpainting", description="类型")
+    created_at: Optional[str] = Field(None, description="创建时间")
+
+
+class CanvasHistoryCreateRequest(BaseModel):
+    """创建画布历史记录请求"""
+    id: str = Field(..., description="历史记录ID")
+    task_id: str = Field(..., description="任务ID")
+    prompt: str = Field(..., description="提示词")
+    original_image_url: Optional[str] = Field(None, description="原始图片URL")
+    result_image_url: str = Field(..., description="结果图片URL")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="参数")
+    timestamp: int = Field(..., description="时间戳")
+    type: str = Field(default="inpainting", description="类型")
+
+
+class CanvasHistoryUpdateRequest(BaseModel):
+    """更新画布历史记录请求"""
+    prompt: Optional[str] = Field(None, description="提示词")
+    parameters: Optional[Dict[str, Any]] = Field(None, description="参数")
+
+
+class CanvasHistoryBatchCreateRequest(BaseModel):
+    """批量创建画布历史记录请求"""
+    records: List[CanvasHistoryCreateRequest] = Field(..., description="历史记录列表")
+
+
+class CanvasHistoryResponse(BaseModel):
+    """画布历史记录响应"""
+    id: str = Field(..., description="历史记录ID")
+    task_id: str = Field(..., description="任务ID")
+    prompt: str = Field(..., description="提示词")
+    original_image_url: Optional[str] = Field(None, description="原始图片URL")
+    result_image_url: str = Field(..., description="结果图片URL")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="参数")
+    timestamp: int = Field(..., description="时间戳")
+    type: str = Field(default="inpainting", description="类型")
+    created_at: str = Field(..., description="创建时间")
+
+
+class CanvasHistoryListResponse(BaseModel):
+    """画布历史记录列表响应"""
+    records: List[CanvasHistoryResponse] = Field(..., description="历史记录列表")
+    total: int = Field(..., description="总记录数")
+    limit: int = Field(..., description="每页限制")
+    offset: int = Field(..., description="偏移量")
+
+
+class CanvasHistoryDeleteResponse(BaseModel):
+    """画布历史记录删除响应"""
+    id: str = Field(..., description="历史记录ID")
+    message: str = Field(..., description="响应消息")

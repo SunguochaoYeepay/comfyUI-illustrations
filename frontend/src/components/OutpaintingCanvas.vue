@@ -350,29 +350,16 @@ export default {
         
         // 如果图片URL相同，跳过重复加载
         if (currentImageUrl && propsImageUrl && currentImageUrl === propsImageUrl) {
-          console.log('⏭️ 图片未变化，跳过重复加载')
           return Promise.resolve(currentImage.value.img)
-        } else {
-          console.log('🔄 检测到图片变化，需要重新加载:', {
-            currentImageUrl: currentImageUrl?.substring(0, 50) + '...',
-            propsImageUrl: propsImageUrl?.substring(0, 50) + '...'
-          })
         }
       }
       
       // 检查是否有有效的图片数据
       const hasImageData = props.originalImage || props.originalImageFile
       if (!hasImageData) {
-        console.log('⚠️ 没有图片数据，跳过加载')
         return Promise.reject(new Error('没有图片数据'))
       }
       
-      console.log('🔍 检查图片数据类型:', {
-        originalImage: typeof props.originalImage,
-        originalImageFile: typeof props.originalImageFile,
-        originalImageValue: props.originalImage,
-        originalImageFileValue: props.originalImageFile
-      })
       
       try {
         let imageUrl = ''
@@ -410,10 +397,6 @@ export default {
         // 返回Promise，等待图片加载完成
         return new Promise((resolve, reject) => {
           img.onload = () => {
-            console.log('📸 图片加载完成，开始重新计算画布尺寸:', {
-              imageSize: { width: img.width, height: img.height },
-              currentCanvas: { width: canvas.value?.width, height: canvas.value?.height }
-            })
             
             // 根据图片尺寸重新计算画布大小
             resizeCanvasForImage(img)

@@ -40,79 +40,75 @@
         </button>
       </div>
 
-      <!-- 画布尺寸选择 -->
-      <div class="canvas-size-group">
+      <!-- 功能按钮组 - 原底部工具栏的功能按钮，只在主模式下显示 -->
+      <div v-if="currentMode === ''" class="function-group">
         <button 
-          class="size-btn" 
-          :class="{ active: canvasSize === 'fit' }"
-          @click="setCanvasSize('fit')"
-          title="适应内容"
+          class="function-btn inpainting" 
+          @click="handleModeChange('inpainting')"
+          :class="{ active: currentMode === 'inpainting' }"
+          title="局部重绘"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M4,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M4,6V18H20V6H4Z"/>
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
           </svg>
+          <span>局部重绘</span>
         </button>
         <button 
-          class="size-btn" 
-          :class="{ active: canvasSize === '1:1' }"
-          @click="setCanvasSize('1:1')"
-          title="1:1"
+          class="function-btn outpainting" 
+          @click="handleModeChange('outpainting')"
+          :class="{ active: currentMode === 'outpainting' }"
+          title="扩图"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3,3V21H21V3H3M5,5H19V19H5V5Z"/>
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
           </svg>
+          <span>扩图</span>
         </button>
         <button 
-          class="size-btn" 
-          :class="{ active: canvasSize === '4:3' }"
-          @click="setCanvasSize('4:3')"
-          title="4:3"
+          class="function-btn detail" 
+          @click="handleModeChange('detail')"
+          :class="{ active: currentMode === 'detail' }"
+          title="细节修复"
         >
-          <svg width="16" height="12" viewBox="0 0 24 18" fill="currentColor">
-            <path d="M3,3V15H21V3H3M5,5H19V13H5V5Z"/>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/>
           </svg>
+          <span>细节修复</span>
         </button>
         <button 
-          class="size-btn" 
-          :class="{ active: canvasSize === '3:2' }"
-          @click="setCanvasSize('3:2')"
-          title="3:2"
+          class="function-btn hd" 
+          @click="handleModeChange('hd')"
+          :class="{ active: currentMode === 'hd' }"
+          title="HD超清"
         >
-          <svg width="16" height="11" viewBox="0 0 24 16" fill="currentColor">
-            <path d="M3,3V13H21V3H3M5,5H19V11H5V5Z"/>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z"/>
           </svg>
+          <span>HD超清</span>
         </button>
         <button 
-          class="size-btn" 
-          :class="{ active: canvasSize === '16:9' }"
-          @click="setCanvasSize('16:9')"
-          title="16:9"
+          class="function-btn cutout" 
+          @click="handleModeChange('cutout')"
+          :class="{ active: currentMode === 'cutout' }"
+          title="抠图"
         >
-          <svg width="16" height="9" viewBox="0 0 24 14" fill="currentColor">
-            <path d="M3,3V11H21V3H3M5,5H19V9H5V5Z"/>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,5V19H5V5H19Z"/>
           </svg>
+          <span>抠图</span>
         </button>
       </div>
+    </div>
 
- 
-
-      <!-- 文件操作 -->
+    <!-- 右侧按钮组 - 右对齐 -->
+    <div class="toolbar-right">
+      <!-- 文件操作组 -->
       <div class="file-group">
         <button class="file-btn upload" @click="handleUpload" title="上传">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
           </svg>
         </button>
-        <button class="file-btn save" @click="handleSave" title="保存">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-
-      <!-- 右侧按钮组 - 右对齐 -->
-      <div class="toolbar-right">
         <button 
           class="history-btn" 
           @click="handleToggleHistory"
@@ -124,8 +120,8 @@
             <path d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3"/>
           </svg>
         </button>
-        
       </div>
+    </div>
 
     <!-- 隐藏的文件输入 -->
     <input 
@@ -168,6 +164,10 @@ export default {
       type: Boolean,
       default: true
     },
+    currentMode: {
+      type: String,
+      default: ''
+    }
   },
   emits: [
     'canvas-size-change',
@@ -179,9 +179,9 @@ export default {
     'undo',
     'redo',
     'upload',
-    'save',
     'clear',
     'download',
+    'mode-change',
   ],
   setup(props, { emit }) {
     const fileInput = ref(null)
@@ -241,10 +241,6 @@ export default {
       event.target.value = ''
     }
 
-    const handleSave = () => {
-      emit('save')
-    }
-
     const handleClear = () => {
       emit('clear')
     }
@@ -253,6 +249,10 @@ export default {
       emit('download')
     }
 
+    // 处理模式切换
+    const handleModeChange = (mode) => {
+      emit('mode-change', mode)
+    }
 
     return {
       fileInput,
@@ -267,9 +267,9 @@ export default {
       handleRedo,
       handleUpload,
       handleFileSelect,
-      handleSave,
       handleClear,
       handleDownload,
+      handleModeChange,
     }
   }
 }
@@ -299,8 +299,7 @@ export default {
 }
 
 .canvas-zoom-group,
-.canvas-size-group,
-.history-group,
+.function-group,
 .file-group {
   display: flex;
   align-items: center;
@@ -312,7 +311,7 @@ export default {
 }
 
 .zoom-btn,
-.size-btn,
+.function-btn,
 .history-btn,
 .file-btn,
 .action-btn {
@@ -329,8 +328,30 @@ export default {
   transition: all 0.2s ease;
 }
 
+/* 功能按钮特殊样式 - 带文字 */
+.function-btn {
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  min-width: 60px;
+  height: auto;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.function-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.function-btn span {
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .zoom-btn:hover,
-.size-btn:hover,
+.function-btn:hover,
 .history-btn:hover,
 .file-btn:hover,
 .action-btn:hover {
@@ -338,10 +359,56 @@ export default {
   color: white;
 }
 
-.size-btn.active,
+.function-btn.active,
 .history-btn.active {
   background: #007bff;
   color: white;
+}
+
+/* 功能按钮颜色样式 */
+.function-btn.inpainting {
+  background: #28a745;
+  color: white;
+}
+
+.function-btn.inpainting:hover {
+  background: #218838;
+}
+
+.function-btn.outpainting {
+  background: #17a2b8;
+  color: white;
+}
+
+.function-btn.outpainting:hover {
+  background: #138496;
+}
+
+.function-btn.detail {
+  background: #6f42c1;
+  color: white;
+}
+
+.function-btn.detail:hover {
+  background: #5a32a3;
+}
+
+.function-btn.hd {
+  background: #fd7e14;
+  color: white;
+}
+
+.function-btn.hd:hover {
+  background: #e8650e;
+}
+
+.function-btn.cutout {
+  background: #20c997;
+  color: white;
+}
+
+.function-btn.cutout:hover {
+  background: #1aa179;
 }
 
 .history-btn:disabled,
@@ -390,15 +457,6 @@ export default {
   background: #138496;
 }
 
-.file-btn.save {
-  background: #6f42c1;
-  color: white;
-}
-
-.file-btn.save:hover {
-  background: #5a32a3;
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
   .canvas-top-toolbar {
@@ -410,14 +468,26 @@ export default {
     gap: 8px;
   }
   
-  .canvas-size-group,
-  .history-group,
+  .function-group,
   .file-group {
     gap: 2px;
     padding: 2px;
   }
   
-  .size-btn,
+  .function-btn {
+    min-width: 50px;
+    font-size: 9px;
+  }
+  
+  .function-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .function-btn span {
+    font-size: 8px;
+  }
+  
   .history-btn,
   .file-btn,
   .action-btn {

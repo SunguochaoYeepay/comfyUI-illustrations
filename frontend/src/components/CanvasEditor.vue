@@ -9,6 +9,7 @@
       :current-zoom-level="currentZoomLevel"
       :show-history="showHistory"
       :show-left-controls="true"
+      :current-mode="currentMode"
       @canvas-size-change="handleCanvasSizeChange"
       @zoom-in="handleZoomIn"
       @zoom-out="handleZoomOut"
@@ -18,21 +19,11 @@
       @undo="handleUndo"
       @redo="handleRedo"
       @upload="handleFileUpload"
-      @save="handleSaveImage"
       @clear="handleClearCanvas"
       @download="handleDownloadImage"
+      @mode-change="handleModeChange"
     />
     
-    <!-- 功能工具栏 - 只在主画布被选中且非局部重绘模式时显示功能选择按钮 -->
-    <CanvasToolbar 
-      v-if="currentMode === '' && isMainCanvasSelected"
-      :is-processing="isProcessing"
-      :current-mode="currentMode"
-      @mode-change="handleModeChange"
-      @drawing-tool-change="handleDrawingToolChange"
-      @brush-size-change="handleBrushSizeChange"
-      @clear-canvas="handleClearCanvas"
-    />
     
     <!-- 局部重绘工具栏已集成到顶部工具栏中 -->
     

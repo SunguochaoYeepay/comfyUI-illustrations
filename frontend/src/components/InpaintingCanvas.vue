@@ -623,7 +623,7 @@ export default {
                 }
                 
                 if (imageUrl && imageUrl.startsWith('/')) {
-                  imageUrl = API_BASE + imageUrl
+                  imageUrl = window.location.origin + imageUrl
                   console.log('🔗 完整图像URL:', imageUrl)
                 }
                 

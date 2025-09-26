@@ -43,6 +43,7 @@
         @canvas-selected="handleMainCanvasSelected"
         @canvas-deselected="handleMainCanvasDeselected"
         @zoom-changed="handleZoomChanged"
+        @upload="handleFileUpload"
       />
       
       <!-- 局部重绘画板 -->
@@ -104,6 +105,7 @@
       @undo="handleUndo"
       @redo="handleRedo"
       @delete-history="deleteHistoryRecord"
+      @close="handleCloseHistory"
     />
     
     
@@ -571,13 +573,26 @@ export default {
             console.log('📋 云端响应数据:', cloudHistoryResponse)
             
             // 确保 historyRecords 始终是数组
+            let records = []
             if (cloudHistoryResponse && Array.isArray(cloudHistoryResponse.records)) {
-              historyRecords.value = cloudHistoryResponse.records
+              records = cloudHistoryResponse.records
             } else if (Array.isArray(cloudHistoryResponse)) {
-              historyRecords.value = cloudHistoryResponse
-            } else {
-              historyRecords.value = []
+              records = cloudHistoryResponse
             }
+            
+            // 转换字段名：从后端格式转换为前端格式
+            historyRecords.value = records.map(record => ({
+              id: record.id,
+              task_id: record.task_id,
+              prompt: record.prompt,
+              originalImageUrl: record.original_image_url,
+              resultImageUrl: record.result_image_url,
+              parameters: record.parameters,
+              timestamp: record.timestamp,
+              type: record.type,
+              created_at: record.created_at
+            }))
+            
             console.log('✅ 从云端加载历史记录:', historyRecords.value.length, '条')
             
             // 同步离线记录
@@ -721,10 +736,10 @@ export default {
           }
         }
         
-        // 从本地删除
+        // 从本地删除 - 使用 filter 创建新数组，避免直接修改响应式数组
         const index = historyRecords.value.findIndex(record => record.id === recordId)
         if (index !== -1) {
-          historyRecords.value.splice(index, 1)
+          historyRecords.value = historyRecords.value.filter(record => record.id !== recordId)
           
           // 调整当前索引
           if (index < currentHistoryIndex.value) {
@@ -839,6 +854,11 @@ export default {
     // 处理历史窗口切换
     const handleToggleHistory = () => {
       showHistory.value = !showHistory.value
+    }
+    
+    // 处理关闭历史面板
+    const handleCloseHistory = () => {
+      showHistory.value = false
     }
     
     // 处理主内容区域点击
@@ -993,6 +1013,7 @@ export default {
       handleMainContentClick,
       showHistory,
       handleToggleHistory,
+      handleCloseHistory,
       deleteHistoryRecord,
       loadOfflineHistory
     }

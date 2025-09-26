@@ -16,6 +16,22 @@
         <p>加载图像中...</p>
       </div>
       
+      <!-- 空状态上传按钮 -->
+      <div v-if="!currentImage && !isLoading" class="empty-upload-area">
+        <div class="upload-content">
+          <div class="upload-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z M12,12L10,14H13V17H11V14H8L12,12Z"/>
+            </svg>
+          </div>
+          <h3 class="upload-title">上传图片开始创作</h3>
+          <p class="upload-description">支持 JPG、PNG、GIF 格式</p>
+          <button class="upload-btn" @click="handleUploadClick">
+            选择文件
+          </button>
+          <p class="upload-hint">或直接拖拽图片到此处</p>
+        </div>
+      </div>
    
     </div>
   </div>
@@ -49,7 +65,7 @@ export default {
       default: 'fit'
     }
   },
-  emits: ['image-loaded', 'image-cleared', 'canvas-selected', 'canvas-deselected', 'zoom-changed'],
+  emits: ['image-loaded', 'image-cleared', 'canvas-selected', 'canvas-deselected', 'zoom-changed', 'upload'],
   setup(props, { emit }) {
     const canvasElement = ref(null)
     const canvasWrapper = ref(null)
@@ -418,6 +434,11 @@ export default {
       e.preventDefault()
     }
     
+    // 处理上传按钮点击
+    const handleUploadClick = () => {
+      emit('upload')
+    }
+    
     // 监听props变化
     watch(() => props.imageFile, (newFile, oldFile) => {
       if (newFile && canvas.value) {
@@ -496,6 +517,7 @@ export default {
       handleDragOver,
       handleDragEnter,
       handleDragLeave,
+      handleUploadClick,
       clearImage,
       handleImageSelected,
       handleImageDeselected,
@@ -577,5 +599,70 @@ export default {
 .debug-info p {
   margin: 8px 0;
   font-size: 14px;
+}
+
+/* 空状态上传区域 */
+.empty-upload-area {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.upload-content {
+  text-align: center;
+  color: white;
+  max-width: 300px;
+  padding: 40px;
+}
+
+.upload-icon {
+  color: #007bff;
+  margin-bottom: 24px;
+  opacity: 0.8;
+}
+
+.upload-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: white;
+}
+
+.upload-description {
+  font-size: 14px;
+  color: #ccc;
+  margin: 0 0 24px 0;
+}
+
+.upload-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 16px;
+}
+
+.upload-btn:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: #999;
+  margin: 0;
 }
 </style>

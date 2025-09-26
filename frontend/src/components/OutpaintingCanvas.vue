@@ -978,6 +978,11 @@ export default {
               imageUrl = statusResult.result.image_urls[0]
             }
             
+            // 将相对路径转换为绝对路径
+            if (imageUrl && imageUrl.startsWith('/')) {
+              imageUrl = window.location.origin + imageUrl
+            }
+            
             if (imageUrl) {
               // 加载结果图像
               await loadResultImage(imageUrl)

@@ -104,9 +104,9 @@
     <div class="toolbar-right">
       <!-- 文件操作组 -->
       <div class="file-group">
-        <button class="file-btn upload" @click="handleUpload" title="上传">
+        <button class="file-btn upload" @click="handleUpload" title="上传图片">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z M12,12L10,14H13V17H11V14H8L12,12Z"/>
           </svg>
         </button>
         <button 

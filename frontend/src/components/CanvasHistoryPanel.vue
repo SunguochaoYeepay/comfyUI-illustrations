@@ -1,28 +1,10 @@
 <template>
   <div class="history-panel">
     <div class="history-header">
-      <h3>变更历史</h3>
-      <div class="history-controls">
-        <div class="network-status" :class="{ offline: !isOnline }" :title="isOnline ? '在线' : '离线'">
-          {{ isOnline ? '🌐' : '📱' }}
-        </div>
-        <button 
-          @click="undo" 
-          :disabled="!canUndo"
-          class="control-btn"
-          title="撤销"
-        >
-          ↶
-        </button>
-        <button 
-          @click="redo" 
-          :disabled="!canRedo"
-          class="control-btn"
-          title="重做"
-        >
-          ↷
-        </button>
-      </div>
+      <h3 class="history-title">变更历史</h3>
+      <button class="close-btn" @click="$emit('close')" title="关闭">
+        ×
+      </button>
     </div>
     
     <!-- 错误提示 -->
@@ -49,7 +31,6 @@
         </div>
         <div class="history-info">
           <div class="history-prompt">{{ record.prompt }}</div>
-          <div class="history-time">{{ formatTime(record.timestamp) }}</div>
         </div>
         <div class="history-actions">
           <button 
@@ -72,7 +53,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 
 export default {
   name: 'CanvasHistoryPanel',
@@ -98,15 +79,13 @@ export default {
       default: true
     }
   },
-  emits: ['update:modelValue', 'update:currentIndex', 'switch-history', 'undo', 'redo', 'delete-history'],
+  emits: ['update:modelValue', 'update:currentIndex', 'switch-history', 'undo', 'redo', 'delete-history', 'close'],
   setup(props, { emit }) {
     const historyRecords = computed({
       get: () => props.modelValue,
       set: (value) => emit('update:modelValue', value)
     })
     
-    const canUndo = computed(() => props.currentIndex > 0)
-    const canRedo = computed(() => props.currentIndex < historyRecords.value.length - 1)
     
     // 修复图片URL，确保是完整的绝对路径
     const fixImageUrl = (url) => {
@@ -122,21 +101,6 @@ export default {
       emit('switch-history', historyRecords.value[index])
     }
     
-    const undo = () => {
-      if (canUndo.value) {
-        const newIndex = props.currentIndex - 1
-        switchToHistory(newIndex)
-        emit('undo')
-      }
-    }
-    
-    const redo = () => {
-      if (canRedo.value) {
-        const newIndex = props.currentIndex + 1
-        switchToHistory(newIndex)
-        emit('redo')
-      }
-    }
     
     const deleteHistory = async (index) => {
       const record = historyRecords.value[index]
@@ -146,9 +110,11 @@ export default {
         // 发送删除事件给父组件
         await emit('delete-history', record.id)
         
-        // 从本地列表中移除
-        const newHistory = [...historyRecords.value]
-        newHistory.splice(index, 1)
+        // 使用 nextTick 确保DOM更新完成后再进行数组操作
+        await nextTick()
+        
+        // 从本地列表中移除 - 使用 filter 而不是 splice，更安全
+        const newHistory = historyRecords.value.filter((_, i) => i !== index)
         
         // 调整当前索引
         let newCurrentIndex = props.currentIndex
@@ -158,6 +124,8 @@ export default {
           newCurrentIndex = Math.max(0, props.currentIndex - 1)
         }
         
+        // 使用 nextTick 确保状态更新完成
+        await nextTick()
         emit('update:modelValue', newHistory)
         emit('update:currentIndex', newCurrentIndex)
       } catch (error) {
@@ -166,23 +134,11 @@ export default {
       }
     }
     
-    const formatTime = (timestamp) => {
-      const date = new Date(timestamp)
-      return date.toLocaleTimeString('zh-CN', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })
-    }
     
     return {
       historyRecords,
-      canUndo,
-      canRedo,
       switchToHistory,
-      undo,
-      redo,
       deleteHistory,
-      formatTime,
       fixImageUrl
     }
   }
@@ -214,10 +170,37 @@ export default {
   backdrop-filter: blur(10px);
 }
 
-.history-header h3 {
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color, #333);
+}
+
+.close-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-color, #666);
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: var(--button-hover-bg, #f0f0f0);
   color: var(--text-color, #333);
 }
 
@@ -227,44 +210,7 @@ export default {
   align-items: center;
 }
 
-.network-status {
-  font-size: 16px;
-  padding: 4px;
-  border-radius: 4px;
-  background: #28a745;
-  color: white;
-  transition: all 0.3s;
-}
 
-.network-status.offline {
-  background: #ffc107;
-  color: #333;
-}
-
-.control-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border-color, #ddd);
-  background: var(--button-bg, white);
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: var(--text-color, #666);
-  transition: all 0.2s;
-}
-
-.control-btn:hover:not(:disabled) {
-  background: var(--button-hover-bg, #f0f0f0);
-  border-color: var(--border-hover-color, #999);
-}
-
-.control-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 .history-list {
   flex: 1;
@@ -344,10 +290,6 @@ export default {
   white-space: nowrap;
 }
 
-.history-time {
-  font-size: 12px;
-  color: var(--text-secondary, #666);
-}
 
 .history-actions {
   margin-left: 8px;

@@ -1,5 +1,73 @@
 <template>
   <div class="inpainting-canvas">
+    <!-- 局部重绘工具栏 -->
+    <div class="inpainting-toolbar">
+      <div class="toolbar-left">
+        <!-- 空区域 -->
+      </div>
+
+      <div class="toolbar-center">
+        <!-- 画笔工具 -->
+        <div class="tool-group">
+          <button 
+            class="tool-btn brush" 
+            :class="{ active: currentDrawingTool === 'brush' }"
+            @click="handleDrawingToolChange('brush')"
+            title="画笔"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.71,4.63L19.37,3.29C19,2.9 18.35,2.9 17.96,3.29L9,12.25L11.75,15L20.71,6.04C21.1,5.65 21.1,5 20.71,4.63M7,14A3,3 0 0,0 4,17C4,18.31 2.84,19 2,19C2.92,20.22 4.5,21 6,21A4,4 0 0,0 10,17A3,3 0 0,0 7,14Z"/>
+            </svg>
+          </button>
+          <button 
+            class="tool-btn eraser" 
+            :class="{ active: currentDrawingTool === 'eraser' }"
+            @click="handleDrawingToolChange('eraser')"
+            title="橡皮擦"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16.24,3.56L21.19,8.5C21.97,9.29 21.97,10.55 21.19,11.34L12,20.53C10.44,22.09 7.91,22.09 6.34,20.53L2.81,17C2.03,16.21 2.03,14.95 2.81,14.16L13.41,3.56C14.2,2.78 15.46,2.78 16.24,3.56M4.22,15.58L7.76,19.11C8.54,19.9 9.8,19.9 10.59,19.11L14.12,15.58L9.17,10.63L4.22,15.58Z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 笔刷大小控制 -->
+        <div class="brush-size-control">
+          <input
+            :value="currentBrushSize"
+            type="range"
+            min="5"
+            max="100"
+            step="5"
+            class="brush-size-slider"
+            @input="handleBrushSizeChange"
+          />
+          <span class="size-text">{{ currentBrushSize }}px</span>
+        </div>
+
+        <!-- 重置按钮 -->
+        <div class="reset-control">
+          <button 
+            class="tool-btn reset" 
+            @click="handleResetDrawing"
+            title="重置绘制"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-right">
+        <button class="toolbar-btn" @click="exitInpainting" title="退出局部重绘">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <div class="canvas-wrapper" ref="canvasWrapper">
       <canvas 
         ref="canvasElement" 
@@ -37,7 +105,7 @@ export default {
     },
     brushSize: {
       type: Number,
-      default: 20
+      default: 50
     },
     currentTool: {
       type: String,
@@ -48,7 +116,7 @@ export default {
       default: 1
     }
   },
-  emits: ['inpainting-complete', 'processing-start', 'processing-end', 'zoom-changed'],
+  emits: ['inpainting-complete', 'processing-start', 'processing-end', 'zoom-changed', 'exit-inpainting'],
   setup(props, { emit }) {
     const canvasElement = ref(null)
     const canvasWrapper = ref(null)
@@ -61,6 +129,10 @@ export default {
     // 绘制相关状态
     const isDrawing = ref(false)
     const brushPath = ref([])
+    
+    // 工具栏相关状态
+    const currentDrawingTool = ref(props.currentTool || 'brush')
+    const currentBrushSize = ref(props.brushSize || 50)
     
     // 获取固定的画布尺寸
     const getCanvasSize = () => {
@@ -111,9 +183,9 @@ export default {
       
       // 鼠标按下
       canvas.value.on('mouse:down', (e) => {
-        if (props.currentTool === 'brush') {
+        if (currentDrawingTool.value === 'brush') {
           startBrushDrawing(e)
-        } else if (props.currentTool === 'eraser') {
+        } else if (currentDrawingTool.value === 'eraser') {
           startErasing(e)
         }
       })
@@ -121,9 +193,9 @@ export default {
       // 鼠标移动
       canvas.value.on('mouse:move', (e) => {
         if (isDrawing.value) {
-          if (props.currentTool === 'brush') {
+          if (currentDrawingTool.value === 'brush') {
             continueBrushDrawing(e)
-          } else if (props.currentTool === 'eraser') {
+          } else if (currentDrawingTool.value === 'eraser') {
             continueErasing(e)
           }
         }
@@ -170,7 +242,7 @@ export default {
       }
       
       // 创建绘制对象
-      if (props.currentTool === 'brush' && brushPath.value.length >= 2) {
+      if (currentDrawingTool.value === 'brush' && brushPath.value.length >= 2) {
         createBrushObjects()
       }
       
@@ -179,7 +251,7 @@ export default {
     
     // 创建画笔对象
     const createBrushObjects = () => {
-      const radius = props.brushSize / 2
+      const radius = currentBrushSize.value / 2
       
       // 创建棋盘格图案
       const patternCanvas = document.createElement('canvas')
@@ -250,7 +322,7 @@ export default {
       const pathData = createPathFromPoints(brushPath.value)
       const tempPath = new fabric.Path(pathData, {
         stroke: 'rgba(0, 100, 200, 0.8)',
-        strokeWidth: props.brushSize,
+        strokeWidth: currentBrushSize.value,
         fill: '',
         selectable: false,
         evented: false,
@@ -287,7 +359,7 @@ export default {
     // 执行擦除
     const performErasing = (e) => {
       const pointer = canvas.value.getPointer(e.e)
-      const radius = props.brushSize / 2
+      const radius = currentBrushSize.value / 2
       
       // 获取所有绘制对象
       const objects = canvas.value.getObjects()
@@ -1048,6 +1120,51 @@ export default {
       }
     })
     
+    // 监听外部传入的画笔大小变化
+    watch(() => props.brushSize, (newSize) => {
+      if (newSize !== undefined) {
+        currentBrushSize.value = newSize
+      }
+    })
+    
+    // 监听外部传入的当前工具变化
+    watch(() => props.currentTool, (newTool) => {
+      if (newTool !== undefined) {
+        currentDrawingTool.value = newTool
+      }
+    })
+    
+    // 工具栏相关方法
+    const handleDrawingToolChange = (tool) => {
+      currentDrawingTool.value = tool
+    }
+    
+    const handleBrushSizeChange = (event) => {
+      currentBrushSize.value = parseInt(event.target.value)
+    }
+    
+    const handleResetDrawing = () => {
+      // 清除所有绘制对象，但保留原始图像
+      if (canvas.value) {
+        const objects = canvas.value.getObjects()
+        const drawnObjects = objects.filter(obj => 
+          obj !== currentImage.value && 
+          (obj.tempPath || obj.isDrawnMask === true)
+        )
+        
+        drawnObjects.forEach(obj => {
+          canvas.value.remove(obj)
+        })
+        
+        canvas.value.renderAll()
+        console.log('✅ 已重置所有绘制结果，清除对象数量:', drawnObjects.length)
+      }
+    }
+    
+    const exitInpainting = () => {
+      emit('exit-inpainting')
+    }
+    
     // 暴露方法给父组件
     return {
       canvasElement,
@@ -1056,13 +1173,19 @@ export default {
       isProcessing,
       processingMessage,
       currentZoom,
+      currentDrawingTool,
+      currentBrushSize,
       executeInpainting,
       clearDrawing,
       applyZoom,
       zoomIn,
       zoomOut,
       zoomFit,
-      zoom100
+      zoom100,
+      handleDrawingToolChange,
+      handleBrushSizeChange,
+      handleResetDrawing,
+      exitInpainting
     }
   }
 }
@@ -1072,11 +1195,162 @@ export default {
 .inpainting-canvas {
   flex: 1;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
   min-height: 0;
+}
+
+/* 局部重绘工具栏样式 */
+.inpainting-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #333;
+  color: white;
+  min-height: 48px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.toolbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: #333;
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tool-btn:hover {
+  background: #444;
+  color: #fff;
+}
+
+.tool-btn.active {
+  background: #1890ff;
+  color: #fff;
+}
+
+.brush-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #333;
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.brush-size-slider {
+  width: 80px;
+  height: 4px;
+  background: #555;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.brush-size-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #1890ff;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.brush-size-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #1890ff;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.size-text {
+  color: #ccc;
+  font-size: 12px;
+  min-width: 35px;
+}
+
+.reset-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: #333;
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.tool-btn.reset {
+  color: #ff6b6b;
+}
+
+.tool-btn.reset:hover {
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: #444;
+  border-color: #555;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .canvas-wrapper {

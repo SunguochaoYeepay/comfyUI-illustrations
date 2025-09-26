@@ -15,7 +15,7 @@
           @click="handleExecute"
         >
           <span class="btn-text">局部重绘</span>
-          <span class="btn-number">1</span>
+         
         </button>
       </div>
     </div>
@@ -145,7 +145,6 @@ export default {
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
-  min-width: 120px; /* 设置按钮最小宽度 */
 }
 
 .generate-btn:hover:not(:disabled) {

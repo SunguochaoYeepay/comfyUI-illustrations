@@ -1,13 +1,14 @@
 <template>
   <div class="canvas-editor">
-    <!-- 顶部工具栏 - 扩图模式下隐藏 -->
+    <!-- 顶部工具栏 - 扩图和局部重绘模式下完全隐藏 -->
     <CanvasTopToolbar
-      v-if="currentMode !== 'outpainting'"
+      v-if="currentMode !== 'outpainting' && currentMode !== 'inpainting'"
       :can-undo="currentHistoryIndex > 0"
       :can-redo="currentHistoryIndex < historyRecords.length - 1"
       :current-canvas-size="currentCanvasSize"
       :current-zoom-level="currentZoomLevel"
       :show-history="showHistory"
+      :show-left-controls="true"
       @canvas-size-change="handleCanvasSizeChange"
       @zoom-in="handleZoomIn"
       @zoom-out="handleZoomOut"
@@ -33,17 +34,7 @@
       @clear-canvas="handleClearCanvas"
     />
     
-    <!-- 局部重绘工具栏 - 在局部重绘模式下显示工具按钮 -->
-    <CanvasToolbar 
-      v-if="currentMode === 'inpainting'"
-      :is-processing="isProcessing"
-      :current-mode="currentMode"
-      :show-function-buttons="false"
-      @mode-change="handleModeChange"
-      @drawing-tool-change="handleDrawingToolChange"
-      @brush-size-change="handleBrushSizeChange"
-      @clear-canvas="handleClearCanvas"
-    />
+    <!-- 局部重绘工具栏已集成到顶部工具栏中 -->
     
     <!-- 主内容区域 -->
     <div class="main-content" :class="{ 'full-width': isInpaintingMode || currentMode === 'outpainting' || !showHistory }" @click="handleMainContentClick">
@@ -76,6 +67,7 @@
         @processing-start="handleProcessingStart"
         @processing-end="handleProcessingEnd"
         @zoom-changed="handleZoomChanged"
+        @exit-inpainting="handleExitInpainting"
       />
       
       <!-- 扩图画板 -->
@@ -99,19 +91,6 @@
         <p>未知模式: {{ currentMode }}</p>
       </div>
       
-      <!-- 参数面板 -->
-      <CanvasParameterPanel
-        v-if="currentMode === 'inpainting'"
-        v-model:prompt="parameters.prompt"
-        @execute="handleExecuteInpainting"
-      />
-      
-      <!-- 扩图参数面板 -->
-      <OutpaintingParameterPanel
-        v-if="currentMode === 'outpainting'"
-        v-model:prompt="parameters.prompt"
-        @execute="handleExecuteOutpainting"
-      />
       
       <!-- 隐藏的执行按钮，用于触发局部重绘 -->
       <button 
@@ -129,6 +108,22 @@
       @switch-history="handleSwitchHistory"
       @undo="handleUndo"
       @redo="handleRedo"
+    />
+    
+    <!-- 漂浮的参数面板 -->
+    <CanvasParameterPanel
+      v-if="currentMode === 'inpainting'"
+      v-model:prompt="parameters.prompt"
+      @execute="handleExecuteInpainting"
+      class="floating-parameter-panel"
+    />
+    
+    <!-- 漂浮的扩图参数面板 -->
+    <OutpaintingParameterPanel
+      v-if="currentMode === 'outpainting'"
+      v-model:prompt="parameters.prompt"
+      @execute="handleExecuteOutpainting"
+      class="floating-parameter-panel"
     />
   </div>
 </template>
@@ -171,7 +166,7 @@ export default {
     const currentMode = ref('')
     const isInpaintingMode = ref(false)
     const currentDrawingTool = ref('brush')
-    const brushSize = ref(20)
+    const brushSize = ref(50)
     const isProcessing = ref(false)
     const processingMessage = ref('')
     const currentImageFile = ref(null)
@@ -227,6 +222,7 @@ export default {
       currentMode.value = ''
       isInpaintingMode.value = false
     }
+    
     
     // 处理绘制工具变化
     const handleDrawingToolChange = (tool) => {
@@ -313,6 +309,13 @@ export default {
     const handleExitOutpainting = () => {
       console.log('收到退出扩图模式请求')
       exitOutpaintingMode()
+    }
+    
+    // 处理退出局部重绘模式
+    const handleExitInpainting = () => {
+      console.log('收到退出局部重绘模式请求')
+      currentMode.value = ''
+      isInpaintingMode.value = false
     }
     
     // 处理处理开始
@@ -686,6 +689,7 @@ export default {
       handleInpaintingComplete,
       handleOutpaintingComplete,
       handleExitOutpainting,
+      handleExitInpainting,
       handleProcessingStart,
       handleProcessingEnd,
       handleSaveImage,
@@ -741,5 +745,21 @@ export default {
   color: white;
   text-align: center;
   font-weight: bold;
+}
+
+/* 漂浮的参数面板样式 */
+.floating-parameter-panel {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: rgba(42, 42, 42, 0.95);
+  border: 1px solid #555;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  max-width: 90vw;
+  min-width: 400px;
 }
 </style>

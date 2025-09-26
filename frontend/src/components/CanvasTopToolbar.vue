@@ -1,7 +1,7 @@
 <template>
   <div class="canvas-top-toolbar">
     <!-- 左侧按钮组 - 居中对齐 -->
-    <div class="toolbar-left">
+    <div v-if="showLeftControls" class="toolbar-left">
       <!-- 画布缩放操作 -->
       <div class="canvas-zoom-group">
         <button 
@@ -143,19 +143,19 @@
       </div>
     </div>
 
-    <!-- 右侧按钮组 - 右对齐 -->
-    <div class="toolbar-right">
-      <button class="action-btn clear" @click="handleClear" title="清除">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
-        </svg>
-      </button>
-      <button class="action-btn download" @click="handleDownload" title="下载">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
-        </svg>
-      </button>
-    </div>
+      <!-- 右侧按钮组 - 右对齐 -->
+      <div class="toolbar-right">
+        <button class="action-btn clear" @click="handleClear" title="清除">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+          </svg>
+        </button>
+        <button class="action-btn download" @click="handleDownload" title="下载">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+          </svg>
+        </button>
+      </div>
 
     <!-- 隐藏的文件输入 -->
     <input 
@@ -193,7 +193,11 @@ export default {
     showHistory: {
       type: Boolean,
       default: false
-    }
+    },
+    showLeftControls: {
+      type: Boolean,
+      default: true
+    },
   },
   emits: [
     'canvas-size-change',
@@ -207,7 +211,7 @@ export default {
     'upload',
     'save',
     'clear',
-    'download'
+    'download',
   ],
   setup(props, { emit }) {
     const fileInput = ref(null)
@@ -278,6 +282,7 @@ export default {
       emit('download')
     }
 
+
     return {
       fileInput,
       canvasSize,
@@ -292,7 +297,7 @@ export default {
       handleFileSelect,
       handleSave,
       handleClear,
-      handleDownload
+      handleDownload,
     }
   }
 }
@@ -448,4 +453,5 @@ export default {
     height: 28px;
   }
 }
+
 </style>

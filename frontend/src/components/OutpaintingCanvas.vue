@@ -79,12 +79,7 @@
       </div>
       
       <div class="toolbar-right">
-        <button class="toolbar-btn" @click="resetOutpainting" title="重置扩图区域">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
-          </svg>
-          重置
-        </button>
+        
         <button class="toolbar-btn" @click="exitOutpainting">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -1140,7 +1135,10 @@ export default {
         // 延迟初始化，确保容器完全渲染
         setTimeout(() => {
           initCanvas()
-          loadOriginalImage()
+          // 只有在有图片数据时才加载
+          if (props.originalImage || props.originalImageFile) {
+            loadOriginalImage()
+          }
         }, 100)
         
         // 延迟检查图片加载状态
